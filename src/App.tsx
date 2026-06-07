@@ -275,7 +275,7 @@ export default function App() {
       .sort((a, b) => b.total - a.total || b.gd - a.gd || b.gf - a.gf || a.team.name.localeCompare(b.team.name));
   }, [state.teams, state.scoring, scores, ko]);
 
-  const leagueName = state.leagueName || "Family Draft · 2026";
+  const leagueName = state.leagueName || "Unnamed league";
 
   /* ---------------- league actions ---------------- */
   const switchLeague = useCallback(async (code: string) => {
