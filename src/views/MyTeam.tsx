@@ -1,5 +1,6 @@
 import { NATION, POT_KEYS, POT_META } from '../data/nations';
 import { GROUP_MATCHES_OF } from '../data/fixtures';
+import type { Match, KOMatch } from '../data/fixtures';
 import type { AppState, ScoreEntry, Team } from '../data/types';
 import type { StandingEntry } from '../utils/scoring';
 import { matchStatus } from '../utils/scoring';
@@ -21,7 +22,10 @@ export function MyTeam({ myTeam, state, scores, standings, setTab }: Props) {
   const me = standings.find(s => s.team.id === myTeam.id);
   const myNations = POT_KEYS.map(pk => myTeam.picks?.[pk]).filter(Boolean) as string[];
 
-  const rows: any[] = [];
+  type MatchRow = Match & { nid: string; ko?: false };
+  type KORow = KOMatch & { nid: string; ko: true };
+  type Row = MatchRow | KORow;
+  const rows: Row[] = [];
   myNations.forEach(nid => (GROUP_MATCHES_OF[nid] || []).forEach(m => rows.push({ ...m, nid })));
   (state.ko || []).forEach(k => {
     if (myNations.includes(k.h) || myNations.includes(k.a))
@@ -29,7 +33,7 @@ export function MyTeam({ myTeam, state, scores, standings, setTab }: Props) {
   });
   rows.sort((a, b) => (a.ko ? "Z" + a.id : a.d).localeCompare(b.ko ? "Z" + b.id : b.d));
 
-  const next = rows.find(r =>
+  const next = rows.find((r): r is MatchRow =>
     !r.ko && matchStatus(r.d, scores[r.i]) !== "ft" && parseDate(r.d).getTime() > Date.now()
   );
 

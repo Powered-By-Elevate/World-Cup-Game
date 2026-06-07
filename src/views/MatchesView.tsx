@@ -63,7 +63,7 @@ function KnockoutPanel({ state, myNations, onAddKO, onSaveKO, onDelKO, toast }: 
   state: AppState;
   myNations: string[];
   onAddKO: (k: KOMatch) => void;
-  onSaveKO: (id: string, v: any) => void;
+  onSaveKO: (id: string, v: Partial<KOMatch>) => void;
   onDelKO: (id: string) => void;
   toast: (msg: string) => void;
 }) {
@@ -168,7 +168,7 @@ interface Props {
   myTeam: Team | null;
   onSaveScore: (id: string, v: ScoreEntry) => void;
   onAddKO: (k: KOMatch) => void;
-  onSaveKO: (id: string, v: any) => void;
+  onSaveKO: (id: string, v: Partial<KOMatch>) => void;
   onDelKO: (id: string) => void;
   toast: (msg: string) => void;
 }

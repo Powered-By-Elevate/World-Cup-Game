@@ -3,7 +3,7 @@ import { NATION, POT_KEYS } from './data/nations';
 import type { AppState, MeState, ScoreEntry, Scoring } from './data/types';
 import { defaultState, withDefaults, DEFAULT_SCORING } from './data/types';
 import type { KOMatch } from './data/fixtures';
-import { sget, sset, HAS_REAL } from './utils/storage';
+import { sget, sset, HAS_REAL, leagueLink } from './utils/storage';
 import { uid, shuffle } from './utils/helpers';
 import { teamStats, computeMovers } from './utils/scoring';
 import type { StandingEntry } from './utils/scoring';
@@ -222,8 +222,9 @@ export default function App() {
   }, [state.teams, state.scoring, state.ko, scores]);
 
   const copyLink = () => {
+    const link = leagueLink() || window.location.href;
     try {
-      navigator.clipboard.writeText(window.location.href);
+      navigator.clipboard.writeText(link);
       toast("Link copied -- share it with the family!");
     } catch {
       toast("Copy the page URL to invite others");

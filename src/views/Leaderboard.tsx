@@ -22,7 +22,7 @@ function MoverCard({ movers, state, scores }: {
   const played: string[] = [];
   POT_KEYS.forEach(pk => {
     const nid = t.picks?.[pk]; if (!nid) return;
-    (GROUP_MATCHES_OF[nid] || []).forEach((m: any) => {
+    (GROUP_MATCHES_OF[nid] || []).forEach(m => {
       if (MATCH_DATE[m.i] === movers.latest) {
         const s = scores[m.i];
         if (s && s.h != null) played.push(nid);
@@ -180,7 +180,7 @@ function GroupStandings({ scores, myNations }: { scores: Record<string, ScoreEnt
               <span className="eyebrow" style={{ fontSize: 8 }}>TEAM</span>
               {["P", "W", "D", "L", "GD"].map(h => <span key={h} className="eyebrow" style={{ fontSize: 8, textAlign: "center" }}>{h}</span>)}
               <span className="eyebrow" style={{ fontSize: 8, textAlign: "center" }}>PTS</span>
-              {rows.map((r: any, i: number) => {
+              {rows.map((r, i) => {
                 const mine = myNations && myNations.includes(r.id);
                 const col = i < 2 ? "var(--lime)" : i === 2 ? "var(--gold)" : "var(--mut2)";
                 return (
