@@ -2,22 +2,25 @@ import { useState } from 'react';
 import type { AppState } from '../data/types';
 import { Mark, Icon } from '../components/Icon';
 import { Flag } from '../components/Flag';
+import { Avatar } from '../components/shared';
 
 interface Props {
   state: AppState;
   defaultName: string;
+  inviteTeamId: string | null;
   onJoin: (teamId: string, playerName: string) => void;
   onCreate: (teamName: string, playerName: string) => void;
-  toast: (msg: string) => void;
 }
 
 const DECO = ['ESP', 'ARG', 'FRA', 'BRA', 'POR', 'NED'];
 
-export function Onboarding({ state, defaultName, onJoin, onCreate }: Props) {
+export function Onboarding({ state, defaultName, inviteTeamId, onJoin, onCreate }: Props) {
+  const teams = state.teams || [];
+  const inviteTeam = inviteTeamId ? teams.find(t => t.id === inviteTeamId) : null;
   const [step, setStep] = useState(defaultName ? 1 : 0);
   const [name, setName] = useState(defaultName || '');
   const [newTeam, setNewTeam] = useState('');
-  const teams = state.teams || [];
+  const [showAll, setShowAll] = useState(!inviteTeam);
 
   return (
     <div className="content" style={{ paddingTop: 18 }}>
@@ -28,7 +31,7 @@ export function Onboarding({ state, defaultName, onJoin, onCreate }: Props) {
           <div style={{ position: 'relative' }}>
             <div className="row" style={{ gap: 10, marginBottom: 14 }}>
               <Mark size={34} />
-              <div className="eyebrow" style={{ color: 'var(--lime)', letterSpacing: '.24em' }}>USA · CAN · MEX 2026</div>
+              <div className="eyebrow" style={{ color: 'var(--lime)', letterSpacing: '.24em' }}>{state.leagueName || 'USA · CAN · MEX 2026'}</div>
             </div>
             <div className="display" style={{ fontSize: 46, color: 'var(--paper)' }}>Family<br /><span style={{ color: 'var(--lime)' }}>Draft</span></div>
             <p style={{ margin: '14px 0 0', fontSize: 15, lineHeight: 1.5, color: '#D9D5C8', maxWidth: 300 }}>
@@ -60,6 +63,23 @@ export function Onboarding({ state, defaultName, onJoin, onCreate }: Props) {
               Continue <Icon name="chevron" size={18} />
             </button>
           </>
+        ) : inviteTeam && !showAll ? (
+          <>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>You're invited to join</div>
+            <div className="card flat pad" style={{ marginBottom: 14 }}>
+              <div className="row" style={{ gap: 10 }}>
+                <span style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--lime)', border: '1.5px solid var(--ink)', display: 'grid', placeItems: 'center' }}><Icon name="users" size={22} /></span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontFamily: 'Anton, Archivo, sans-serif', textTransform: 'uppercase', fontSize: 20 }}>{inviteTeam.name}</div>
+                  <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{(inviteTeam.members || []).map(m => m.name).join(' · ') || 'be the first in'}</div>
+                </div>
+              </div>
+            </div>
+            <button className="btn btn-lime btn-block" disabled={!name.trim()} onClick={() => onJoin(inviteTeam.id, name.trim())}>
+              Join {inviteTeam.name}
+            </button>
+            <button className="chip" style={{ margin: '12px auto 0', display: 'flex' }} onClick={() => setShowAll(true)}>join a different team instead</button>
+          </>
         ) : (
           <>
             <h2 className="h2">Join or start a team</h2>
@@ -70,7 +90,10 @@ export function Onboarding({ state, defaultName, onJoin, onCreate }: Props) {
                   <div key={t.id} className="between" style={{ padding: '12px 13px', borderBottom: i < teams.length - 1 ? '1px solid var(--line-2)' : '0' }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontFamily: 'Anton, Archivo, sans-serif', textTransform: 'uppercase', fontSize: 16 }}>{t.name}</div>
-                      <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{(t.members || []).map(m => m.name).join(' · ') || 'empty'}</div>
+                      <div className="row" style={{ gap: 4, marginTop: 4 }}>
+                        {(t.members || []).slice(0, 4).map((m, j) => <Avatar key={m.id} name={m.name} idx={j} size={20} />)}
+                        {(t.members || []).length === 0 && <span className="muted" style={{ fontSize: 12 }}>empty</span>}
+                      </div>
                     </div>
                     <button className="btn btn-sm" onClick={() => onJoin(t.id, name.trim())}>Join</button>
                   </div>

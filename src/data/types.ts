@@ -28,6 +28,7 @@ export interface AppState {
   ko: KOMatch[];
   pots: Record<string, string[]>;
   commissioner: string | null;
+  leagueName: string;
   v: number;
 }
 
@@ -72,6 +73,7 @@ export function defaultState(): AppState {
     ko: [],
     pots: defaultPots(),
     commissioner: null,
+    leagueName: '',
     v: 1,
   };
 }
@@ -87,6 +89,7 @@ export function withDefaults(s: Partial<AppState> | null): AppState {
     ko: Array.isArray(s.ko) ? s.ko : [],
     pots: s.pots && s.pots.FAV ? s.pots : defaultPots(),
     commissioner: s.commissioner || null,
+    leagueName: typeof s.leagueName === 'string' ? s.leagueName : '',
     v: 1,
   };
 }

@@ -1,9 +1,14 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { NATION, POT_KEYS } from './data/nations';
-import type { AppState, MeState, ScoreEntry, Scoring } from './data/types';
+import type { AppState, MeState, Scoring } from './data/types';
 import { defaultState, withDefaults, DEFAULT_SCORING } from './data/types';
-import type { KOMatch } from './data/fixtures';
-import { sget, sset, HAS_REAL, leagueLink } from './utils/storage';
+import {
+  sget, sset, HAS_REAL, leagueLink, teamLink, parseLeagueCode,
+  listLeagues, activeLeague, setActiveLeague, upsertLeague, newLeagueCode,
+  getMe, setMe as persistMe, resetActiveLeague, clearLocal,
+} from './utils/storage';
+import type { League } from './utils/storage';
+import { groupResults, knockoutResults } from './data/results';
 import { uid, shuffle } from './utils/helpers';
 import { teamStats, computeMovers } from './utils/scoring';
 import type { StandingEntry } from './utils/scoring';
@@ -16,6 +21,7 @@ import { TableView } from './views/Leaderboard';
 import { MatchesView } from './views/MatchesView';
 import { Squads } from './views/Squads';
 import { Settings } from './views/Settings';
+import { Leagues } from './views/Leagues';
 import './styles.css';
 
 const NAV: { id: string; label: string; icon: IconName }[] = [
@@ -26,50 +32,66 @@ const NAV: { id: string; label: string; icon: IconName }[] = [
   { id: "squads", label: "Squads", icon: "users" },
 ];
 
+// Results are produced automatically and identically on every device — no entry.
+const SCORES = groupResults();
+const KO = knockoutResults(SCORES);
+
 export default function App() {
   const [state, setState] = useState<AppState>(defaultState());
-  const [scores, setScores] = useState<Record<string, ScoreEntry>>({});
   const [me, setMe] = useState<MeState | null>(null);
+  const [leagueCode, setLeagueCode] = useState('');
+  const [leagues, setLeagues] = useState<League[]>([]);
   const [tab, setTab] = useState("home");
   const [loaded, setLoaded] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showLeagues, setShowLeagues] = useState(false);
+  const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
+
+  const scores = SCORES;
+  const ko = KO;
 
   const stateRef = useRef(state);
   stateRef.current = state;
-  const scoresRef = useRef(scores);
-  scoresRef.current = scores;
+  const leagueCodeRef = useRef(leagueCode);
+  leagueCodeRef.current = leagueCode;
 
   const toast = useCallback((msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 2200);
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      const [s, sc, m] = await Promise.all([
-        sget<AppState>("wc:state", true),
-        sget<Record<string, ScoreEntry>>("wc:scores", true),
-        sget<MeState>("wc:me", false),
-      ]);
-      if (s) setState(withDefaults(s));
-      if (sc) setScores(sc);
-      if (m) setMe(m);
-      setLoaded(true);
-    })();
+  const reload = useCallback(async (code: string) => {
+    const [s, m] = await Promise.all([
+      sget<AppState>("wc:state", true),
+      getMe(code),
+    ]);
+    const ns = s ? withDefaults(s) : defaultState();
+    setState(ns);
+    setMe(m || null);
+    if (ns.leagueName) { upsertLeague(code, ns.leagueName); setLeagues(listLeagues()); }
+    setLoaded(true);
   }, []);
 
+  // init: resolve active league + team invite, then load
+  useEffect(() => {
+    const code = activeLeague();
+    upsertLeague(code, "");
+    leagueCodeRef.current = code;
+    setLeagueCode(code);
+    setLeagues(listLeagues());
+    try { setInviteTeamId(new URL(window.location.href).searchParams.get("team")); } catch { /* ignore */ }
+    reload(code);
+  }, [reload]);
+
+  // poll shared state for the active league (teams/draft/scoring changes)
   useEffect(() => {
     let alive = true;
     const tick = async () => {
-      const [s, sc] = await Promise.all([
-        sget<AppState>("wc:state", true),
-        sget<Record<string, ScoreEntry>>("wc:scores", true),
-      ]);
-      if (!alive) return;
-      const ns = s ? withDefaults(s) : null;
-      if (ns && JSON.stringify(ns) !== JSON.stringify(stateRef.current)) setState(ns);
-      if (sc && JSON.stringify(sc) !== JSON.stringify(scoresRef.current)) setScores(sc);
+      const s = await sget<AppState>("wc:state", true);
+      if (!alive || !s) return;
+      const ns = withDefaults(s);
+      if (JSON.stringify(ns) !== JSON.stringify(stateRef.current)) setState(ns);
     };
     const iv = setInterval(tick, 5000);
     return () => { alive = false; clearInterval(iv); };
@@ -82,16 +104,13 @@ export default function App() {
     await sset("wc:state", next, true);
   }, []);
 
-  const commitScores = useCallback(async (mutator: (sc: Record<string, ScoreEntry>) => Record<string, ScoreEntry>) => {
-    const cur = (await sget<Record<string, ScoreEntry>>("wc:scores", true)) || scoresRef.current || {};
-    const next = mutator({ ...cur });
-    setScores(next);
-    await sset("wc:scores", next, true);
-  }, []);
-
   const setMeBoth = useCallback(async (m: MeState | null) => {
     setMe(m);
-    await sset("wc:me", m, false);
+    await persistMe(leagueCodeRef.current, m);
+    if (m) {
+      setInviteTeamId(null);
+      try { window.history.replaceState(null, "", leagueLink(leagueCodeRef.current)); } catch { /* ignore */ }
+    }
   }, []);
 
   const api = useMemo(() => ({
@@ -103,6 +122,7 @@ export default function App() {
         return s;
       });
       await setMeBoth({ id: mid, name: playerName, teamId: tid });
+      setTab("home");
     },
     joinTeam: async (tid: string, playerName: string) => {
       const mid = uid();
@@ -112,6 +132,7 @@ export default function App() {
         return s;
       });
       await setMeBoth({ id: mid, name: playerName, teamId: tid });
+      setTab("home");
     },
     leave: async () => {
       await commitState(s => {
@@ -175,33 +196,10 @@ export default function App() {
         return s;
       });
     },
-    saveScore: async (id: string, v: ScoreEntry) => {
-      await commitScores(sc => { sc[id] = { h: v.h, a: v.a, st: v.st }; return sc; });
-    },
-    addKO: async (k: KOMatch) => {
-      await commitState(s => { s.ko = s.ko || []; s.ko.push(k); return s; });
-    },
-    saveKO: async (id: string, v: Partial<KOMatch>) => {
-      await commitState(s => {
-        const k = (s.ko || []).find(k => k.id === id);
-        if (k) {
-          Object.assign(k, v);
-          // Stamp the matchday the first time a result lands so knockout
-          // results count toward the "biggest mover" on the Table.
-          if (!k.d && (k.st === "ft" || k.st === "live")) {
-            k.d = new Date().toISOString().slice(0, 10);
-          }
-        }
-        return s;
-      });
-    },
-    delKO: async (id: string) => {
-      await commitState(s => { s.ko = (s.ko || []).filter(k => k.id !== id); return s; });
-    },
     setScoring: async (sc: Scoring) => {
       await commitState(s => { s.scoring = sc; return s; });
     },
-  }), [commitState, commitScores, setMeBoth, me]);
+  }), [commitState, setMeBoth, me]);
 
   const myTeam = useMemo(
     () => state.teams?.find(t => t.id === me?.teamId) || null,
@@ -222,26 +220,68 @@ export default function App() {
   const isCommish = !state.commissioner || (me != null && me.id === state.commissioner) || !commishName;
 
   const movers = useMemo(
-    () => computeMovers(state.teams || [], scores, state.ko || [], state.scoring || DEFAULT_SCORING),
-    [state.teams, state.ko, state.scoring, scores]
+    () => computeMovers(state.teams || [], scores, ko, state.scoring || DEFAULT_SCORING),
+    [state.teams, state.scoring, scores, ko]
   );
 
   const standings: StandingEntry[] = useMemo(() => {
     const sc = state.scoring || DEFAULT_SCORING;
     return (state.teams || [])
-      .map(team => ({ team, ...teamStats(team, scores, state.ko || [], sc) }))
+      .map(team => ({ team, ...teamStats(team, scores, ko, sc) }))
       .sort((a, b) => b.total - a.total || b.gd - a.gd || b.gf - a.gf || a.team.name.localeCompare(b.team.name));
-  }, [state.teams, state.scoring, state.ko, scores]);
+  }, [state.teams, state.scoring, scores, ko]);
 
-  const copyLink = () => {
-    const link = leagueLink() || window.location.href;
-    try {
-      navigator.clipboard.writeText(link);
-      toast("Invite link copied to clipboard");
-    } catch {
-      toast("Copy the page URL to invite others");
-    }
-  };
+  const leagueName = state.leagueName || "Family Draft · 2026";
+
+  /* ---------------- league actions ---------------- */
+  const switchLeague = useCallback(async (code: string) => {
+    if (code === leagueCodeRef.current) { setShowLeagues(false); return; }
+    setActiveLeague(code); leagueCodeRef.current = code; setLeagueCode(code);
+    try { window.history.replaceState(null, "", leagueLink(code)); } catch { /* ignore */ }
+    setShowLeagues(false); setTab("home"); setLoaded(false);
+    await reload(code);
+  }, [reload]);
+
+  const createLeague = useCallback(async (name: string) => {
+    const code = newLeagueCode();
+    setActiveLeague(code); leagueCodeRef.current = code;
+    upsertLeague(code, name); setLeagues(listLeagues());
+    await sset("wc:state", { ...defaultState(), leagueName: name }, true);
+    await persistMe(code, null);
+    setLeagueCode(code);
+    try { window.history.replaceState(null, "", leagueLink(code)); } catch { /* ignore */ }
+    setShowLeagues(false); setTab("home"); setLoaded(false);
+    await reload(code);
+    toast(`Created “${name}”`);
+  }, [reload, toast]);
+
+  const joinLeague = useCallback(async (input: string) => {
+    const code = parseLeagueCode(input);
+    if (!code) { toast("Enter a valid league code or link"); return; }
+    setActiveLeague(code); leagueCodeRef.current = code;
+    upsertLeague(code, ""); setLeagues(listLeagues());
+    setLeagueCode(code);
+    try { window.history.replaceState(null, "", leagueLink(code)); } catch { /* ignore */ }
+    setShowLeagues(false); setTab("home"); setLoaded(false);
+    await reload(code);
+  }, [reload, toast]);
+
+  const resetApp = useCallback(async () => {
+    await resetActiveLeague();
+    clearLocal();
+    try { window.location.href = window.location.origin + window.location.pathname; } catch { window.location.reload(); }
+  }, []);
+
+  const copyLeagueLink = useCallback(() => {
+    try { navigator.clipboard.writeText(leagueLink(leagueCodeRef.current)); toast("League invite copied"); }
+    catch { toast("Copy the page URL to invite others"); }
+  }, [toast]);
+
+  const copyTeamLink = useCallback(() => {
+    if (!myTeam) return;
+    try { navigator.clipboard.writeText(teamLink(myTeam.id, leagueCodeRef.current)); toast("Team invite copied — drops them onto your team"); }
+    catch { toast("Copy failed"); }
+  }, [myTeam, toast]);
 
   if (!loaded) return (
     <div className="app">
@@ -259,12 +299,18 @@ export default function App() {
         <header className="hdr">
           <div className="wordmark">
             <Mark size={36} />
-            <div className="wm-text"><div className="l1">World Cup</div><div className="l2">Family Draft · 2026</div></div>
+            <div className="wm-text"><div className="l1">World Cup</div><div className="l2">{leagueName}</div></div>
           </div>
+          <button className="hdr-btn" onClick={() => setShowLeagues(true)} title="Leagues"><Icon name="globe" size={18} /></button>
         </header>
         <div className="screen">
-          <Onboarding state={state} defaultName={me?.name || ""} onJoin={api.joinTeam} onCreate={api.createTeam} toast={toast} />
+          <Onboarding state={state} defaultName={me?.name || ""} inviteTeamId={inviteTeamId} onJoin={api.joinTeam} onCreate={api.createTeam} />
         </div>
+        {showLeagues && (
+          <Leagues leagues={leagues} activeCode={leagueCode} leagueName={state.leagueName} hasTeam={false}
+            onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague}
+            onCopyLeagueLink={copyLeagueLink} onCopyTeamLink={copyTeamLink} onClose={() => setShowLeagues(false)} />
+        )}
         {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
       </div>
     );
@@ -276,7 +322,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="sb-top">
           <Mark size={40} />
-          <div className="wm-text"><div className="l1">World Cup</div><div className="l2">Family Draft · 2026</div></div>
+          <div className="wm-text"><div className="l1">World Cup</div><div className="l2">{leagueName}</div></div>
         </div>
         <nav className="sb-nav">
           {NAV.map(n => (
@@ -287,7 +333,8 @@ export default function App() {
         </nav>
         <div className="sb-bottom">
           <span className={`status ${HAS_REAL ? "live" : "preview"}`}><span className="dot" />{HAS_REAL ? "Live" : "Preview"}</span>
-          <button className="hdr-btn" onClick={copyLink} title="Copy invite link"><Icon name="share" size={16} /></button>
+          <button className="hdr-btn" onClick={() => setShowLeagues(true)} title="Leagues"><Icon name="globe" size={16} /></button>
+          <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
           <button className="hdr-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="gear" size={18} /></button>
         </div>
       </aside>
@@ -296,20 +343,18 @@ export default function App() {
       <header className="hdr">
         <div className="wordmark">
           <Mark size={36} />
-          <div className="wm-text"><div className="l1">World Cup</div><div className="l2">Family Draft · 2026</div></div>
+          <div className="wm-text"><div className="l1">World Cup</div><div className="l2">{leagueName}</div></div>
         </div>
-        <span className={`status ${HAS_REAL ? "live" : "preview"}`} style={{ marginRight: 2 }}>
-          <span className="dot" />{HAS_REAL ? "Live" : "Preview"}
-        </span>
-        <button className="hdr-btn" onClick={copyLink} title="Copy invite link"><Icon name="share" size={16} /></button>
+        <button className="hdr-btn" onClick={() => setShowLeagues(true)} title="Leagues"><Icon name="globe" size={16} /></button>
+        <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
         <button className="hdr-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="gear" size={18} /></button>
       </header>
 
       <div className="screen">
-        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} standings={standings} setTab={setTab} />}
+        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} />}
-        {tab === "matches" && <MatchesView state={state} scores={scores} myTeam={myTeam} onSaveScore={api.saveScore} onAddKO={api.addKO} onSaveKO={api.saveKO} onDelKO={api.delKO} toast={toast} />}
+        {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
         {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
       </div>
 
@@ -324,12 +369,16 @@ export default function App() {
         </div>
       </nav>
 
+      {showLeagues && (
+        <Leagues leagues={leagues} activeCode={leagueCode} leagueName={state.leagueName} hasTeam={!!myTeam}
+          onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague}
+          onCopyLeagueLink={copyLeagueLink} onCopyTeamLink={copyTeamLink} onClose={() => setShowLeagues(false)} />
+      )}
       {showSettings && (
         <Settings
           state={state} myTeam={myTeam} me={me} isCommish={isCommish} commishName={commishName}
           onClose={() => setShowSettings(false)} onScoring={api.setScoring} onLeave={api.leave}
-          onRename={api.rename} onClaim={api.claimCommish}
-        />
+          onRename={api.rename} onClaim={api.claimCommish} onResetApp={resetApp} onTeamInvite={copyTeamLink} />
       )}
       {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
     </div>

@@ -13,15 +13,17 @@ interface Props {
   myTeam: Team;
   state: AppState;
   scores: Record<string, ScoreEntry>;
+  ko: KOMatch[];
   standings: StandingEntry[];
   setTab: (tab: string) => void;
+  onTeamInvite: () => void;
 }
 
 type MatchRow = Match & { nid: string; ko?: false };
 type KORow = KOMatch & { nid: string; ko: true };
 type Row = MatchRow | KORow;
 
-export function MyTeam({ myTeam, state, scores, standings, setTab }: Props) {
+export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite }: Props) {
   const grad = teamGradient(myTeam);
   const drafted = state.draftDone && !!myTeam.picks;
   const myIds = POT_KEYS.map(pk => myTeam.picks?.[pk]).filter(Boolean) as string[];
@@ -30,7 +32,7 @@ export function MyTeam({ myTeam, state, scores, standings, setTab }: Props) {
 
   const rows: Row[] = [];
   myIds.forEach(nid => (GROUP_MATCHES_OF[nid] || []).forEach(m => rows.push({ ...m, nid })));
-  (state.ko || []).forEach(k => {
+  (ko || []).forEach(k => {
     if (myIds.includes(k.h) || myIds.includes(k.a))
       rows.push({ ko: true, ...k, nid: myIds.includes(k.h) ? k.h : k.a });
   });
@@ -82,6 +84,10 @@ export function MyTeam({ myTeam, state, scores, standings, setTab }: Props) {
           )}
         </div>
       </div>
+
+      <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={onTeamInvite}>
+        <Icon name="users" size={16} /> Invite your partner to this team
+      </button>
 
       {drafted && <>
         {/* next match */}

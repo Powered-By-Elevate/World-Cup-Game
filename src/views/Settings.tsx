@@ -16,9 +16,11 @@ interface Props {
   onLeave: () => void;
   onRename: (name: string) => void;
   onClaim: () => void;
+  onResetApp: () => void;
+  onTeamInvite: () => void;
 }
 
-export function Settings({ state, myTeam, isCommish, commishName, onClose, onScoring, onLeave, onRename, onClaim }: Props) {
+export function Settings({ state, myTeam, isCommish, commishName, onClose, onScoring, onLeave, onRename, onClaim, onResetApp, onTeamInvite }: Props) {
   const sc = state.scoring;
   const [name, setName] = useState(myTeam?.name || '');
 
@@ -87,10 +89,22 @@ export function Settings({ state, myTeam, isCommish, commishName, onClose, onSco
                 <input className="ipt" value={name} onChange={e => setName(e.target.value)} style={{ flex: 1 }} />
                 <button className="btn btn-ink btn-sm" style={{ height: 48 }} disabled={!name.trim()} onClick={() => { onRename(name.trim()); onClose(); }}>Save</button>
               </div>
+              <button className="btn btn-ghost btn-block" style={{ marginBottom: 8 }} onClick={() => { onTeamInvite(); onClose(); }}><Icon name="users" size={16} /> Invite your partner</button>
               <button className="btn btn-ghost btn-block" style={{ color: 'var(--live)', borderColor: 'var(--live)' }}
                 onClick={() => { if (confirm('Leave this team?')) { onLeave(); onClose(); } }}>Leave team</button>
             </div>
           </>}
+
+          {/* testing */}
+          <div className="eyebrow" style={{ margin: '18px 0 4px' }}>Testing</div>
+          <div className="card flat pad">
+            <div style={{ fontWeight: 800, marginBottom: 2 }}>Reset everything</div>
+            <div className="muted" style={{ fontSize: 12.5, marginBottom: 12 }}>Wipes this league's pool and your local data, then starts fresh from onboarding. Use this to re-test from the beginning.</div>
+            <button className="btn btn-ghost btn-block" style={{ color: 'var(--live)', borderColor: 'var(--live)' }}
+              onClick={() => { if (confirm('Reset everything and start over? This clears this league’s teams, draft and your saved identity.')) onResetApp(); }}>
+              <Icon name="refresh" size={16} /> Reset app
+            </button>
+          </div>
         </div>
       </div>
     </div>

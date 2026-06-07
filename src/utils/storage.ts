@@ -1,20 +1,14 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { MeState } from '../data/types';
 
 /**
- * Layered key-value storage for the Family Draft.
+ * Multi-league key-value storage.
  *
- * The app keeps two *shared* keys (`wc:state`, `wc:scores`) that every family
- * member must see, and one *private* key (`wc:me`) that is unique to each
- * device. We resolve the best available backend at runtime:
+ * Shared keys (wc:state) are namespaced by the ACTIVE league code so several
+ * family pools coexist on one backend. Private keys (the per-league identity
+ * wc:me:<code>, plus the local league registry) stay on the device.
  *
- *   1. window.storage  - Bolt's sandbox shared-storage API (when hosted there)
- *   2. Supabase        - real cross-device sharing (when VITE_SUPABASE_* is set)
- *   3. localStorage    - single-device persistence (survives refreshes)
- *   4. memory          - last-resort fallback (SSR / private-mode failures)
- *
- * "Shared" reads/writes go to the chosen shared backend; private reads/writes
- * always stay on the local device. HAS_REAL is true only when a genuinely
- * shared backend is available, which the UI surfaces as LIVE vs PREVIEW.
+ * Backend preference: window.storage (Bolt) → Supabase → localStorage → memory.
  */
 
 declare global {
@@ -40,10 +34,7 @@ const hasWindow = typeof window !== 'undefined';
 const memStore: KV = (() => {
   const m: Record<string, string> = {};
   return {
-    get: async (k) => {
-      if (k in m) return { key: k, value: m[k] };
-      throw new Error('nf');
-    },
+    get: async (k) => { if (k in m) return { key: k, value: m[k] }; throw new Error('nf'); },
     set: async (k, v) => { m[k] = v; return { key: k, value: v }; },
     delete: async (k) => { delete m[k]; return { key: k, deleted: true }; },
   };
@@ -56,57 +47,87 @@ function makeLocalStore(): KV | null {
     const probe = '__wc_probe__';
     window.localStorage.setItem(probe, '1');
     window.localStorage.removeItem(probe);
-  } catch {
-    return null;
-  }
+  } catch { return null; }
   return {
-    get: async (k) => {
-      const v = window.localStorage.getItem(k);
-      if (v == null) throw new Error('nf');
-      return { key: k, value: v };
-    },
+    get: async (k) => { const v = window.localStorage.getItem(k); if (v == null) throw new Error('nf'); return { key: k, value: v }; },
     set: async (k, v) => { window.localStorage.setItem(k, v); return { key: k, value: v }; },
     delete: async (k) => { window.localStorage.removeItem(k); return { key: k, deleted: true }; },
   };
 }
 const localStore = makeLocalStore();
 
-/* -------------------------------- league id ------------------------------- */
-/**
- * A short code that namespaces a family's shared data so multiple pools can
- * coexist on one Supabase project. Resolved from the invite link (?league=),
- * otherwise read from / generated into localStorage so the creator keeps a
- * stable pool. leagueLink() builds an invite URL that carries the code.
- */
-function resolveLeague(): string {
-  if (!hasWindow) return 'family';
+/* plain localStorage helpers for the local league registry */
+function lsGet<T>(k: string, d: T): T {
+  try { const v = hasWindow ? window.localStorage.getItem(k) : null; return v ? JSON.parse(v) as T : d; } catch { return d; }
+}
+function lsSet(k: string, v: unknown) { try { if (hasWindow) window.localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } }
+
+/* ============================================================
+   LEAGUES
+   ============================================================ */
+export type League = { code: string; name: string };
+
+export function newLeagueCode(): string {
+  return Math.random().toString(36).slice(2, 8);
+}
+
+export function listLeagues(): League[] {
+  return lsGet<League[]>('wc:leagues', []);
+}
+export function upsertLeague(code: string, name: string) {
+  const ls = listLeagues();
+  const i = ls.findIndex(l => l.code === code);
+  if (i >= 0) { if (name) ls[i].name = name; }
+  else ls.push({ code, name: name || '' });
+  lsSet('wc:leagues', ls);
+}
+export function removeLeague(code: string) {
+  lsSet('wc:leagues', listLeagues().filter(l => l.code !== code));
+}
+
+let _active: string | null = null;
+export function activeLeague(): string {
+  if (_active) return _active;
   let code = '';
-  try {
-    code = new URL(window.location.href).searchParams.get('league') || '';
-  } catch { /* ignore malformed URL */ }
-  try {
-    if (!code) code = window.localStorage?.getItem('wc:league') || '';
-    if (!code) code = Math.random().toString(36).slice(2, 8);
-    window.localStorage?.setItem('wc:league', code);
-  } catch {
-    if (!code) code = 'family';
-  }
+  try { if (hasWindow) code = new URL(window.location.href).searchParams.get('league') || ''; } catch { /* ignore */ }
+  if (!code) code = lsGet<string>('wc:activeLeague', '');
+  if (!code) { const ls = listLeagues(); code = ls[0]?.code || newLeagueCode(); }
+  _active = code;
+  lsSet('wc:activeLeague', code);
   return code;
 }
-export const LEAGUE = resolveLeague();
+export function setActiveLeague(code: string) { _active = code; lsSet('wc:activeLeague', code); }
 
-export function leagueLink(): string {
-  if (!hasWindow) return '';
-  try {
-    const u = new URL(window.location.href);
-    u.searchParams.set('league', LEAGUE);
-    return u.toString();
-  } catch {
-    return hasWindow ? window.location.href : '';
-  }
+/* ---- invite links ---- */
+function baseUrl(): URL | null {
+  if (!hasWindow) return null;
+  try { const u = new URL(window.location.href); u.search = ''; u.hash = ''; return u; } catch { return null; }
+}
+export function leagueLink(code = activeLeague()): string {
+  const u = baseUrl(); if (!u) return '';
+  u.searchParams.set('league', code);
+  return u.toString();
+}
+export function teamLink(teamId: string, code = activeLeague()): string {
+  const u = baseUrl(); if (!u) return '';
+  u.searchParams.set('league', code);
+  u.searchParams.set('team', teamId);
+  return u.toString();
+}
+/** Pull a league code out of a pasted invite link or raw code. */
+export function parseLeagueCode(input: string): string {
+  const s = (input || '').trim();
+  if (!s) return '';
+  try { const u = new URL(s); const q = u.searchParams.get('league'); if (q) return q; } catch { /* not a url */ }
+  const m = s.match(/league=([a-z0-9]+)/i);
+  if (m) return m[1];
+  if (/^[a-z0-9]{4,12}$/i.test(s)) return s;
+  return '';
 }
 
-/* --------------------------------- Supabase ------------------------------- */
+/* ============================================================
+   Supabase
+   ============================================================ */
 const SUPA_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 const SUPA_ON = !!(SUPA_URL && SUPA_KEY);
@@ -114,31 +135,22 @@ const SUPA_ON = !!(SUPA_URL && SUPA_KEY);
 let supa: SupabaseClient | null = null;
 function makeSupaStore(): KV | null {
   if (!SUPA_ON) return null;
-  try {
-    supa = createClient(SUPA_URL!, SUPA_KEY!, { auth: { persistSession: false } });
-  } catch (e) {
-    console.error('supabase init failed', e);
-    return null;
-  }
-  // Shared keys are scoped to the league so families never collide.
-  const scoped = (k: string) => `${LEAGUE}:${k}`;
+  try { supa = createClient(SUPA_URL!, SUPA_KEY!, { auth: { persistSession: false } }); }
+  catch (e) { console.error('supabase init failed', e); return null; }
   return {
     get: async (k) => {
-      const { data, error } = await supa!
-        .from('app_kv').select('value').eq('key', scoped(k)).maybeSingle();
+      const { data, error } = await supa!.from('app_kv').select('value').eq('key', k).maybeSingle();
       if (error) throw error;
       if (!data) throw new Error('nf');
       return { key: k, value: JSON.stringify(data.value) };
     },
     set: async (k, v) => {
-      const { error } = await supa!
-        .from('app_kv')
-        .upsert({ key: scoped(k), value: JSON.parse(v), updated_at: new Date().toISOString() });
+      const { error } = await supa!.from('app_kv').upsert({ key: k, value: JSON.parse(v), updated_at: new Date().toISOString() });
       if (error) throw error;
       return { key: k, value: v };
     },
     delete: async (k) => {
-      const { error } = await supa!.from('app_kv').delete().eq('key', scoped(k));
+      const { error } = await supa!.from('app_kv').delete().eq('key', k);
       if (error) throw error;
       return { key: k, deleted: true };
     },
@@ -155,33 +167,44 @@ const boltStore: KV | null = (hasWindow && window.storage && typeof window.stora
     }
   : null;
 
-// Backend for SHARED keys, best-to-worst.
 const sharedStore: KV = boltStore || supaStore || localStore || memStore;
-// Backend for PRIVATE keys: always this device.
 const privateStore: KV = localStore || memStore;
 
 /** True when a genuinely shared backend is active (drives the LIVE badge). */
 export const HAS_REAL = !!(boltStore || supaStore);
 
-function pick(shared?: boolean): KV {
-  return shared ? sharedStore : privateStore;
+/** Shared keys are namespaced by the active league; private keys are not. */
+function scoped(key: string, shared?: boolean): string {
+  return shared ? `${activeLeague()}:${key}` : key;
 }
 
 export async function sget<T>(key: string, shared?: boolean): Promise<T | null> {
   try {
-    const r = await pick(shared).get(key);
+    const r = await (shared ? sharedStore : privateStore).get(scoped(key, shared));
     return r ? JSON.parse(r.value) : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
+}
+export async function sset<T>(key: string, val: T, shared?: boolean): Promise<boolean> {
+  try { await (shared ? sharedStore : privateStore).set(scoped(key, shared), JSON.stringify(val)); return true; }
+  catch (e) { console.error('storage set failed', e); return false; }
 }
 
-export async function sset<T>(key: string, val: T, shared?: boolean): Promise<boolean> {
+/* ---- per-league identity ---- */
+export async function getMe(code: string): Promise<MeState | null> { return sget<MeState>(`wc:me:${code}`, false); }
+export async function setMe(code: string, me: MeState | null): Promise<boolean> { return sset(`wc:me:${code}`, me, false); }
+
+/* ============================================================
+   RESET (testing) — wipe the active league's pool + all local app data
+   ============================================================ */
+export async function resetActiveLeague(): Promise<void> {
+  try { await sset('wc:state', null, true); } catch { /* ignore */ }
+  try { await sset('wc:scores', {}, true); } catch { /* ignore */ }
+}
+export function clearLocal(): void {
   try {
-    await pick(shared).set(key, JSON.stringify(val));
-    return true;
-  } catch (e) {
-    console.error('storage set failed', e);
-    return false;
-  }
+    if (hasWindow) {
+      Object.keys(window.localStorage).filter(k => k.startsWith('wc:')).forEach(k => window.localStorage.removeItem(k));
+    }
+  } catch { /* ignore */ }
+  _active = null;
 }

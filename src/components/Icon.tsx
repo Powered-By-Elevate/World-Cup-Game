@@ -2,7 +2,8 @@
 
 export type IconName =
   | 'home' | 'draft' | 'table' | 'cal' | 'users' | 'gear' | 'share'
-  | 'bolt' | 'trophy' | 'check' | 'plus' | 'x' | 'chevron' | 'flame' | 'arrow';
+  | 'bolt' | 'trophy' | 'check' | 'plus' | 'x' | 'chevron' | 'flame' | 'arrow'
+  | 'globe' | 'copy' | 'refresh';
 
 interface IconProps {
   name: IconName;
@@ -32,6 +33,9 @@ export function Icon({ name, size = 21, stroke = 2 }: IconProps) {
     case 'chevron':return <svg {...p}><path d="M9 5l7 7-7 7" /></svg>;
     case 'flame':  return <svg {...p}><path d="M12 3c1 3-2 4-2 7a2 2 0 0 0 4 0c0-1 .5-1.5.5-1.5C16 11 17 13 17 15a5 5 0 0 1-10 0c0-4 5-5 5-12z" /></svg>;
     case 'arrow':  return <svg {...p}><path d="M12 19V5M6 11l6-6 6 6" /></svg>;
+    case 'globe':  return <svg {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" /></svg>;
+    case 'copy':   return <svg {...p}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h8" /></svg>;
+    case 'refresh':return <svg {...p}><path d="M21 12a9 9 0 1 1-2.6-6.3M21 4v5h-5" /></svg>;
     default:       return null;
   }
 }
