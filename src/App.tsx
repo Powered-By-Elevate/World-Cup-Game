@@ -352,16 +352,26 @@ export default function App() {
     try { window.location.href = window.location.origin + window.location.pathname; } catch { window.location.reload(); }
   }, []);
 
-  const copyLeagueLink = useCallback(() => {
-    try { navigator.clipboard.writeText(leagueLink(leagueCodeRef.current)); toast("League invite copied"); }
+  // Prefer the native share sheet (opens straight into iMessage / Android Messages,
+  // WhatsApp, etc.); fall back to copying the link on browsers without Web Share.
+  const shareInvite = useCallback(async (url: string, text: string, copiedMsg: string) => {
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try { await navigator.share({ title: "World Cup Family Draft", text, url }); return; }
+      catch (e) { if (e instanceof Error && e.name === "AbortError") return; /* else fall through to copy */ }
+    }
+    try { await navigator.clipboard.writeText(url); toast(copiedMsg); }
     catch { toast("Copy the page URL to invite others"); }
   }, [toast]);
 
+  const copyLeagueLink = useCallback(() => {
+    const nm = realLeagueName ? ` “${realLeagueName}”` : "";
+    shareInvite(leagueLink(leagueCodeRef.current), `Join our family World Cup pool${nm} — pick your team here:`, "League invite copied");
+  }, [shareInvite, realLeagueName]);
+
   const copyTeamLink = useCallback(() => {
     if (!myTeam) return;
-    try { navigator.clipboard.writeText(teamLink(myTeam.id, leagueCodeRef.current)); toast("Team invite copied — drops them onto your team"); }
-    catch { toast("Copy failed"); }
-  }, [myTeam, toast]);
+    shareInvite(teamLink(myTeam.id, leagueCodeRef.current), `Join my team “${myTeam.name}” in our World Cup pool:`, "Team invite copied");
+  }, [shareInvite, myTeam]);
 
   if (!loaded) return (
     <div className="app">
