@@ -91,6 +91,26 @@ The app picks the best available backend at runtime:
 
 ---
 
+## Deploying to Vercel
+
+The app is a static Vite build (no server, no path-based routing), so it deploys
+anywhere static. This repo ships a `vercel.json`:
+
+1. Push your branch to GitHub (already done if you're reading this on the repo).
+2. At [vercel.com](https://vercel.com) → **Add New → Project** → import this repo.
+   Vercel auto-detects Vite (build `npm run build`, output `dist`).
+3. (Shared mode) Under **Settings → Environment Variables** add:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+
+   These are read at **build time**, so add them before the first build (or
+   redeploy after adding). Without them the live site runs in single-device
+   PREVIEW mode.
+4. **Deploy.** You'll get a `*.vercel.app` URL to share with the family.
+
+> After deploying, you can set the canonical `og:image` to an absolute URL
+> (`https://your-app.vercel.app/og.png`) so link previews render everywhere.
+
 ## Project structure
 
 ```
