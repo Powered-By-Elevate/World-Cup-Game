@@ -12,12 +12,13 @@ interface Props {
   onCreate: (name: string) => void;
   onJoin: (input: string) => void;
   onRename: (name: string) => void;
+  onRemove: (code: string) => void;
   onCopyLeagueLink: () => void;
   onCopyTeamLink: () => void;
   onClose: () => void;
 }
 
-export function Leagues({ leagues, activeCode, leagueName, hasTeam, canRename, onSwitch, onCreate, onJoin, onRename, onCopyLeagueLink, onCopyTeamLink, onClose }: Props) {
+export function Leagues({ leagues, activeCode, leagueName, hasTeam, canRename, onSwitch, onCreate, onJoin, onRename, onRemove, onCopyLeagueLink, onCopyTeamLink, onClose }: Props) {
   const [newName, setNewName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [editing, setEditing] = useState(false);
@@ -55,7 +56,7 @@ export function Leagues({ leagues, activeCode, leagueName, hasTeam, canRename, o
                 <div className="row" style={{ gap: 10, minWidth: 0 }}>
                   <span style={{ width: 40, height: 40, borderRadius: 11, background: 'var(--lime)', border: '1.5px solid var(--ink)', display: 'grid', placeItems: 'center', flex: '0 0 auto' }}><Icon name="globe" size={20} /></span>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontFamily: 'Anton, Archivo, sans-serif', textTransform: 'uppercase', fontSize: 18, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{leagueName || 'Family League'}</div>
+                    <div style={{ fontFamily: 'Anton, Archivo, sans-serif', textTransform: 'uppercase', fontSize: 18, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{leagueName || 'Unnamed league'}</div>
                     <div className="muted tnum" style={{ fontSize: 12 }}>code · {activeCode}</div>
                   </div>
                 </div>
@@ -76,14 +77,18 @@ export function Leagues({ leagues, activeCode, leagueName, hasTeam, canRename, o
             <div className="eyebrow" style={{ marginBottom: 4 }}>Your leagues</div>
             <div className="card flat" style={{ overflow: 'hidden', marginBottom: 14 }}>
               {leagues.map((l, i) => (
-                <button key={l.code} onClick={() => onSwitch(l.code)}
-                  className="between" style={{ width: '100%', textAlign: 'left', border: 0, background: l.code === activeCode ? 'rgba(200,242,60,.16)' : 'transparent', borderBottom: i < leagues.length - 1 ? '1px solid var(--line-2)' : '0', padding: '13px 14px', cursor: 'pointer' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, fontSize: 14 }}>{l.name || 'Family League'}</div>
-                    <div className="muted tnum" style={{ fontSize: 11 }}>{l.code}</div>
+                <div key={l.code} className="between" style={{ background: l.code === activeCode ? 'rgba(200,242,60,.16)' : 'transparent', borderBottom: i < leagues.length - 1 ? '1px solid var(--line-2)' : '0', padding: '7px 10px 7px 14px' }}>
+                  <button onClick={() => onSwitch(l.code)} className="row" style={{ flex: 1, minWidth: 0, gap: 9, textAlign: 'left', border: 0, background: 'transparent', padding: '6px 0', cursor: 'pointer' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.name || 'Unnamed league'}</div>
+                      <div className="muted tnum" style={{ fontSize: 11 }}>{l.code}</div>
+                    </div>
+                  </button>
+                  <div className="row" style={{ gap: 7, flex: '0 0 auto' }}>
+                    {l.code === activeCode ? <span className="badge you">Active</span> : <Icon name="chevron" size={16} />}
+                    <button className="hdr-btn" title="Remove from your list" onClick={() => { if (confirm(`Remove “${l.name || 'this league'}” from your list? You can rejoin with its invite link.`)) onRemove(l.code); }} style={{ border: '1.5px solid var(--line)', height: 32, width: 32 }}><Icon name="x" size={15} /></button>
                   </div>
-                  {l.code === activeCode ? <span className="badge you">Active</span> : <Icon name="chevron" size={16} />}
-                </button>
+                </div>
               ))}
             </div>
           </>}

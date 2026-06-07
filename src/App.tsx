@@ -4,7 +4,7 @@ import type { AppState, MeState, Scoring } from './data/types';
 import { defaultState, withDefaults, DEFAULT_SCORING } from './data/types';
 import {
   sget, sset, HAS_REAL, leagueLink, teamLink, parseLeagueCode,
-  listLeagues, activeLeague, setActiveLeague, upsertLeague, newLeagueCode,
+  listLeagues, activeLeague, setActiveLeague, upsertLeague, removeLeague, newLeagueCode,
   getMe, setMe as persistMe, resetActiveLeague, clearLocal,
 } from './utils/storage';
 import type { League } from './utils/storage';
@@ -103,14 +103,16 @@ export default function App() {
     const ns = s ? withDefaults(s) : defaultState();
     setState(ns);
     setMe(m || null);
-    if (ns.leagueName) { upsertLeague(code, ns.leagueName); setLeagues(listLeagues()); }
+    // Register the active league only once it's real — it has a name, or the
+    // user actually has a team/identity in it. This avoids leaving a nameless
+    // "phantom" league in the switch list on first run / after a reset.
+    if (ns.leagueName || m) { upsertLeague(code, ns.leagueName); setLeagues(listLeagues()); }
     setLoaded(true);
   }, []);
 
   // init: resolve active league + team invite, then load
   useEffect(() => {
     const code = activeLeague();
-    upsertLeague(code, "");
     leagueCodeRef.current = code;
     setLeagueCode(code);
     setLeagues(listLeagues());
@@ -197,10 +199,18 @@ export default function App() {
         };
         s.teams.forEach(t => { t.picks = {}; });
         const board: AppState['board'] = [];
+        // A nation is off-limits the moment it's drafted — never assign one twice.
+        const used = new Set<string>();
         POT_KEYS.forEach((pk, ri) => {
           const seq = ri % 2 === 0 ? order : [...order].reverse();
-          seq.forEach((t, i) => {
-            const nation = pots[pk][i];
+          const queue = pots[pk];      // shuffled nations for this pot
+          let qi = 0;
+          seq.forEach((t) => {
+            // pull the next nation in this pot that hasn't been taken yet
+            let nation = queue[qi++];
+            while (nation && used.has(nation.id)) nation = queue[qi++];
+            if (!nation) return;       // guarded by canRun, but stay safe if a pot runs dry
+            used.add(nation.id);
             const team = s.teams.find(x => x.id === t.id)!;
             team.picks![pk] = nation.id;
             board.push({ pickNo: board.length + 1, teamId: t.id, nationId: nation.id, pot: pk });
@@ -309,6 +319,15 @@ export default function App() {
     toast("League renamed");
   }, [commitState, toast]);
 
+  const removeLeagueFromList = useCallback(async (code: string) => {
+    removeLeague(code);
+    const rest = listLeagues();
+    setLeagues(rest);
+    // If we removed the league we're currently in, hop to another one.
+    if (code === leagueCodeRef.current && rest[0]) await switchLeague(rest[0].code);
+    toast("League removed from your list");
+  }, [switchLeague, toast]);
+
   const resetApp = useCallback(async () => {
     await resetActiveLeague();
     clearLocal();
@@ -348,7 +367,7 @@ export default function App() {
         </div>
         {showLeagues && (
           <Leagues leagues={leagues} activeCode={leagueCode} leagueName={state.leagueName} hasTeam={false} canRename={isCommish}
-            onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague} onRename={renameLeague}
+            onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague} onRename={renameLeague} onRemove={removeLeagueFromList}
             onCopyLeagueLink={copyLeagueLink} onCopyTeamLink={copyTeamLink} onClose={() => setShowLeagues(false)} />
         )}
         {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
@@ -408,7 +427,7 @@ export default function App() {
 
       {showLeagues && (
         <Leagues leagues={leagues} activeCode={leagueCode} leagueName={state.leagueName} hasTeam={!!myTeam} canRename={isCommish}
-          onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague} onRename={renameLeague}
+          onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague} onRename={renameLeague} onRemove={removeLeagueFromList}
           onCopyLeagueLink={copyLeagueLink} onCopyTeamLink={copyTeamLink} onClose={() => setShowLeagues(false)} />
       )}
       {showSettings && (
