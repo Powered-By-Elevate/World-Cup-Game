@@ -1,50 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { NATION, NATIONS, POT_KEYS, POT_META } from '../data/nations';
+import { NATION, NATIONS, POT_KEYS } from '../data/nations';
 import type { AppState } from '../data/types';
 import { Flag } from '../components/Flag';
-import { Icon, ICONS } from '../components/Icon';
-
-function unassignedNations(pots: Record<string, string[]>) {
-  return NATIONS.filter(n => !POT_KEYS.some(pk => (pots[pk] || []).includes(n.id))).map(n => n.id);
-}
-
-function PotMenu({ nationId, pots, onMove, onClose }: {
-  nationId: string;
-  pots: Record<string, string[]>;
-  onMove: (target: string | null) => void;
-  onClose: () => void;
-}) {
-  const cur = POT_KEYS.find(pk => (pots[pk] || []).includes(nationId));
-  return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 460 }}>
-        <div className="row" style={{ marginBottom: 14 }}>
-          <Flag id={nationId} size={30} radius={6} />
-          <div className="h2">{NATION[nationId].name}</div>
-          <button className="wc-hbtn" style={{ marginLeft: "auto" }} onClick={onClose}>&#10005;</button>
-        </div>
-        <div className="eyebrow" style={{ marginBottom: 8 }}>{cur ? "Move to a different pot" : "Add to a pot"}</div>
-        <div style={{ display: "grid", gap: 8 }}>
-          {POT_KEYS.map(pk => (
-            <button key={pk} className="btn btn-ghost" disabled={pk === cur}
-              style={{ justifyContent: "flex-start", gap: 10, opacity: pk === cur ? .45 : 1 }}
-              onClick={() => { onMove(pk); onClose(); }}>
-              <span className="pill" style={{ background: POT_META[pk].accent, color: "#0a0f08" }}>{POT_META[pk].tag}</span>
-              {POT_META[pk].label}{pk === cur ? " - current" : ""}
-            </button>
-          ))}
-          {cur && (
-            <button className="btn btn-ghost"
-              style={{ color: "var(--live)", borderColor: "rgba(255,77,77,.4)", justifyContent: "flex-start" }}
-              onClick={() => { onMove(null); onClose(); }}>
-              Remove from the draft
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+import { Icon } from '../components/Icon';
+import { Confetti, PotTag, POT_OF } from '../components/shared';
 
 interface Props {
   state: AppState;
@@ -56,13 +15,16 @@ interface Props {
   toast: (msg: string) => void;
 }
 
+function unassignedNations(pots: Record<string, string[]>) {
+  return NATIONS.filter(n => !POT_KEYS.some(pk => (pots[pk] || []).includes(n.id))).map(n => n.id);
+}
+
 export function DraftView({ state, isCommish, commishName, onRunDraft, onReset, onMovePot }: Props) {
   const teams = state.teams || [];
   const board = state.board || [];
   const pots = state.pots;
-  const [reveal, setReveal] = useState(state.draftDone ? 0 : -1);
-  const [editPots, setEditPots] = useState(false);
-  const [menu, setMenu] = useState<string | null>(null);
+  const [reveal, setReveal] = useState(state.draftDone ? board.length : 0);
+  const [editPot, setEditPot] = useState<string | null>(null);
   const played = useRef(false);
 
   useEffect(() => {
@@ -74,178 +36,171 @@ export function DraftView({ state, isCommish, commishName, onRunDraft, onReset, 
         n++;
         setReveal(n);
         if (n >= board.length) clearInterval(iv);
-      }, 620);
+      }, 820);
       return () => clearInterval(iv);
     }
     if (state.draftDone && played.current) setReveal(board.length);
   }, [state.draftDone, board.length]);
 
-  const shown = reveal < 0 ? 0 : reveal;
-  const current = board[shown];
+  const teamName = (id: string) => teams.find(t => t.id === id)?.name || '';
   const minPot = Math.min(...POT_KEYS.map(pk => (pots[pk] || []).length));
-  const enoughTeams = teams.length >= 1;
-  const enoughNations = teams.length <= minPot;
-  const canRun = isCommish && enoughTeams && enoughNations;
+  const canRun = isCommish && teams.length >= 1 && teams.length <= minPot;
   const unassigned = unassignedNations(pots);
 
-  if (!state.draftDone) {
+  /* ---- RUNNING / DONE (draft is done) ---- */
+  if (state.draftDone) {
+    const running = reveal < board.length;
+    const current = board[Math.min(reveal, board.length - 1)];
     return (
-      <div>
-        <div className="card">
-          <div className="eyebrow">The draw</div>
-          <div className="h2" style={{ margin: "6px 0 8px" }}>Serpentine draft</div>
-          <div className="muted tiny">
-            Each team is randomly assigned <b style={{ color: "var(--txt)" }}>one nation from each pot</b>.
-            Snake order means pick #1 in round one drafts last in round two -- luck of the draw, fair for everyone.
+      <div className="content">
+        {running ? (
+          <div className="reveal-stage onclock">
+            <div className="eyebrow" style={{ color: 'var(--lime)', letterSpacing: '.3em' }}>● On the clock</div>
+            <div className="display" style={{ fontSize: 18, color: '#9C988C', marginTop: 14 }}>{teamName(current.teamId)}</div>
+            <div className="pop" key={reveal} style={{ margin: '14px 0 4px' }}>
+              <Flag id={current.nationId} size={104} ring="pot" />
+            </div>
+            <div className="display pop" key={'n' + reveal} style={{ fontSize: 40, color: 'var(--paper)', marginTop: 8 }}>{NATION[current.nationId].name}</div>
+            <div style={{ marginTop: 10 }}><PotTag pot={current.pot} /></div>
+            <div className="row" style={{ justifyContent: 'center', gap: 5, marginTop: 20, flexWrap: 'wrap' }}>
+              {board.map((_, i) => <span key={i} style={{ width: i < reveal ? 18 : 7, height: 7, borderRadius: 4, background: i < reveal ? 'var(--lime)' : 'rgba(255,255,255,.2)', transition: 'all .3s' }} />)}
+            </div>
           </div>
-          <div style={{ height: 14 }} />
-          {isCommish ? (
-            <>
-              <button className="btn btn-lime" disabled={!canRun}
-                onClick={() => { played.current = false; onRunDraft(); }}>
-                <Icon d={ICONS.draft} size={18} />
-                {!enoughTeams ? "Need at least 1 team" : !enoughNations
-                  ? `A pot only has ${minPot} nations`
-                  : `Run the draft \u00B7 ${teams.length} team${teams.length > 1 ? "s" : ""}`}
-              </button>
-              {enoughTeams && !enoughNations && (
-                <div className="muted tiny" style={{ marginTop: 8, textAlign: "center" }}>
-                  Each pot needs at least {teams.length} nations for {teams.length} teams.
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="onclock" style={{ padding: 16 }}>
-              <div className="eyebrow">Locked</div>
-              <div style={{ fontWeight: 700, marginTop: 6 }}>
-                Only the commissioner{commishName ? <> (<b style={{ color: "var(--lime)" }}>{commishName}</b>)</> : ""} can start the draft.
+        ) : (
+          <div className="card pad" style={{ textAlign: 'center', background: 'var(--ink)', color: 'var(--paper)', border: '2px solid var(--ink)', position: 'relative', overflow: 'hidden' }}>
+            <Confetti />
+            <div style={{ fontSize: 34 }}>🎉</div>
+            <div className="display" style={{ fontSize: 28, color: 'var(--lime)', marginTop: 6 }}>Draft complete</div>
+            <p className="muted" style={{ color: '#9C988C', fontSize: 14, margin: '8px 0 0' }}>Every couple has their three nations. Let the games begin.</p>
+          </div>
+        )}
+
+        <div className="sec-head"><span className="eyebrow">{running ? 'Draft board' : 'Final board'}</span><span className="muted" style={{ fontSize: 12 }}>{reveal} / {board.length}</span></div>
+        <div className="card flat" style={{ overflow: 'hidden' }}>
+          {board.slice(0, reveal).reverse().map((p) => (
+            <div className="tick" key={p.pickNo}>
+              <span className="num" style={{ fontSize: 20, color: 'var(--mut-2)', width: 30 }}>{String(p.pickNo).padStart(2, '0')}</span>
+              <Flag id={p.nationId} size={34} ring="pot" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 14 }}>{NATION[p.nationId].name}</div>
+                <div className="muted" style={{ fontSize: 12 }}>{teamName(p.teamId)}</div>
               </div>
+              <PotTag pot={p.pot} />
             </div>
-          )}
-          {teams.length > 0 && (
-            <div className="muted tiny" style={{ marginTop: 10, textAlign: "center" }}>
-              Drafting: {teams.map(t => t.name).join(" \u00B7 ")}
-            </div>
-          )}
+          ))}
         </div>
 
-        {isCommish && (
-          <button className="chip" style={{ margin: "0 auto 12px", display: "flex" }}
-            onClick={() => setEditPots(v => !v)}>
-            {editPots ? "Done editing pots" : "Customize pots"}
+        {isCommish && !running && (
+          <button className="btn btn-ghost btn-block" style={{ marginTop: 14 }}
+            onClick={() => { if (confirm('Re-draft? This clears the current assignments for everyone.')) { played.current = false; onReset(); } }}>
+            Re-draft
           </button>
         )}
-
-        {POT_KEYS.map(pk => {
-          const ids = pots[pk] || [];
-          const short = ids.length < teams.length;
-          return (
-            <div className="card" key={pk}>
-              <div className="row" style={{ marginBottom: 10 }}>
-                <span className="pill" style={{ background: POT_META[pk].accent, color: "#0a0f08" }}>{POT_META[pk].tag}</span>
-                <div className="h2">{POT_META[pk].label}</div>
-                <span className="tiny" style={{ marginLeft: "auto", fontWeight: 800, color: short ? "var(--live)" : "var(--mut)" }}>
-                  {ids.length} nations
-                </span>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {ids.map(id => (
-                  <span key={id} className="member"
-                    style={editPots ? { cursor: "pointer", borderColor: "var(--line2)" } : {}}
-                    onClick={editPots ? () => setMenu(id) : undefined}>
-                    <Flag id={id} size={18} /> {NATION[id].name}
-                    {editPots && <span style={{ color: "var(--mut2)", fontWeight: 800 }}> ...</span>}
-                  </span>
-                ))}
-                {ids.length === 0 && <span className="muted tiny">empty -- add nations below</span>}
-              </div>
-            </div>
-          );
-        })}
-
-        {(editPots || unassigned.length > 0) && (
-          <div className="card" style={{ borderStyle: "dashed" }}>
-            <div className="row" style={{ marginBottom: 10 }}>
-              <div className="h2" style={{ color: "var(--mut)" }}>Not in the draft</div>
-              <span className="tiny muted" style={{ marginLeft: "auto", fontWeight: 800 }}>{unassigned.length}</span>
-            </div>
-            {unassigned.length === 0 ? (
-              <div className="muted tiny">All 48 nations are in a pot.</div>
-            ) : (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {unassigned.map(id => (
-                  <span key={id} className="member"
-                    style={{ cursor: editPots ? "pointer" : "default", opacity: .8 }}
-                    onClick={editPots ? () => setMenu(id) : undefined}>
-                    <Flag id={id} size={18} /> {NATION[id].name}
-                    {editPots && <span style={{ color: "var(--lime)", fontWeight: 800 }}> +</span>}
-                  </span>
-                ))}
-              </div>
-            )}
-            {editPots && (
-              <div className="muted tiny" style={{ marginTop: 10 }}>
-                Tap any nation to move it between pots or pull it out of the draft.
-              </div>
-            )}
-          </div>
-        )}
-
-        {menu && <PotMenu nationId={menu} pots={pots} onMove={(t) => onMovePot(menu, t)} onClose={() => setMenu(null)} />}
       </div>
     );
   }
 
+  /* ---- PRE-DRAFT ---- */
   return (
-    <div>
-      {shown < board.length ? (
-        <div className="onclock">
-          <div className="eyebrow">{current ? `Pick ${current.pickNo} of ${board.length}` : "Starting..."}</div>
-          {current && (
-            <>
-              <div className="big">{teams.find(t => t.id === current.teamId)?.name}</div>
-              <div className="row" style={{ justifyContent: "center", gap: 10, marginTop: 12 }}>
-                <Flag id={current.nationId} size={40} radius={7} />
-                <div style={{ textAlign: "left" }}>
-                  <div style={{ fontWeight: 800, fontSize: 16 }}>{NATION[current.nationId].name}</div>
-                  <span className="pill" style={{ background: POT_META[current.pot].accent, color: "#0a0f08" }}>
-                    {POT_META[current.pot].tag} - {POT_META[current.pot].label}
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
+    <div className="content">
+      <div className="card pad">
+        <div className="row" style={{ gap: 10, marginBottom: 10 }}>
+          <span style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--lime)', border: '1.5px solid var(--ink)', display: 'grid', placeItems: 'center' }}><Icon name="bolt" size={22} /></span>
+          <div><div className="eyebrow">The format</div><h2 className="h2" style={{ fontSize: 20 }}>Serpentine draft</h2></div>
         </div>
+        <p style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--ink-2)', margin: '0 0 4px' }}>
+          Each couple is randomly dealt <b>three nations</b> — one Favorite, one Underdog, one Longshot. The order snakes back and forth so it's fair. It's over in seconds, and it's the best 30 seconds of the tournament.
+        </p>
+        <div className="row wrap" style={{ gap: 8, marginTop: 14 }}>
+          <span className="chip"><span style={{ width: 9, height: 9, borderRadius: 3, background: 'var(--gold)' }} />Favorites</span>
+          <span className="chip"><span style={{ width: 9, height: 9, borderRadius: 3, background: 'var(--cyan)' }} />Underdogs</span>
+          <span className="chip"><span style={{ width: 9, height: 9, borderRadius: 3, background: 'var(--magenta)' }} />Longshots</span>
+        </div>
+        {teams.length > 0 && (
+          <div className="muted" style={{ fontSize: 12, marginTop: 12, textAlign: 'center' }}>
+            Drafting: {teams.map(t => t.name).join(' · ')}
+          </div>
+        )}
+      </div>
+
+      {isCommish ? (
+        <button className="btn btn-lime btn-block" style={{ marginTop: 14, height: 62, fontSize: 17, boxShadow: '0 5px 0 var(--ink)' }}
+          disabled={!canRun} onClick={() => { played.current = false; onRunDraft(); }}>
+          <Icon name="bolt" size={22} />
+          {teams.length < 1 ? 'Need at least 1 team' : teams.length > minPot ? `A pot only has ${minPot} nations` : 'Run the draft'}
+        </button>
       ) : (
-        <div className="card" style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 28 }}>&#127881;</div>
-          <div className="h2" style={{ margin: "4px 0" }}>Draft complete</div>
-          <div className="muted tiny">Everyone's locked in. Head to Matches to start tracking.</div>
+        <div className="card pad" style={{ marginTop: 14, textAlign: 'center' }}>
+          <div style={{ fontSize: 22, marginBottom: 6 }}>🔒</div>
+          <div style={{ fontWeight: 800 }}>Waiting for the commissioner</div>
+          <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{commishName ? `${commishName} 👑` : 'The commissioner'} runs the draft when everyone's in.</div>
         </div>
       )}
 
-      <div className="card">
-        <div className="eyebrow" style={{ marginBottom: 10 }}>Draft board</div>
-        <div style={{ display: "grid", gap: 8 }}>
-          {board.slice(0, shown + 1).reverse().map(b => (
-            <div className="tick" key={b.pickNo}>
-              <span className="pno">{String(b.pickNo).padStart(2, "0")}</span>
-              <Flag id={b.nationId} size={26} radius={5} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 13.5 }}>{NATION[b.nationId].name}</div>
-                <div className="muted tiny">{teams.find(t => t.id === b.teamId)?.name}</div>
-              </div>
-              <span className="pill" style={{ background: POT_META[b.pot].accent, color: "#0a0f08" }}>{POT_META[b.pot].tag}</span>
+      {/* pot editor */}
+      <div className="sec-head"><span className="eyebrow">The pots</span>{isCommish && <span className="muted" style={{ fontSize: 12 }}>tap a nation to move it</span>}</div>
+      {POT_KEYS.map(pk => {
+        const nats = pots[pk] || [];
+        const short = nats.length < teams.length;
+        return (
+          <div key={pk} className="card flat pad" style={{ marginBottom: 10 }}>
+            <div className="between" style={{ marginBottom: 12 }}>
+              <div className="row" style={{ gap: 8 }}><span className={`pot ${POT_OF[pk].cls}`}>{POT_OF[pk].tag}</span><span style={{ fontFamily: 'Anton, Archivo, sans-serif', textTransform: 'uppercase', fontSize: 16 }}>{POT_OF[pk].label}s</span></div>
+              <span className="tnum" style={{ fontSize: 12, fontWeight: 800, color: short ? 'var(--live)' : 'var(--mut)' }}>{nats.length}</span>
             </div>
-          ))}
-        </div>
+            {nats.length === 0 ? (
+              <div className="muted" style={{ fontSize: 12.5 }}>empty — add nations below</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px 6px' }}>
+                {nats.map(id => (
+                  <button key={id} onClick={() => isCommish && setEditPot(id)} style={{ border: 0, background: 'transparent', cursor: isCommish ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
+                    <Flag id={id} size={42} ring="pot" />
+                    <span style={{ fontSize: 10.5, fontWeight: 700, textAlign: 'center', lineHeight: 1.1 }}>{NATION[id].name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div className="card flat pad" style={{ borderStyle: 'dashed', textAlign: 'center' }}>
+        <div className="eyebrow">Not in the draft</div>
+        {unassigned.length === 0 ? (
+          <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>Every nation is in a pot.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px 6px', marginTop: 12 }}>
+            {unassigned.map(id => (
+              <button key={id} onClick={() => isCommish && setEditPot(id)} style={{ border: 0, background: 'transparent', cursor: isCommish ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, opacity: .85 }}>
+                <Flag id={id} size={42} ring="ink" />
+                <span style={{ fontSize: 10.5, fontWeight: 700, textAlign: 'center', lineHeight: 1.1 }}>{NATION[id].name}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {isCommish && (
-        <button className="chip" style={{ margin: "4px auto 0", display: "flex" }}
-          onClick={() => { if (confirm("Re-draft? This clears the current assignments for everyone.")) { played.current = false; onReset(); } }}>
-          Re-draft
-        </button>
+      {/* move sheet */}
+      {editPot && (
+        <div className="modal-bg" onClick={() => setEditPot(null)}>
+          <div className="sheet" onClick={e => e.stopPropagation()} style={{ padding: '0 18px 26px' }}>
+            <div className="sheet-grab" />
+            <div className="row" style={{ gap: 11, padding: '8px 0 16px' }}>
+              <Flag id={editPot} size={52} ring="pot" />
+              <div><div className="display" style={{ fontSize: 22 }}>{NATION[editPot].name}</div><div style={{ marginTop: 4 }}><PotTag pot={NATION[editPot].pot} /></div></div>
+            </div>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>{POT_KEYS.find(pk => pots[pk]?.includes(editPot)) ? 'Move to' : 'Add to a pot'}</div>
+            {POT_KEYS.filter(p => !pots[p]?.includes(editPot)).map(p => (
+              <button key={p} className="btn btn-ghost btn-block" style={{ marginBottom: 8, justifyContent: 'space-between' }}
+                onClick={() => { onMovePot(editPot, p); setEditPot(null); }}>
+                <span>{POT_OF[p].label}s</span><span className={`pot ${POT_OF[p].cls}`}>{POT_OF[p].tag}</span>
+              </button>
+            ))}
+            {POT_KEYS.some(pk => pots[pk]?.includes(editPot)) && (
+              <button className="btn btn-ghost btn-block" style={{ marginTop: 4, color: 'var(--live)', borderColor: 'var(--live)' }}
+                onClick={() => { onMovePot(editPot, null); setEditPot(null); }}>Pull out of the draft</button>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

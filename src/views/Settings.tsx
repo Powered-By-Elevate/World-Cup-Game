@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { AppState, MeState, Scoring, Team } from '../data/types';
 import { HAS_REAL } from '../utils/storage';
 import { clamp } from '../utils/helpers';
+import { Icon } from '../components/Icon';
+import { Avatar } from '../components/shared';
 
 interface Props {
   state: AppState;
@@ -18,93 +20,77 @@ interface Props {
 
 export function Settings({ state, myTeam, isCommish, commishName, onClose, onScoring, onLeave, onRename, onClaim }: Props) {
   const sc = state.scoring;
-  const [name, setName] = useState(myTeam?.name || "");
+  const [name, setName] = useState(myTeam?.name || '');
+
+  const set = (k: 'win' | 'draw', v: number) => onScoring({ ...sc, [k]: clamp(v, 0, 9) });
+  const setB = (k: string, v: number) => onScoring({ ...sc, b: { ...sc.b, [k]: clamp(v, 0, 50) } });
+
+  const Stp = ({ label, val, dec, inc, gold }: { label: string; val: number; dec: () => void; inc: () => void; gold?: boolean }) => (
+    <div className="between" style={{ padding: '10px 0', borderBottom: '1px solid var(--line-2)' }}>
+      <span style={{ fontWeight: 600, fontSize: 14, color: gold ? 'var(--gold)' : undefined }}>{label}</span>
+      <div className="stepper"><button onClick={dec}>–</button><span className="val">{val}</span><button onClick={inc}>+</button></div>
+    </div>
+  );
 
   return (
     <div className="modal-bg" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="row" style={{ marginBottom: 16 }}>
-          <div className="h2">Settings</div>
-          <button className="wc-hbtn" style={{ marginLeft: "auto" }} onClick={onClose}>&#10005;</button>
+      <div className="sheet" onClick={e => e.stopPropagation()}>
+        <div className="sheet-grab" />
+        <div className="between" style={{ padding: '4px 18px 14px' }}>
+          <h2 className="display" style={{ fontSize: 26 }}>Settings</h2>
+          <button className="hdr-btn" onClick={onClose} style={{ border: '1.5px solid var(--line)' }}><Icon name="x" size={18} /></button>
         </div>
 
-        <div className="eyebrow">Scoring</div>
-        <div className="card" style={{ marginTop: 8 }}>
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <span style={{ fontWeight: 700 }}>Win</span>
-            <div className="stepper">
-              <button onClick={() => onScoring({ ...sc, win: clamp(sc.win - 1, 0, 9) })}>-</button>
-              <b>{sc.win}</b>
-              <button onClick={() => onScoring({ ...sc, win: clamp(sc.win + 1, 0, 9) })}>+</button>
-            </div>
+        <div style={{ padding: '0 18px 30px' }}>
+          {/* sync */}
+          <div className="between card flat pad" style={{ marginBottom: 14 }}>
+            <div><div style={{ fontWeight: 800 }}>Family sync</div><div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>{HAS_REAL ? 'On — everyone sees live updates' : 'Preview — changes stay on this device'}</div></div>
+            <span className={`status ${HAS_REAL ? 'live' : 'preview'}`}><span className="dot" />{HAS_REAL ? 'Live' : 'Preview'}</span>
           </div>
-          <div className="row" style={{ justifyContent: "space-between", marginTop: 10 }}>
-            <span style={{ fontWeight: 700 }}>Draw</span>
-            <div className="stepper">
-              <button onClick={() => onScoring({ ...sc, draw: clamp(sc.draw - 1, 0, 9) })}>-</button>
-              <b>{sc.draw}</b>
-              <button onClick={() => onScoring({ ...sc, draw: clamp(sc.draw + 1, 0, 9) })}>+</button>
-            </div>
-          </div>
-          <div className="row" style={{ justifyContent: "space-between", marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
-            <div>
-              <div style={{ fontWeight: 700 }}>Round bonuses</div>
-              <div className="muted tiny">reward reaching R16, QF, SF...</div>
-            </div>
-            <span className={"chip " + (sc.bonuses ? "on" : "")} onClick={() => onScoring({ ...sc, bonuses: !sc.bonuses })}>
-              {sc.bonuses ? "ON" : "OFF"}
-            </span>
-          </div>
-          {sc.bonuses && (
-            <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-              {([["R32", "Reach R32"], ["R16", "Reach R16"], ["QF", "Reach QF"], ["SF", "Reach SF"], ["Final", "Reach Final"], ["CHAMP", "Win the Cup"]] as const).map(([k, lab]) => (
-                <div className="row" key={k} style={{ justifyContent: "space-between" }}>
-                  <span className="tiny" style={{ fontWeight: 700 }}>{lab}</span>
-                  <div className="stepper">
-                    <button onClick={() => onScoring({ ...sc, b: { ...sc.b, [k]: clamp(sc.b[k] - 1, 0, 50) } })}>-</button>
-                    <b>{sc.b[k]}</b>
-                    <button onClick={() => onScoring({ ...sc, b: { ...sc.b, [k]: clamp(sc.b[k] + 1, 0, 50) } })}>+</button>
-                  </div>
-                </div>
-              ))}
-              <div className="muted tiny">Bonuses are cumulative milestones -- a nation that reaches the final earns every step up to it.</div>
-            </div>
-          )}
-        </div>
 
-        {myTeam && (
-          <>
-            <div className="eyebrow" style={{ marginTop: 18 }}>Commissioner</div>
-            <div className="card" style={{ marginTop: 8 }}>
-              <div className="tiny" style={{ fontWeight: 600 }}>
-                {commishName ? "The commissioner runs the draft & edits the pots." : "No commissioner yet -- claim it to control the draft."}
+          {/* scoring */}
+          <div className="eyebrow" style={{ marginBottom: 4 }}>Scoring</div>
+          <div className="card flat pad" style={{ marginBottom: 14 }}>
+            <Stp label="Points per win" val={sc.win} dec={() => set('win', sc.win - 1)} inc={() => set('win', sc.win + 1)} />
+            <Stp label="Points per draw" val={sc.draw} dec={() => set('draw', sc.draw - 1)} inc={() => set('draw', sc.draw + 1)} />
+            <div className="between" style={{ padding: '12px 0 4px' }}>
+              <div><div style={{ fontWeight: 600, fontSize: 14 }}>Round bonuses</div><div className="muted" style={{ fontSize: 12 }}>Reward going deep in the knockouts</div></div>
+              <div className={`toggle ${sc.bonuses ? 'on' : ''}`} onClick={() => onScoring({ ...sc, bonuses: !sc.bonuses })}><span className="knob" /></div>
+            </div>
+            {sc.bonuses && (
+              <div className="fade-in" style={{ marginTop: 6, borderTop: '1px solid var(--line-2)', paddingTop: 4 }}>
+                {([['R32', 'Reach Round of 32'], ['R16', 'Reach Round of 16'], ['QF', 'Reach Quarter-finals'], ['SF', 'Reach Semi-finals'], ['Final', 'Reach the Final']] as const).map(([k, l]) => (
+                  <Stp key={k} label={l} val={sc.b[k]} dec={() => setB(k, sc.b[k] - 1)} inc={() => setB(k, sc.b[k] + 1)} />
+                ))}
+                <Stp label="🏆 Win it all" val={sc.b.CHAMP} dec={() => setB('CHAMP', sc.b.CHAMP - 1)} inc={() => setB('CHAMP', sc.b.CHAMP + 1)} gold />
               </div>
-              {isCommish && commishName
-                ? <div className="muted tiny" style={{ marginTop: 8 }}>That's you</div>
-                : <button className="btn btn-ghost" style={{ marginTop: 10 }} onClick={() => { onClaim(); onClose(); }}>
-                    {commishName ? <>Take over from {commishName}</> : "Become commissioner"}
-                  </button>
-              }
-            </div>
+            )}
+          </div>
 
-            <div className="eyebrow" style={{ marginTop: 18 }}>Your team</div>
-            <div className="card" style={{ marginTop: 8 }}>
-              <input className="input" value={name} onChange={e => setName(e.target.value)} />
-              <div className="row" style={{ gap: 8, marginTop: 10 }}>
-                <button className="btn btn-ghost" onClick={() => { onRename(name.trim()); onClose(); }} disabled={!name.trim()}>
-                  Rename team
-                </button>
-                <button className="btn btn-ghost" style={{ color: "var(--live)", borderColor: "rgba(255,77,77,.4)" }}
-                  onClick={() => { if (confirm("Leave this team?")) { onLeave(); onClose(); } }}>
-                  Leave team
-                </button>
+          {/* commissioner */}
+          <div className="eyebrow" style={{ marginBottom: 4 }}>Commissioner</div>
+          <div className="between card flat pad" style={{ marginBottom: 14 }}>
+            <div className="row" style={{ gap: 8 }}>
+              <Avatar name={commishName || '?'} />
+              <div><div style={{ fontWeight: 800 }}>{commishName ? `${commishName} 👑` : 'No commissioner yet'}</div><div className="muted" style={{ fontSize: 12 }}>Runs the draft & rules</div></div>
+            </div>
+            {isCommish && commishName
+              ? <span className="muted" style={{ fontSize: 12 }}>That's you</span>
+              : <button className="btn btn-ghost btn-sm" onClick={() => { onClaim(); onClose(); }}>{commishName ? 'Take over' : 'Claim'}</button>}
+          </div>
+
+          {/* your team */}
+          {myTeam && <>
+            <div className="eyebrow" style={{ marginBottom: 4 }}>Your team</div>
+            <div className="card flat pad">
+              <div className="row" style={{ gap: 8, marginBottom: 10 }}>
+                <input className="ipt" value={name} onChange={e => setName(e.target.value)} style={{ flex: 1 }} />
+                <button className="btn btn-ink btn-sm" style={{ height: 48 }} disabled={!name.trim()} onClick={() => { onRename(name.trim()); onClose(); }}>Save</button>
               </div>
+              <button className="btn btn-ghost btn-block" style={{ color: 'var(--live)', borderColor: 'var(--live)' }}
+                onClick={() => { if (confirm('Leave this team?')) { onLeave(); onClose(); } }}>Leave team</button>
             </div>
-          </>
-        )}
-
-        <div className="muted tiny" style={{ marginTop: 18, textAlign: "center" }}>
-          {HAS_REAL ? "Synced live for everyone with the link." : "Preview mode -- publish & share the link for live multiplayer."}
+          </>}
         </div>
       </div>
     </div>

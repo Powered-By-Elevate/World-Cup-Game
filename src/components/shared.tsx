@@ -1,53 +1,111 @@
-import { useState, useEffect } from 'react';
-import { NATION, POT_KEYS } from '../data/nations';
+import { useState, useEffect, useMemo } from 'react';
+import { NATION } from '../data/nations';
 import type { Team } from '../data/types';
 import { Flag } from './Flag';
-import { parseDate } from '../utils/helpers';
 
-export function Avatar({ name, color = "#C7FF4E" }: { name: string; color?: string }) {
-  return (
-    <span className="av" style={{ background: color }}>
-      {(name || "?").slice(0, 1).toUpperCase()}
-    </span>
-  );
+/* ---------- pot helpers ---------- */
+export const POT_OF: Record<string, { label: string; tag: string; cls: string }> = {
+  FAV: { label: 'Favorite', tag: 'POT 1', cls: 'fav' },
+  UND: { label: 'Underdog', tag: 'POT 2', cls: 'und' },
+  LNG: { label: 'Longshot', tag: 'POT 3', cls: 'lng' },
+};
+export function PotTag({ pot }: { pot: string }) {
+  const p = POT_OF[pot];
+  return <span className={`pot ${p.cls}`}>{p.tag}</span>;
 }
 
-export function TeamFlags({ team, size = 22 }: { team: Team; size?: number }) {
-  if (!team.picks) return <span className="muted tiny">not drafted</span>;
+const PICK_KEYS = ['FAV', 'UND', 'LNG'] as const;
+
+/* ---------- team gradient from its nation colors ---------- */
+export function teamGradient(team: Team | null): string {
+  if (!team?.picks) return 'linear-gradient(135deg,#888,#555)';
+  const ids = PICK_KEYS.map(k => team.picks![k]).filter(Boolean).map(id => NATION[id]).filter(Boolean);
+  if (ids.length < 2) return 'linear-gradient(135deg,#888,#555)';
+  const stops: string[] = [];
+  ids.forEach(n => { stops.push(n.c1); stops.push(n.c2); });
+  return `linear-gradient(115deg, ${stops.join(', ')})`;
+}
+
+/* ---------- TeamFlags : a team's three picks in a row ---------- */
+export function TeamFlags({ team, size = 40, ring = 'pot' }: { team: Team; size?: number; ring?: 'pot' | 'ink' }) {
   return (
-    <div className="row" style={{ gap: 5 }}>
-      {POT_KEYS.map(pk => team.picks![pk]
-        ? <Flag key={pk} id={team.picks![pk]} size={size} />
-        : <span key={pk} style={{
-            width: size, height: size * .68, borderRadius: 5,
-            background: "rgba(255,255,255,.08)", display: "inline-block"
-          }} />
-      )}
+    <div className="flagrow">
+      {PICK_KEYS.map((k, i) => {
+        const id = team.picks?.[k];
+        return id
+          ? <Flag key={i} id={id} size={size} ring={ring} />
+          : <span key={i} className="flag" style={{ width: size, height: size, background: 'var(--line)' }} />;
+      })}
     </div>
   );
 }
 
-export function teamGradient(team: Team | null) {
-  if (!team?.picks) return "linear-gradient(135deg,#1b2a22,#0d1512)";
-  const cs = POT_KEYS.map(pk => NATION[team.picks![pk]]?.c1).filter(Boolean);
-  if (cs.length < 2) return "linear-gradient(135deg,#1b2a22,#0d1512)";
-  return `linear-gradient(125deg, ${cs[0]} 0%, ${cs[1]} 52%, ${cs[2] || cs[1]} 100%)`;
+/* ---------- Avatar ---------- */
+const AV_COLORS = ['#FF3D9A', '#07C2C7', '#FFB000', '#7A5CFF', '#FF6A3D', '#1FB257'];
+export function Avatar({ name, size = 28, idx = 0 }: { name: string; size?: number; idx?: number }) {
+  const c = AV_COLORS[((name?.charCodeAt(0) || 0) + idx) % AV_COLORS.length];
+  return (
+    <span className="avatar" style={{ width: size, height: size, background: c, fontSize: size * 0.42 }}>
+      {(name || '?')[0].toUpperCase()}
+    </span>
+  );
 }
 
-export function Countdown({ to }: { to: string }) {
-  const [, force] = useState(0);
-  useEffect(() => {
-    const iv = setInterval(() => force(x => x + 1), 1000);
-    return () => clearInterval(iv);
-  }, []);
-  const ms = parseDate(to).getTime() - Date.now();
-  if (ms <= 0) return <span>kicking off</span>;
-  const s = Math.floor(ms / 1000);
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const ss = s % 60;
-  if (d > 0) return <span>{d}d {h}h {m}m</span>;
-  if (h > 0) return <span>{h}h {m}m {ss}s</span>;
-  return <span>{m}m {ss}s</span>;
+/* ---------- Member chip ---------- */
+export function Member({ name, idx = 0, commish = false }: { name: string; idx?: number; commish?: boolean }) {
+  return (
+    <span className="member">
+      <Avatar name={name} idx={idx} />
+      {name}{commish && <span title="Commissioner" style={{ marginLeft: 1 }}>👑</span>}
+    </span>
+  );
+}
+
+/* ---------- Countdown ---------- */
+export function Countdown({ target, compact }: { target: number; compact?: boolean }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  let diff = Math.max(0, target - now);
+  const h = Math.floor(diff / 3.6e6); diff -= h * 3.6e6;
+  const m = Math.floor(diff / 6e4); diff -= m * 6e4;
+  const s = Math.floor(diff / 1000);
+  const pad = (x: number) => String(x).padStart(2, '0');
+  const Cell = ({ v, l }: { v: number; l: string }) => (
+    <div style={{ textAlign: 'center' }}>
+      <div className="num" style={{ fontSize: compact ? 22 : 30, lineHeight: 1 }}>{pad(v)}</div>
+      <div className="eyebrow" style={{ fontSize: 8, marginTop: 3 }}>{l}</div>
+    </div>
+  );
+  return (
+    <div className="row" style={{ gap: compact ? 10 : 16 }}>
+      <Cell v={h} l="HRS" /><span className="num" style={{ fontSize: compact ? 20 : 26, opacity: .3 }}>:</span>
+      <Cell v={m} l="MIN" /><span className="num" style={{ fontSize: compact ? 20 : 26, opacity: .3 }}>:</span>
+      <Cell v={s} l="SEC" />
+    </div>
+  );
+}
+
+/* ---------- Confetti burst ---------- */
+export function Confetti({ count = 80 }: { count?: number }) {
+  const pieces = useMemo(() => Array.from({ length: count }).map((_, i) => ({
+    left: Math.random() * 100,
+    delay: Math.random() * 0.6,
+    dur: 2.2 + Math.random() * 1.8,
+    color: ['#C8F23C', '#FFB000', '#07C2C7', '#FF3D9A', '#FF6A3D', '#15120C'][i % 6],
+    rot: Math.random() * 360,
+    w: 7 + Math.random() * 6,
+    round: i % 3 === 0,
+  })), [count]);
+  return (
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 80 }}>
+      {pieces.map((p, i) => (
+        <span key={i} className="confetti" style={{
+          left: p.left + '%', width: p.w, height: p.w * 1.5, background: p.color,
+          transform: `rotate(${p.rot}deg)`,
+          animation: `fall ${p.dur}s linear ${p.delay}s forwards`,
+          borderRadius: p.round ? '50%' : '1px',
+        }} />
+      ))}
+    </div>
+  );
 }

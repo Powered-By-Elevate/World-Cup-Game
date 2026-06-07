@@ -2,7 +2,7 @@ import { NATION, POT_KEYS } from '../data/nations';
 import type { AppState, ScoreEntry, Team } from '../data/types';
 import type { StandingEntry } from '../utils/scoring';
 import { Flag } from '../components/Flag';
-import { Avatar, teamGradient } from '../components/shared';
+import { Member, teamGradient } from '../components/shared';
 
 interface Props {
   state: AppState;
@@ -14,59 +14,57 @@ interface Props {
 export function Squads({ state, standings, myTeam }: Props) {
   const teams = state.teams || [];
   if (teams.length === 0) return (
-    <div className="card" style={{ textAlign: "center" }}><div className="h2">No teams yet</div></div>
+    <div className="content">
+      <div className="card pad" style={{ textAlign: 'center' }}><div className="h2">No teams yet</div></div>
+    </div>
   );
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div className="eyebrow" style={{ margin: "2px 4px" }}>
-        {teams.length} teams - {teams.reduce((a, t) => a + (t.members?.length || 0), 0)} players
-      </div>
-      {teams.map(t => {
-        const s = standings.find(x => x.team.id === t.id);
-        const isMine = myTeam?.id === t.id;
-        return (
-          <div className="card" key={t.id} style={isMine ? { borderColor: "rgba(199,255,78,.4)" } : {}}>
-            <div className="row" style={{ marginBottom: 12 }}>
-              <span style={{ width: 8, height: 34, borderRadius: 4, background: teamGradient(t) }} />
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 15 }}>
-                  {t.name} {isMine && <span className="pill on" style={{ background: "var(--lime)", color: "#0a0f08" }}>YOU</span>}
-                </div>
-                <div className="muted tiny">{(t.members || []).length} member{(t.members || []).length === 1 ? "" : "s"}</div>
-              </div>
-              {state.draftDone && s && (
-                <div style={{ marginLeft: "auto", textAlign: "right" }}>
-                  <div style={{ fontFamily: "var(--disp)", fontSize: 20, color: "var(--lime)" }}>{s.total}</div>
-                  <div className="eyebrow">pts</div>
-                </div>
-              )}
-            </div>
-            <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-              {(t.members || []).map(m => (
-                <span className="member" key={m.id}>
-                  <Avatar name={m.name} /> {m.name}
-                  {m.id === state.commissioner && <span title="Commissioner"> &#128081;</span>}
-                </span>
-              ))}
-              {(t.members || []).length === 0 && <span className="muted tiny">No one's joined yet</span>}
-            </div>
-            {t.picks ? (
-              <div className="flagrow">
-                {POT_KEYS.map(pk => (
-                  <div className="fwrap" key={pk}>
-                    <Flag id={t.picks![pk]} size={40} radius={6} />
-                    <div className="fname">{NATION[t.picks![pk]].name}</div>
-                    {state.draftDone && s && <span className="pill ft-badge">{s.per[pk]?.total ?? 0} pts</span>}
+    <div className="content">
+      <div className="sec-head"><span className="eyebrow">Everyone's teams</span><span className="muted" style={{ fontSize: 12 }}>{teams.length} couples</span></div>
+      <div style={{ display: 'grid', gap: 12 }}>
+        {teams.map(t => {
+          const st = standings.find(s => s.team.id === t.id);
+          const mine = t.id === myTeam?.id;
+          return (
+            <div key={t.id} className="card" style={{ overflow: 'hidden', border: mine ? '2px solid var(--ink)' : '1.5px solid var(--ink)' }}>
+              <div style={{ height: 7, background: teamGradient(t) }} />
+              <div style={{ padding: '13px 14px 14px' }}>
+                <div className="between">
+                  <div className="row" style={{ gap: 8, minWidth: 0 }}>
+                    <span style={{ fontFamily: 'Anton, Archivo, sans-serif', textTransform: 'uppercase', fontSize: 18, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.name}</span>
+                    {mine && <span className="badge you">You</span>}
                   </div>
-                ))}
+                  {state.draftDone && st && (
+                    <div style={{ textAlign: 'right' }}><div className="num" style={{ fontSize: 24, lineHeight: 1 }}>{st.total}</div><div className="eyebrow" style={{ fontSize: 8 }}>PTS</div></div>
+                  )}
+                </div>
+                <div className="row wrap" style={{ gap: 6, marginTop: 10 }}>
+                  {(t.members || []).map((m, i) => <Member key={m.id} name={m.name} idx={i} commish={m.id === state.commissioner} />)}
+                  {(t.members || []).length === 0 && <span className="muted" style={{ fontSize: 12 }}>No one's joined yet</span>}
+                </div>
+                {t.picks ? (
+                  <div className="row" style={{ gap: 8, marginTop: 14, justifyContent: 'space-between' }}>
+                    {POT_KEYS.map(pot => {
+                      const nid = t.picks![pot];
+                      const pts = st?.per[pot]?.total ?? 0;
+                      return (
+                        <div key={pot} style={{ flex: 1, textAlign: 'center', background: 'var(--paper-3)', border: '1px solid var(--line)', borderRadius: 12, padding: '10px 4px 9px' }}>
+                          <Flag id={nid} size={40} ring="pot" />
+                          <div style={{ fontSize: 11, fontWeight: 700, marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{NATION[nid].name}</div>
+                          {state.draftDone && <div className="num" style={{ fontSize: 16, marginTop: 2 }}>{pts}<span style={{ fontSize: 9, fontFamily: 'Archivo, sans-serif', fontWeight: 800, marginLeft: 2, color: 'var(--mut)' }}>PT</span></div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="muted" style={{ fontSize: 13, marginTop: 12 }}>Nations assigned after the draft.</div>
+                )}
               </div>
-            ) : (
-              <div className="muted tiny">Nations assigned after the draft.</div>
-            )}
-          </div>
-        );
-      })}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

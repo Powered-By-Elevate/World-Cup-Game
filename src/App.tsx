@@ -7,7 +7,8 @@ import { sget, sset, HAS_REAL, leagueLink } from './utils/storage';
 import { uid, shuffle } from './utils/helpers';
 import { teamStats, computeMovers } from './utils/scoring';
 import type { StandingEntry } from './utils/scoring';
-import { Icon, ICONS } from './components/Icon';
+import { Icon, Mark } from './components/Icon';
+import type { IconName } from './components/Icon';
 import { Onboarding } from './views/Onboarding';
 import { MyTeam } from './views/MyTeam';
 import { DraftView } from './views/DraftView';
@@ -17,12 +18,12 @@ import { Squads } from './views/Squads';
 import { Settings } from './views/Settings';
 import './styles.css';
 
-const NAV = [
-  { id: "home", label: "My Team", icon: ICONS.home },
-  { id: "draft", label: "Draft", icon: ICONS.draft },
-  { id: "table", label: "Table", icon: ICONS.table },
-  { id: "matches", label: "Matches", icon: ICONS.cal },
-  { id: "squads", label: "Squads", icon: ICONS.users },
+const NAV: { id: string; label: string; icon: IconName }[] = [
+  { id: "home", label: "My Team", icon: "home" },
+  { id: "draft", label: "Draft", icon: "draft" },
+  { id: "table", label: "Table", icon: "table" },
+  { id: "matches", label: "Matches", icon: "cal" },
+  { id: "squads", label: "Squads", icon: "users" },
 ];
 
 export default function App() {
@@ -236,62 +237,71 @@ export default function App() {
     const link = leagueLink() || window.location.href;
     try {
       navigator.clipboard.writeText(link);
-      toast("Link copied -- share it with the family!");
+      toast("Invite link copied to clipboard");
     } catch {
       toast("Copy the page URL to invite others");
     }
   };
 
   if (!loaded) return (
-    <div className="wc-root">
-      <div className="wc-shell" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
-        <div className="muted">Loading...</div>
+    <div className="app">
+      <div className="screen" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
+        <div className="muted">Loading…</div>
       </div>
     </div>
   );
 
   const needsOnboard = !me || !myTeam;
 
-  return (
-    <div className="wc-root">
-      <div className="wc-pitch" />
-      <div className="wc-grain" />
-      <div className="wc-shell">
-        <div className="wc-head">
-          <div className="wc-logo">World Cup<small>FAMILY DRAFT . 2026</small></div>
-          {!needsOnboard && (
-            <>
-              <div className="wc-sync"><span className="wc-dot" />{HAS_REAL ? "LIVE" : "PREVIEW"}</div>
-              <button className="wc-hbtn" onClick={copyLink} title="Invite"><Icon d={ICONS.share} size={18} /></button>
-              <button className="wc-hbtn" onClick={() => setShowSettings(true)} title="Settings"><Icon d={ICONS.gear} size={18} /></button>
-            </>
-          )}
+  if (needsOnboard) {
+    return (
+      <div className="app">
+        <header className="hdr">
+          <div className="wordmark">
+            <Mark size={36} />
+            <div className="wm-text"><div className="l1">World Cup</div><div className="l2">Family Draft · 2026</div></div>
+          </div>
+        </header>
+        <div className="screen">
+          <Onboarding state={state} defaultName={me?.name || ""} onJoin={api.joinTeam} onCreate={api.createTeam} toast={toast} />
         </div>
+        {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
+      </div>
+    );
+  }
 
-        {needsOnboard ? (
-          <Onboarding state={state} defaultName={me?.name || ""} onJoin={api.joinTeam} onCreate={api.createTeam} />
-        ) : (
-          <>
-            {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} standings={standings} setTab={setTab} toast={toast} />}
-            {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
-            {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} />}
-            {tab === "matches" && <MatchesView state={state} scores={scores} myTeam={myTeam} onSaveScore={api.saveScore} onAddKO={api.addKO} onSaveKO={api.saveKO} onDelKO={api.delKO} toast={toast} />}
-            {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
-          </>
-        )}
+  return (
+    <div className="app">
+      <header className="hdr">
+        <div className="wordmark">
+          <Mark size={36} />
+          <div className="wm-text"><div className="l1">World Cup</div><div className="l2">Family Draft · 2026</div></div>
+        </div>
+        <span className={`status ${HAS_REAL ? "live" : "preview"}`} style={{ marginRight: 2 }}>
+          <span className="dot" />{HAS_REAL ? "Live" : "Preview"}
+        </span>
+        <button className="hdr-btn" onClick={copyLink} title="Copy invite link"><Icon name="share" size={16} /></button>
+        <button className="hdr-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="gear" size={18} /></button>
+      </header>
+
+      <div className="screen">
+        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} standings={standings} setTab={setTab} />}
+        {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
+        {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} />}
+        {tab === "matches" && <MatchesView state={state} scores={scores} myTeam={myTeam} onSaveScore={api.saveScore} onAddKO={api.addKO} onSaveKO={api.saveKO} onDelKO={api.delKO} toast={toast} />}
+        {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
       </div>
 
-      {!needsOnboard && (
-        <div className="wc-nav">
-          <div className="wc-nav-in">
-            {NAV.map(n => (
-              <button key={n.id} className={"navb " + (tab === n.id ? "on" : "")} onClick={() => setTab(n.id)}>
-                <Icon d={n.icon} size={20} sw={tab === n.id ? 2.2 : 1.9} />{n.label}
-              </button>
-            ))}
-          </div>
+      <nav className="nav">
+        <div className="nav-inner">
+          {NAV.map(n => (
+            <button key={n.id} className={"navb " + (tab === n.id ? "on" : "")} onClick={() => setTab(n.id)}>
+              <Icon name={n.icon} size={20} />
+              <span className="lbl">{n.label}</span>
+            </button>
+          ))}
         </div>
-      )}
+      </nav>
 
       {showSettings && (
         <Settings
@@ -300,7 +310,7 @@ export default function App() {
           onRename={api.rename} onClaim={api.claimCommish}
         />
       )}
-      {toastMsg && <div className="toast">{toastMsg}</div>}
+      {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
     </div>
   );
 }

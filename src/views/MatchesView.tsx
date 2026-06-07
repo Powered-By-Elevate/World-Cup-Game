@@ -1,163 +1,19 @@
 import { useState } from 'react';
 import { NATION, NATIONS, POT_KEYS } from '../data/nations';
 import { MATCHES, KO_ROUNDS, KO_LABEL, KO_SORT_ORDER } from '../data/fixtures';
-import type { KOMatch } from '../data/fixtures';
+import type { Match, KOMatch } from '../data/fixtures';
 import type { AppState, ScoreEntry, Team } from '../data/types';
 import { matchStatus } from '../utils/scoring';
-import { Flag } from '../components/Flag';
 import { uid, clamp, dayKeyOf, fmtDayLabel, fmtTime } from '../utils/helpers';
+import { Flag } from '../components/Flag';
+import { Icon } from '../components/Icon';
 
-function MatchEditor({ m, ko, score, onSave, onClose }: {
-  m: { h: string; a: string };
-  ko?: KOMatch;
-  score?: ScoreEntry | null;
-  onSave: (v: { h: number; a: number; st: string; pk: string | null }) => void;
-  onClose: () => void;
-}) {
-  const [h, setH] = useState(score?.h ?? 0);
-  const [a, setA] = useState(score?.a ?? 0);
-  const [stt, setStt] = useState(score?.st || "ft");
-  const [pk, setPk] = useState(ko?.pk || m.h);
-  const isKo = !!ko;
-  const levelKo = isKo && ko!.round !== "3rd" && h === a && stt === "ft";
-
+function Stepper({ v, set }: { v: number; set: (n: number) => void }) {
   return (
-    <div className="card" style={{ marginTop: 7, borderColor: "var(--line2)" }}>
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <div className="row" style={{ gap: 7 }}><Flag id={m.h} size={20} /><b className="tiny">{NATION[m.h].name}</b></div>
-        <div className="stepper">
-          <button onClick={() => setH(clamp(h - 1, 0, 30))}>-</button><b>{h}</b>
-          <button onClick={() => setH(clamp(h + 1, 0, 30))}>+</button>
-        </div>
-      </div>
-      <div className="row" style={{ justifyContent: "space-between", marginTop: 9 }}>
-        <div className="row" style={{ gap: 7 }}><Flag id={m.a} size={20} /><b className="tiny">{NATION[m.a].name}</b></div>
-        <div className="stepper">
-          <button onClick={() => setA(clamp(a - 1, 0, 30))}>-</button><b>{a}</b>
-          <button onClick={() => setA(clamp(a + 1, 0, 30))}>+</button>
-        </div>
-      </div>
-      <div className="seg" style={{ marginTop: 12 }}>
-        {[["sched", "Scheduled"], ["live", "Live"], ["ft", "Final"]].map(([v, lab]) => (
-          <button key={v} className={stt === v ? "on" : ""} onClick={() => setStt(v)}>{lab}</button>
-        ))}
-      </div>
-      {levelKo && (
-        <div style={{ marginTop: 10 }}>
-          <div className="eyebrow" style={{ marginBottom: 6 }}>Won on penalties</div>
-          <div className="seg">
-            <button className={pk === m.h ? "on" : ""} onClick={() => setPk(m.h)}>{NATION[m.h].name}</button>
-            <button className={pk === m.a ? "on" : ""} onClick={() => setPk(m.a)}>{NATION[m.a].name}</button>
-          </div>
-        </div>
-      )}
-      <div className="row" style={{ gap: 8, marginTop: 12 }}>
-        <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-        <button className="btn btn-lime" onClick={() => onSave({ h, a, st: stt, pk: levelKo ? pk : null })}>Save score</button>
-      </div>
-    </div>
-  );
-}
-
-function KnockoutPanel({ state, myNations, onAddKO, onSaveKO, onDelKO, toast }: {
-  state: AppState;
-  myNations: string[];
-  onAddKO: (k: KOMatch) => void;
-  onSaveKO: (id: string, v: Partial<KOMatch>) => void;
-  onDelKO: (id: string) => void;
-  toast: (msg: string) => void;
-}) {
-  const [adding, setAdding] = useState(false);
-  const [round, setRound] = useState("R32");
-  const [home, setHome] = useState("BRA");
-  const [away, setAway] = useState("ARG");
-  const [editing, setEditing] = useState<string | null>(null);
-  const ko = state.ko || [];
-  const sorted = [...ko].sort((a, b) => KO_SORT_ORDER.indexOf(a.round) - KO_SORT_ORDER.indexOf(b.round));
-
-  return (
-    <div>
-      <div className="card" style={{ marginBottom: 12 }}>
-        <div className="muted tiny">
-          Knockouts begin <b style={{ color: "var(--txt)" }}>June 28</b>. As matchups are set, add them here -- round bonuses kick in automatically the moment a nation appears in a round.
-        </div>
-        <div style={{ height: 12 }} />
-        {!adding ? (
-          <button className="btn btn-ghost" onClick={() => setAdding(true)}>+ Add a knockout match</button>
-        ) : (
-          <div>
-            <div className="eyebrow" style={{ marginBottom: 6 }}>Round</div>
-            <select className="sel" value={round} onChange={e => setRound(e.target.value)}>
-              {KO_ROUNDS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-            </select>
-            <div className="row" style={{ gap: 8, marginTop: 8 }}>
-              <select className="sel" value={home} onChange={e => setHome(e.target.value)}>
-                {NATIONS.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
-              </select>
-              <span className="mvs">v</span>
-              <select className="sel" value={away} onChange={e => setAway(e.target.value)}>
-                {NATIONS.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
-              </select>
-            </div>
-            <div className="row" style={{ gap: 8, marginTop: 12 }}>
-              <button className="btn btn-ghost" onClick={() => setAdding(false)}>Cancel</button>
-              <button className="btn btn-lime" disabled={home === away}
-                onClick={() => {
-                  onAddKO({ id: uid(), round, h: home, a: away, h_s: null, a_s: null, st: "sched", pk: null });
-                  setAdding(false);
-                  toast("Match added");
-                }}>Add match</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {sorted.length === 0 && (
-        <div className="muted tiny" style={{ textAlign: "center", padding: 14 }}>No knockout matches yet.</div>
-      )}
-      {KO_SORT_ORDER.map(rid => {
-        const list = sorted.filter(k => k.round === rid);
-        if (!list.length) return null;
-        return (
-          <div key={rid}>
-            <div className="daterow">
-              <span className="dl">{KO_LABEL[rid]}</span>
-              <span className="hr" />
-              <span className="muted tiny">{KO_ROUNDS.find(r => r.id === rid)?.when}</span>
-            </div>
-            <div style={{ display: "grid", gap: 7 }}>
-              {list.map(k => {
-                const done = (k.st === "ft" || k.st === "live") && k.h_s != null;
-                const mine = myNations.includes(k.h) || myNations.includes(k.a);
-                return (
-                  <div key={k.id}>
-                    <div className="mrow" onClick={() => setEditing(editing === k.id ? null : k.id)}
-                      style={mine ? { borderColor: "rgba(199,255,78,.35)" } : {}}>
-                      <div className="mside"><Flag id={k.h} size={22} /><span className="mname">{NATION[k.h].name}</span></div>
-                      {done ? <span className="mscore">{k.h_s}</span> : <span className="mvs">-</span>}
-                      {k.st === "live" ? <span className="pill live-badge">LIVE</span> : done ? <span className="pill ft-badge">FT{k.pk ? " (p)" : ""}</span> : <span className="mvs">vs</span>}
-                      {done ? <span className="mscore">{k.a_s}</span> : <span className="mvs" style={{ minWidth: 12 }} />}
-                      <div className="mside away"><Flag id={k.a} size={22} /><span className="mname">{NATION[k.a].name}</span></div>
-                    </div>
-                    {editing === k.id && (
-                      <>
-                        <MatchEditor m={{ h: k.h, a: k.a }} ko={k}
-                          score={{ h: k.h_s, a: k.a_s, st: k.st }}
-                          onClose={() => setEditing(null)}
-                          onSave={(v) => { onSaveKO(k.id, { h_s: v.h, a_s: v.a, st: v.st, pk: v.pk }); setEditing(null); toast("Score saved"); }} />
-                        <button className="chip" style={{ margin: "6px auto 0", display: "flex" }}
-                          onClick={() => { if (confirm("Delete this match?")) { onDelKO(k.id); setEditing(null); } }}>
-                          delete match
-                        </button>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+    <div className="stepper">
+      <button onClick={() => set(clamp(v - 1, 0, 30))}>–</button>
+      <span className="val">{v}</span>
+      <button onClick={() => set(clamp(v + 1, 0, 30))}>+</button>
     </div>
   );
 }
@@ -174,88 +30,198 @@ interface Props {
 }
 
 export function MatchesView({ state, scores, myTeam, onSaveScore, onAddKO, onSaveKO, onDelKO, toast }: Props) {
-  const [filter, setFilter] = useState<"all" | "mine" | "live">("all");
+  const [mode, setMode] = useState<'group' | 'ko'>('group');
+  const [filter, setFilter] = useState<'all' | 'mine' | 'live'>('all');
   const [editing, setEditing] = useState<string | null>(null);
-  const [section, setSection] = useState<"group" | "ko">("group");
-  const myNations = myTeam?.picks ? POT_KEYS.map(pk => myTeam.picks![pk]) : [];
+  const myIds = myTeam?.picks ? POT_KEYS.map(pk => myTeam.picks![pk]) : [];
 
-  const filtered = MATCHES.filter(m => {
-    if (filter === "mine") return myNations.includes(m.h) || myNations.includes(m.a);
-    if (filter === "live") return matchStatus(m.d, scores[m.i]) === "live";
-    return true;
-  });
-
-  const byDay: Record<string, typeof MATCHES> = {};
-  filtered.forEach(m => { (byDay[dayKeyOf(m.d)] ||= []).push(m); });
-  const days = Object.keys(byDay).sort();
+  let fx = MATCHES;
+  if (filter === 'mine') fx = fx.filter(f => myIds.includes(f.h) || myIds.includes(f.a));
+  if (filter === 'live') fx = fx.filter(f => matchStatus(f.d, scores[f.i]) === 'live');
+  const days = [...new Set(fx.map(f => dayKeyOf(f.d)))].sort();
 
   return (
-    <div>
-      <div className="seg" style={{ marginBottom: 12 }}>
-        <button className={section === "group" ? "on" : ""} onClick={() => setSection("group")}>Group stage</button>
-        <button className={section === "ko" ? "on" : ""} onClick={() => setSection("ko")}>Knockouts</button>
+    <div className="content">
+      <div className="seg" style={{ marginBottom: 14 }}>
+        <button className={mode === 'group' ? 'on' : ''} onClick={() => setMode('group')}>Group stage</button>
+        <button className={mode === 'ko' ? 'on' : ''} onClick={() => setMode('ko')}>Knockouts</button>
       </div>
 
-      {section === "group" && (
-        <>
-          <div className="row" style={{ gap: 7, marginBottom: 6 }}>
-            {([["all", "All"], ["mine", "My nations"], ["live", "Live now"]] as const).map(([v, lab]) => (
-              <span key={v} className={"chip " + (filter === v ? "on" : "")} onClick={() => setFilter(v)}>{lab}</span>
+      {mode === 'group' ? <>
+        <div className="scroll-x" style={{ marginBottom: 8 }}>
+          {([['all', 'All'], ['mine', 'My nations'], ['live', 'Live now']] as const).map(([k, l]) => (
+            <button key={k} className={`chip ${filter === k ? 'on' : ''}`} onClick={() => setFilter(k)}>
+              {k === 'live' && <span style={{ width: 7, height: 7, borderRadius: '50%', background: filter === 'live' ? '#fff' : 'var(--live)' }} />}{l}
+            </button>
+          ))}
+        </div>
+        {filter === 'mine' && !myTeam?.picks && (
+          <div className="card pad" style={{ textAlign: 'center' }}><div className="muted" style={{ fontSize: 13 }}>Draft first to filter your nations.</div></div>
+        )}
+        {days.map(day => (
+          <div key={day}>
+            <div className="sec-head" style={{ margin: '18px 2px 9px' }}><span className="eyebrow">{fmtDayLabel(day)}</span></div>
+            <div className="card flat" style={{ overflow: 'hidden' }}>
+              {fx.filter(f => dayKeyOf(f.d) === day).map(f => (
+                <EditableMatch key={f.i} f={f} myIds={myIds} score={scores[f.i]} open={editing === f.i}
+                  onToggle={() => setEditing(editing === f.i ? null : f.i)}
+                  onSave={(v) => { onSaveScore(f.i, v); setEditing(null); toast('Score saved'); }} />
+              ))}
+            </div>
+          </div>
+        ))}
+        {fx.length === 0 && <div className="card pad" style={{ textAlign: 'center' }}><div className="muted">No matches match this filter.</div></div>}
+      </> : (
+        <KnockoutTab state={state} myIds={myIds} editing={editing} setEditing={setEditing}
+          onAddKO={onAddKO} onSaveKO={onSaveKO} onDelKO={onDelKO} toast={toast} />
+      )}
+    </div>
+  );
+}
+
+/* group match row + inline editor */
+function EditableMatch({ f, myIds, score, open, onToggle, onSave }: {
+  f: Match; myIds: string[]; score?: ScoreEntry | null; open: boolean;
+  onToggle: () => void; onSave: (v: ScoreEntry) => void;
+}) {
+  const [hs, setHs] = useState(score?.h ?? 0);
+  const [as, setAs] = useState(score?.a ?? 0);
+  const [status, setStatus] = useState(score?.st || 'ft');
+  const mine = myIds.includes(f.h) || myIds.includes(f.a);
+  const stt = matchStatus(f.d, score);
+  const done = score && (score.st === 'ft' || score.st === 'live') && score.h != null;
+
+  return (
+    <div style={{ borderBottom: '1px solid var(--line-2)', background: mine ? 'rgba(200,242,60,.1)' : 'transparent' }}>
+      <div className="mrow" onClick={onToggle} style={{ cursor: 'pointer', borderBottom: 0 }}>
+        <div className="side"><Flag id={f.h} size={30} ring={myIds.includes(f.h) ? 'pot' : 'ink'} /><span className="nm">{NATION[f.h].name}</span></div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          {done
+            ? <span className="scorebug">{score.h}<span style={{ opacity: .4 }}>:</span>{score.a}</span>
+            : <span className="scorebug sched">{fmtTime(f.d).replace(' ET', '')}</span>}
+          {stt === 'live' && <span className="badge live" style={{ height: 16, fontSize: 8 }}><span className="dot" />LIVE</span>}
+          {done && stt !== 'live' && <span className="badge ft" style={{ height: 16, fontSize: 8 }}>FT</span>}
+        </div>
+        <div className="side away"><Flag id={f.a} size={30} ring={myIds.includes(f.a) ? 'pot' : 'ink'} /><span className="nm">{NATION[f.a].name}</span></div>
+      </div>
+      {open && (
+        <div className="fade-in" style={{ padding: '4px 14px 16px' }}>
+          <div className="row" style={{ justifyContent: 'center', gap: 18, padding: '8px 0 14px' }}>
+            <div style={{ textAlign: 'center' }}><Flag id={f.h} size={36} ring="ink" /><div style={{ marginTop: 8 }}><Stepper v={hs} set={setHs} /></div></div>
+            <span className="num" style={{ fontSize: 24, color: 'var(--mut-2)', alignSelf: 'center' }}>:</span>
+            <div style={{ textAlign: 'center' }}><Flag id={f.a} size={36} ring="ink" /><div style={{ marginTop: 8 }}><Stepper v={as} set={setAs} /></div></div>
+          </div>
+          <div className="seg" style={{ borderWidth: 1 }}>
+            {([['sched', 'Scheduled'], ['live', 'Live'], ['ft', 'Final']] as const).map(([k, l]) => (
+              <button key={k} className={status === k ? 'on' : ''} onClick={() => setStatus(k)}>{l}</button>
             ))}
           </div>
-          {filter === "mine" && !myTeam?.picks && (
-            <div className="muted tiny" style={{ padding: 8 }}>Draft first to filter your nations.</div>
-          )}
-          {days.map(key => (
-            <div key={key}>
-              <div className="daterow">
-                <span className="dl">{fmtDayLabel(key)}</span>
-                <span className="hr" />
-              </div>
-              <div style={{ display: "grid", gap: 7 }}>
-                {byDay[key].map(m => {
-                  const s = scores[m.i];
-                  const stt = matchStatus(m.d, s);
-                  const done = s && (s.st === "ft" || s.st === "live") && s.h != null;
-                  const mine = myNations.includes(m.h) || myNations.includes(m.a);
-                  return (
-                    <div key={m.i}>
-                      <div className="mrow" onClick={() => setEditing(editing === m.i ? null : m.i)}
-                        style={mine ? { borderColor: "rgba(199,255,78,.35)" } : {}}>
-                        <div className="mside"><Flag id={m.h} size={22} /><span className="mname">{NATION[m.h].name}</span></div>
-                        {done ? <span className="mscore">{s.h}</span> : <span className="mvs">{fmtTime(m.d).replace(" ET", "")}</span>}
-                        {stt === "live" ? <span className="pill live-badge">LIVE</span> : done ? <span className="pill ft-badge">FT</span> : <span className="mvs">vs</span>}
-                        {done ? <span className="mscore">{s.a}</span> : <span className="mvs" style={{ minWidth: 12 }} />}
-                        <div className="mside away"><Flag id={m.a} size={22} /><span className="mname">{NATION[m.a].name}</span></div>
-                      </div>
-                      {editing === m.i && (
-                        <>
-                          <MatchEditor m={m} score={s}
-                            onClose={() => setEditing(null)}
-                            onSave={(v) => { onSaveScore(m.i, { h: v.h, a: v.a, st: v.st }); setEditing(null); toast("Score saved"); }} />
-                          <div className="muted tiny" style={{ textAlign: "center", marginTop: 4 }}>
-                            {m.c} - Group {m.g} - {fmtTime(m.d)}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
+          <button className="btn btn-lime btn-block" style={{ marginTop: 12 }} onClick={() => onSave({ h: hs, a: as, st: status })}>Save score</button>
+          <div className="muted" style={{ fontSize: 11.5, textAlign: 'center', marginTop: 10 }}>{f.c} · Group {f.g} · {fmtTime(f.d)}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* knockouts */
+function KnockoutTab({ state, myIds, editing, setEditing, onAddKO, onSaveKO, onDelKO, toast }: {
+  state: AppState; myIds: string[]; editing: string | null; setEditing: (id: string | null) => void;
+  onAddKO: (k: KOMatch) => void; onSaveKO: (id: string, v: Partial<KOMatch>) => void; onDelKO: (id: string) => void;
+  toast: (msg: string) => void;
+}) {
+  const [round, setRound] = useState('R16');
+  const [home, setHome] = useState('BRA');
+  const [away, setAway] = useState('ARG');
+  const ko = state.ko || [];
+  const sc = state.scoring;
+
+  return <>
+    <div className="card pad" style={{ marginBottom: 14 }}>
+      <div className="eyebrow" style={{ marginBottom: 10 }}>Add a knockout matchup</div>
+      <div className="row" style={{ gap: 8 }}>
+        <select className="ipt" style={{ flex: 1 }} value={round} onChange={e => setRound(e.target.value)}>
+          {KO_ROUNDS.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+        </select>
+        <button className="btn btn-ink btn-sm" style={{ height: 48 }} disabled={home === away}
+          onClick={() => { onAddKO({ id: uid(), round, h: home, a: away, h_s: null, a_s: null, st: 'sched', pk: null }); toast('Match added'); }}>
+          <Icon name="plus" size={18} />
+        </button>
+      </div>
+      <div className="row" style={{ gap: 8, marginTop: 8 }}>
+        <select className="ipt" style={{ flex: 1 }} value={home} onChange={e => setHome(e.target.value)}>{NATIONS.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}</select>
+        <span className="num" style={{ fontSize: 18, color: 'var(--mut-2)' }}>v</span>
+        <select className="ipt" style={{ flex: 1 }} value={away} onChange={e => setAway(e.target.value)}>{NATIONS.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}</select>
+      </div>
+    </div>
+
+    {ko.length === 0 && <div className="card pad" style={{ textAlign: 'center' }}><div className="muted" style={{ fontSize: 13 }}>No knockout matches yet.</div></div>}
+
+    {KO_SORT_ORDER.map(rid => {
+      const list = ko.filter(k => k.round === rid);
+      if (!list.length) return null;
+      const bonus = sc.bonuses ? sc.b[rid] : undefined;
+      return (
+        <div key={rid}>
+          <div className="sec-head"><span className="eyebrow">{KO_LABEL[rid]}</span>{bonus ? <span className="badge" style={{ background: 'var(--lime)' }}>bonus +{bonus}</span> : null}</div>
+          <div className="card flat" style={{ overflow: 'hidden' }}>
+            {list.map(k => (
+              <KoMatch key={k.id} k={k} myIds={myIds} open={editing === k.id}
+                onToggle={() => setEditing(editing === k.id ? null : k.id)}
+                onSave={(v) => { onSaveKO(k.id, v); setEditing(null); toast('Score saved'); }}
+                onDelete={() => { if (confirm('Delete this match?')) { onDelKO(k.id); setEditing(null); } }} />
+            ))}
+          </div>
+        </div>
+      );
+    })}
+  </>;
+}
+
+function KoMatch({ k, myIds, open, onToggle, onSave, onDelete }: {
+  k: KOMatch; myIds: string[]; open: boolean; onToggle: () => void;
+  onSave: (v: Partial<KOMatch>) => void; onDelete: () => void;
+}) {
+  const [hs, setHs] = useState(k.h_s ?? 0);
+  const [as, setAs] = useState(k.a_s ?? 0);
+  const [status, setStatus] = useState(k.st || 'ft');
+  const [pens, setPens] = useState(k.pk);
+  const done = (k.st === 'ft' || k.st === 'live') && k.h_s != null;
+  const level = hs === as && status !== 'sched' && k.round !== '3rd';
+
+  return (
+    <div style={{ borderBottom: '1px solid var(--line-2)' }}>
+      <div className="mrow" onClick={onToggle} style={{ cursor: 'pointer', borderBottom: 0 }}>
+        <div className="side"><Flag id={k.h} size={30} ring={myIds.includes(k.h) ? 'pot' : 'ink'} /><span className="nm">{NATION[k.h].name}</span>{k.pk === k.h && <span style={{ fontSize: 11 }}>(P)</span>}</div>
+        {done
+          ? <span className="scorebug">{k.h_s}<span style={{ opacity: .4 }}>:</span>{k.a_s}</span>
+          : <span className="scorebug sched">vs</span>}
+        <div className="side away">{k.pk === k.a && <span style={{ fontSize: 11 }}>(P)</span>}<Flag id={k.a} size={30} ring={myIds.includes(k.a) ? 'pot' : 'ink'} /><span className="nm">{NATION[k.a].name}</span></div>
+      </div>
+      {open && (
+        <div className="fade-in" style={{ padding: '4px 14px 16px' }}>
+          <div className="row" style={{ justifyContent: 'center', gap: 18, padding: '8px 0 12px' }}>
+            <div style={{ textAlign: 'center' }}><Flag id={k.h} size={36} ring="ink" /><div style={{ marginTop: 8 }}><Stepper v={hs} set={setHs} /></div></div>
+            <span className="num" style={{ fontSize: 24, color: 'var(--mut-2)', alignSelf: 'center' }}>:</span>
+            <div style={{ textAlign: 'center' }}><Flag id={k.a} size={36} ring="ink" /><div style={{ marginTop: 8 }}><Stepper v={as} set={setAs} /></div></div>
+          </div>
+          <div className="seg" style={{ borderWidth: 1, marginBottom: 10 }}>
+            {([['sched', 'Scheduled'], ['live', 'Live'], ['ft', 'Final']] as const).map(([kk, l]) => (
+              <button key={kk} className={status === kk ? 'on' : ''} onClick={() => setStatus(kk)}>{l}</button>
+            ))}
+          </div>
+          {level && (
+            <div className="between soft" style={{ padding: '10px 12px', marginBottom: 10 }}>
+              <span style={{ fontWeight: 700, fontSize: 13 }}>Won on penalties?</span>
+              <div className="row" style={{ gap: 6 }}>
+                <button className={`chip ${pens === k.h ? 'on' : ''}`} onClick={() => setPens(k.h)}>{NATION[k.h].id}</button>
+                <button className={`chip ${pens === k.a ? 'on' : ''}`} onClick={() => setPens(k.a)}>{NATION[k.a].id}</button>
               </div>
             </div>
-          ))}
-        </>
-      )}
-
-      {section === "ko" && (
-        <KnockoutPanel
-          state={state}
-          myNations={myNations as string[]}
-          onAddKO={onAddKO}
-          onSaveKO={onSaveKO}
-          onDelKO={onDelKO}
-          toast={toast}
-        />
+          )}
+          <button className="btn btn-lime btn-block" onClick={() => onSave({ h_s: hs, a_s: as, st: status, pk: level ? pens : null })}>Save score</button>
+          <button className="chip" style={{ margin: '10px auto 0', display: 'flex' }} onClick={onDelete}>delete match</button>
+        </div>
       )}
     </div>
   );

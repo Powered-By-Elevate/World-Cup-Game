@@ -1,50 +1,35 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { NATION } from '../data/nations';
+
+type Ring = 'ink' | 'pot' | 'gold' | 'cyan' | 'magenta';
 
 interface FlagProps {
   id: string;
   size?: number;
-  radius?: number;
-  ring?: boolean;
+  ring?: Ring;
+  shine?: boolean;
 }
 
-export function Flag({ id, size = 26, radius = 5, ring = true }: FlagProps) {
+/* Circular, ring-framed flag — the brand's repeating texture. */
+export function Flag({ id, size = 40, ring = 'ink', shine = true }: FlagProps) {
   const n = NATION[id];
   const [err, setErr] = useState(false);
-  const h = Math.round(size * 0.68);
-  const base: React.CSSProperties = {
-    width: size,
-    height: h,
-    borderRadius: radius,
-    flex: "0 0 auto",
-    boxShadow: ring ? "0 0 0 1px rgba(255,255,255,.18), 0 2px 6px rgba(0,0,0,.4)" : "none",
-  };
+  if (!n) return null;
 
-  if (!n) return <span style={{ ...base, background: "#333", display: "inline-block" }} />;
-
-  if (err) return (
-    <span style={{
-      ...base,
-      background: `linear-gradient(135deg, ${n.c1} 0 50%, ${n.c2} 50% 100%)`,
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontSize: size * 0.34,
-      fontWeight: 800,
-      color: "#fff",
-      letterSpacing: ".02em",
-      textShadow: "0 1px 2px rgba(0,0,0,.6)",
-    }}>
-      {size >= 30 ? n.id : ""}
-    </span>
-  );
+  const ringCls =
+    ring === 'pot'
+      ? (n.pot === 'FAV' ? 'ring-gold' : n.pot === 'UND' ? 'ring-cyan' : 'ring-magenta')
+      : ring === 'gold' ? 'ring-gold'
+      : ring === 'cyan' ? 'ring-cyan'
+      : ring === 'magenta' ? 'ring-magenta'
+      : '';
 
   return (
-    <img
-      src={`https://flagcdn.com/w160/${n.flag}.png`}
-      alt={n.name}
-      onError={() => setErr(true)}
-      style={{ ...base, objectFit: "cover" }}
-    />
+    <span className={`flag ${ringCls}`} style={{ width: size, height: size, fontSize: size }}>
+      {!err
+        ? <img src={`https://flagcdn.com/w160/${n.flag}.png`} alt={n.name} onError={() => setErr(true)} />
+        : <span className="fb" style={{ background: `linear-gradient(135deg, ${n.c1}, ${n.c2})` }}>{n.id}</span>}
+      {shine && <span className="shine" />}
+    </span>
   );
 }
