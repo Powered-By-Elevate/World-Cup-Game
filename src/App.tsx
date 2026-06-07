@@ -4,7 +4,7 @@ import type { AppState, MeState, Scoring } from './data/types';
 import { defaultState, withDefaults, DEFAULT_SCORING } from './data/types';
 import {
   sget, sset, HAS_REAL, leagueLink, teamLink, parseLeagueCode,
-  listLeagues, activeLeague, setActiveLeague, upsertLeague, removeLeague, newLeagueCode,
+  listLeagues, activeLeague, setActiveLeague, upsertLeague, removeLeague, pruneLeagues, newLeagueCode,
   getMe, setMe as persistMe, resetActiveLeague, clearLocal,
 } from './utils/storage';
 import type { League } from './utils/storage';
@@ -103,10 +103,11 @@ export default function App() {
     const ns = s ? withDefaults(s) : defaultState();
     setState(ns);
     setMe(m || null);
-    // Register the active league only once it's real — it has a name, or the
-    // user actually has a team/identity in it. This avoids leaving a nameless
-    // "phantom" league in the switch list on first run / after a reset.
-    if (ns.leagueName || m) { upsertLeague(code, ns.leagueName); setLeagues(listLeagues()); }
+    // Register the active league in the switch list only once it has a real
+    // name. Nameless leagues never go in the registry (they'd show as a
+    // permanent "Unnamed league" phantom); the active one still shows in the
+    // "This league" card from shared state regardless.
+    if (ns.leagueName) { upsertLeague(code, ns.leagueName); setLeagues(listLeagues()); }
     setLoaded(true);
   }, []);
 
@@ -115,6 +116,7 @@ export default function App() {
     const code = activeLeague();
     leagueCodeRef.current = code;
     setLeagueCode(code);
+    pruneLeagues();                 // clear out any nameless/duplicate legacy entries
     setLeagues(listLeagues());
     try { setInviteTeamId(new URL(window.location.href).searchParams.get("team")); } catch { /* ignore */ }
     reload(code);
@@ -303,8 +305,9 @@ export default function App() {
     const code = parseLeagueCode(input);
     if (!code) { toast("Enter a valid league code or link"); return; }
     setActiveLeague(code); leagueCodeRef.current = code;
-    upsertLeague(code, ""); setLeagues(listLeagues());
     setLeagueCode(code);
+    // The league registers itself in reload() once its shared name loads;
+    // we never store it nameless.
     try { window.history.replaceState(null, "", leagueLink(code)); } catch { /* ignore */ }
     setShowLeagues(false); setTab("home"); setLoaded(false);
     await reload(code);

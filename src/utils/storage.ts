@@ -72,17 +72,38 @@ export function newLeagueCode(): string {
 }
 
 export function listLeagues(): League[] {
-  return lsGet<League[]>('wc:leagues', []);
+  const raw = lsGet<League[]>('wc:leagues', []);
+  if (!Array.isArray(raw)) return [];
+  // Always return a de-duped, valid registry. A corrupted store (duplicate
+  // codes, blank codes) must never produce duplicate rows or let a single
+  // remove() wipe several leagues at once.
+  const byCode = new Map<string, League>();
+  for (const l of raw) {
+    if (!l || typeof l.code !== 'string' || !l.code) continue;
+    const cur = byCode.get(l.code);
+    if (!cur) byCode.set(l.code, { code: l.code, name: l.name || '' });
+    else if (!cur.name && l.name) cur.name = l.name;   // keep the named version
+  }
+  return [...byCode.values()];
 }
 export function upsertLeague(code: string, name: string) {
+  if (!code) return;
   const ls = listLeagues();
   const i = ls.findIndex(l => l.code === code);
   if (i >= 0) { if (name) ls[i].name = name; }
-  else ls.push({ code, name: name || '' });
+  else if (name) ls.push({ code, name });   // never persist a nameless league
+  else return;
   lsSet('wc:leagues', ls);
 }
 export function removeLeague(code: string) {
   lsSet('wc:leagues', listLeagues().filter(l => l.code !== code));
+}
+/** Normalize the stored registry: only named, unique, valid-code leagues.
+ *  Clears out nameless "phantom" leagues left by older versions. */
+export function pruneLeagues(): League[] {
+  const clean = listLeagues().filter(l => l.name);
+  lsSet('wc:leagues', clean);
+  return clean;
 }
 
 let _active: string | null = null;
