@@ -255,7 +255,7 @@ export default function App() {
 
   if (needsOnboard) {
     return (
-      <div className="app">
+      <div className="app onboard">
         <header className="hdr">
           <div className="wordmark">
             <Mark size={36} />
@@ -272,6 +272,27 @@ export default function App() {
 
   return (
     <div className="app">
+      {/* desktop left rail */}
+      <aside className="sidebar">
+        <div className="sb-top">
+          <Mark size={40} />
+          <div className="wm-text"><div className="l1">World Cup</div><div className="l2">Family Draft · 2026</div></div>
+        </div>
+        <nav className="sb-nav">
+          {NAV.map(n => (
+            <button key={n.id} className={"sb-navb " + (tab === n.id ? "on" : "")} onClick={() => setTab(n.id)}>
+              <Icon name={n.icon} size={20} /><span>{n.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="sb-bottom">
+          <span className={`status ${HAS_REAL ? "live" : "preview"}`}><span className="dot" />{HAS_REAL ? "Live" : "Preview"}</span>
+          <button className="hdr-btn" onClick={copyLink} title="Copy invite link"><Icon name="share" size={16} /></button>
+          <button className="hdr-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="gear" size={18} /></button>
+        </div>
+      </aside>
+
+      {/* mobile top header */}
       <header className="hdr">
         <div className="wordmark">
           <Mark size={36} />

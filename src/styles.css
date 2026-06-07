@@ -320,3 +320,62 @@
 .divider{ height:1px; background:var(--line); margin:14px 0; }
 .scroll-x{ display:flex; gap:8px; overflow-x:auto; padding:2px 16px; margin:0 -16px; scrollbar-width:none; }
 .scroll-x::-webkit-scrollbar{ display:none; }
+
+/* ============================================================
+   DESKTOP — left rail, wider content, dialog modals
+   (mobile layout is everything above; these rules only apply ≥900px)
+   ============================================================ */
+.sidebar{ display:none; }
+
+@media (min-width:900px){
+  /* swap mobile chrome for the rail in the main app (not onboarding) */
+  .app:not(.onboard) .hdr{ display:none; }
+  .app:not(.onboard) .nav{ display:none; }
+  .app:not(.onboard){ padding-left:248px; }
+
+  .sidebar{
+    display:flex; flex-direction:column; gap:6px;
+    position:fixed; top:0; left:0; bottom:0; width:248px; z-index:45;
+    padding:24px 16px 18px;
+    background:var(--paper-2);
+    border-right:1.5px solid var(--ink);
+    box-shadow:var(--shadow);
+  }
+  .sb-top{ display:flex; align-items:center; gap:11px; padding:2px 8px 18px; }
+  .sb-nav{ display:flex; flex-direction:column; gap:5px; }
+  .sb-navb{
+    display:flex; align-items:center; gap:13px; width:100%;
+    padding:13px 14px; border-radius:13px; border:0; background:transparent; cursor:pointer;
+    color:var(--ink-2); font-family:'Archivo',sans-serif; font-weight:800; font-size:13px;
+    letter-spacing:.05em; text-transform:uppercase; transition:background .14s var(--ease);
+  }
+  .sb-navb:not(.on):hover{ background:var(--line-2); }
+  .sb-navb.on{ background:var(--ink); color:var(--paper); }
+  .sb-navb.on svg{ stroke:var(--paper); }
+  .sb-bottom{ margin-top:auto; display:flex; align-items:center; gap:8px; padding:8px 6px 2px; flex-wrap:wrap; }
+
+  /* wider, comfortable content column centered in the remaining space */
+  .app:not(.onboard) .screen{ max-width:760px; }
+  .app:not(.onboard) .content{ padding:26px 24px 64px; }
+  .app:not(.onboard) .sec-head{ margin-top:28px; }
+
+  /* onboarding centers as a tidy card flow */
+  .app.onboard .hdr{ max-width:560px; }
+  .app.onboard .screen{ max-width:560px; }
+
+  /* modals become centered dialogs instead of bottom sheets */
+  .app:not(.onboard) .modal-bg{ align-items:center; padding:24px; }
+  .app:not(.onboard) .sheet{
+    max-width:540px; border-radius:22px; border:1.5px solid var(--ink);
+    max-height:86vh; box-shadow:var(--shadow-pop); animation:dialogIn .26s var(--ease);
+  }
+  @keyframes dialogIn{ from{ transform:translateY(14px) scale(.98); opacity:0 } }
+
+  /* toast sits above content, clear of the (now absent) bottom nav */
+  .app:not(.onboard) .toast{ bottom:28px; }
+}
+
+/* large desktop — a touch more breathing room */
+@media (min-width:1280px){
+  .app:not(.onboard) .screen{ max-width:820px; }
+}
