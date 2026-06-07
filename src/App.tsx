@@ -277,10 +277,11 @@ export default function App() {
       .sort((a, b) => b.total - a.total || b.gd - a.gd || b.gf - a.gf || a.team.name.localeCompare(b.team.name));
   }, [state.teams, state.scoring, scores, ko]);
 
-  // Prefer the live shared name; fall back to the locally-known registry name
-  // (e.g. right after switching, before shared state reloads) so a named league
-  // never flashes as "Unnamed league".
-  const leagueName = state.leagueName || leagues.find(l => l.code === leagueCode)?.name || "Unnamed league";
+  // The active league's real name: prefer the live shared name, fall back to the
+  // locally-known registry name (e.g. right after switching, before shared state
+  // reloads) so a named league never flashes as "Unnamed". Empty if truly unnamed.
+  const realLeagueName = state.leagueName || leagues.find(l => l.code === leagueCode)?.name || "";
+  const leagueName = realLeagueName || "Unnamed league";   // display fallback
 
   /* ---------------- league actions ---------------- */
   const switchLeague = useCallback(async (code: string) => {
@@ -383,7 +384,7 @@ export default function App() {
           <Onboarding state={state} defaultName={me?.name || ""} inviteTeamId={inviteTeamId} onJoin={api.joinTeam} onCreate={api.createTeam} />
         </div>
         {showLeagues && (
-          <Leagues leagues={leagues} activeCode={leagueCode} leagueName={state.leagueName} hasTeam={false} canRename={isCommish}
+          <Leagues leagues={leagues} activeCode={leagueCode} leagueName={realLeagueName} hasTeam={false} canRename={isCommish}
             onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague} onRename={renameLeague} onRemove={removeLeagueFromList}
             onCopyLeagueLink={copyLeagueLink} onCopyTeamLink={copyTeamLink} onClose={() => setShowLeagues(false)} />
         )}
@@ -443,7 +444,7 @@ export default function App() {
       </nav>
 
       {showLeagues && (
-        <Leagues leagues={leagues} activeCode={leagueCode} leagueName={state.leagueName} hasTeam={!!myTeam} canRename={isCommish}
+        <Leagues leagues={leagues} activeCode={leagueCode} leagueName={realLeagueName} hasTeam={!!myTeam} canRename={isCommish}
           onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague} onRename={renameLeague} onRemove={removeLeagueFromList}
           onCopyLeagueLink={copyLeagueLink} onCopyTeamLink={copyTeamLink} onClose={() => setShowLeagues(false)} />
       )}
