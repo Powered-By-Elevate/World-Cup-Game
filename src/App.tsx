@@ -9,6 +9,8 @@ import {
 } from './utils/storage';
 import type { League } from './utils/storage';
 import { groupResults, knockoutResults } from './data/results';
+import { fetchLiveResults } from './data/liveResults';
+import type { LiveData } from './data/liveResults';
 import { uid, shuffle } from './utils/helpers';
 import { teamStats, computeMovers } from './utils/scoring';
 import type { StandingEntry } from './utils/scoring';
@@ -32,9 +34,9 @@ const NAV: { id: string; label: string; icon: IconName }[] = [
   { id: "squads", label: "Squads", icon: "users" },
 ];
 
-// Results are produced automatically and identically on every device — no entry.
-const SCORES = groupResults();
-const KO = knockoutResults(SCORES);
+// Fallback engine: deterministic results so the app works offline / pre-feed.
+const ENGINE_SCORES = groupResults();
+const ENGINE_KO = knockoutResults(ENGINE_SCORES);
 
 export default function App() {
   const [state, setState] = useState<AppState>(defaultState());
@@ -48,8 +50,26 @@ export default function App() {
   const [showLeagues, setShowLeagues] = useState(false);
   const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
 
-  const scores = SCORES;
-  const ko = KO;
+  const [live, setLiveData] = useState<LiveData | null>(null);
+  const [demo, setDemo] = useState(false);
+
+  // pull real results from the feed; poll while open. null result => engine fallback.
+  useEffect(() => {
+    try { setDemo(localStorage.getItem('wc:demo') === '1'); } catch { /* ignore */ }
+    let alive = true;
+    const pull = async () => { const d = await fetchLiveResults(); if (alive && d) setLiveData(d); };
+    pull();
+    const iv = setInterval(pull, 60000);
+    return () => { alive = false; clearInterval(iv); };
+  }, []);
+
+  const scores = demo ? ENGINE_SCORES : (live?.scores ?? ENGINE_SCORES);
+  const ko = demo ? ENGINE_KO : (live?.ko ?? ENGINE_KO);
+
+  const toggleDemo = useCallback((v: boolean) => {
+    setDemo(v);
+    try { localStorage.setItem('wc:demo', v ? '1' : '0'); } catch { /* ignore */ }
+  }, []);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -378,7 +398,8 @@ export default function App() {
         <Settings
           state={state} myTeam={myTeam} me={me} isCommish={isCommish} commishName={commishName}
           onClose={() => setShowSettings(false)} onScoring={api.setScoring} onLeave={api.leave}
-          onRename={api.rename} onClaim={api.claimCommish} onResetApp={resetApp} onTeamInvite={copyTeamLink} />
+          onRename={api.rename} onClaim={api.claimCommish} onResetApp={resetApp} onTeamInvite={copyTeamLink}
+          demo={demo} onToggleDemo={toggleDemo} />
       )}
       {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
     </div>

@@ -18,9 +18,11 @@ interface Props {
   onClaim: () => void;
   onResetApp: () => void;
   onTeamInvite: () => void;
+  demo: boolean;
+  onToggleDemo: (v: boolean) => void;
 }
 
-export function Settings({ state, myTeam, isCommish, commishName, onClose, onScoring, onLeave, onRename, onClaim, onResetApp, onTeamInvite }: Props) {
+export function Settings({ state, myTeam, isCommish, commishName, onClose, onScoring, onLeave, onRename, onClaim, onResetApp, onTeamInvite, demo, onToggleDemo }: Props) {
   const sc = state.scoring;
   const [name, setName] = useState(myTeam?.name || '');
 
@@ -94,6 +96,18 @@ export function Settings({ state, myTeam, isCommish, commishName, onClose, onSco
                 onClick={() => { if (confirm('Leave this team?')) { onLeave(); onClose(); } }}>Leave team</button>
             </div>
           </>}
+
+          {/* results */}
+          <div className="eyebrow" style={{ margin: '18px 0 4px' }}>Results</div>
+          <div className="card flat pad" style={{ marginBottom: 14 }}>
+            <div className="between">
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>Demo results</div>
+                <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{demo ? 'Showing a simulated full tournament so you can test scoring.' : 'Live scores come automatically from the real match feed — no entry.'}</div>
+              </div>
+              <div className={`toggle ${demo ? 'on' : ''}`} onClick={() => onToggleDemo(!demo)}><span className="knob" /></div>
+            </div>
+          </div>
 
           {/* testing */}
           <div className="eyebrow" style={{ margin: '18px 0 4px' }}>Testing</div>
