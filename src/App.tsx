@@ -34,6 +34,20 @@ const NAV: { id: string; label: string; icon: IconName }[] = [
   { id: "squads", label: "Squads", icon: "users" },
 ];
 
+// Prominent league switcher — the league name is the focus, tap to manage/switch.
+function LeagueSwitch({ name, onClick }: { name: string; onClick: () => void }) {
+  return (
+    <button className="league-switch" onClick={onClick} title="Switch or manage leagues">
+      <span className="ls-ico"><Icon name="globe" size={18} /></span>
+      <span className="ls-txt">
+        <span className="ls-eyebrow">League</span>
+        <span className="ls-name">{name}</span>
+      </span>
+      <span className="ls-chev"><Icon name="chevron" size={15} /></span>
+    </button>
+  );
+}
+
 // Fallback engine: deterministic results so the app works offline / pre-feed.
 const ENGINE_SCORES = groupResults();
 const ENGINE_KO = knockoutResults(ENGINE_SCORES);
@@ -286,6 +300,15 @@ export default function App() {
     await reload(code);
   }, [reload, toast]);
 
+  const renameLeague = useCallback(async (name: string) => {
+    const nm = name.trim();
+    if (!nm) return;
+    await commitState(s => { s.leagueName = nm; return s; });
+    upsertLeague(leagueCodeRef.current, nm);
+    setLeagues(listLeagues());
+    toast("League renamed");
+  }, [commitState, toast]);
+
   const resetApp = useCallback(async () => {
     await resetActiveLeague();
     clearLocal();
@@ -317,18 +340,15 @@ export default function App() {
     return (
       <div className="app onboard">
         <header className="hdr">
-          <div className="wordmark">
-            <Mark size={36} />
-            <div className="wm-text"><div className="l1">World Cup</div><div className="l2">{leagueName}</div></div>
-          </div>
-          <button className="hdr-btn" onClick={() => setShowLeagues(true)} title="Leagues"><Icon name="globe" size={18} /></button>
+          <Mark size={36} />
+          <LeagueSwitch name={leagueName} onClick={() => setShowLeagues(true)} />
         </header>
         <div className="screen">
           <Onboarding state={state} defaultName={me?.name || ""} inviteTeamId={inviteTeamId} onJoin={api.joinTeam} onCreate={api.createTeam} />
         </div>
         {showLeagues && (
-          <Leagues leagues={leagues} activeCode={leagueCode} leagueName={state.leagueName} hasTeam={false}
-            onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague}
+          <Leagues leagues={leagues} activeCode={leagueCode} leagueName={state.leagueName} hasTeam={false} canRename={isCommish}
+            onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague} onRename={renameLeague}
             onCopyLeagueLink={copyLeagueLink} onCopyTeamLink={copyTeamLink} onClose={() => setShowLeagues(false)} />
         )}
         {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
@@ -342,8 +362,9 @@ export default function App() {
       <aside className="sidebar">
         <div className="sb-top">
           <Mark size={40} />
-          <div className="wm-text"><div className="l1">World Cup</div><div className="l2">{leagueName}</div></div>
+          <div className="wm-text"><div className="l1">World Cup</div><div className="l2">Family Draft · 2026</div></div>
         </div>
+        <LeagueSwitch name={leagueName} onClick={() => setShowLeagues(true)} />
         <nav className="sb-nav">
           {NAV.map(n => (
             <button key={n.id} className={"sb-navb " + (tab === n.id ? "on" : "")} onClick={() => setTab(n.id)}>
@@ -353,7 +374,6 @@ export default function App() {
         </nav>
         <div className="sb-bottom">
           <span className={`status ${HAS_REAL ? "live" : "preview"}`}><span className="dot" />{HAS_REAL ? "Live" : "Preview"}</span>
-          <button className="hdr-btn" onClick={() => setShowLeagues(true)} title="Leagues"><Icon name="globe" size={16} /></button>
           <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
           <button className="hdr-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="gear" size={18} /></button>
         </div>
@@ -361,11 +381,8 @@ export default function App() {
 
       {/* mobile top header */}
       <header className="hdr">
-        <div className="wordmark">
-          <Mark size={36} />
-          <div className="wm-text"><div className="l1">World Cup</div><div className="l2">{leagueName}</div></div>
-        </div>
-        <button className="hdr-btn" onClick={() => setShowLeagues(true)} title="Leagues"><Icon name="globe" size={16} /></button>
+        <Mark size={36} />
+        <LeagueSwitch name={leagueName} onClick={() => setShowLeagues(true)} />
         <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
         <button className="hdr-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="gear" size={18} /></button>
       </header>
@@ -390,8 +407,8 @@ export default function App() {
       </nav>
 
       {showLeagues && (
-        <Leagues leagues={leagues} activeCode={leagueCode} leagueName={state.leagueName} hasTeam={!!myTeam}
-          onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague}
+        <Leagues leagues={leagues} activeCode={leagueCode} leagueName={state.leagueName} hasTeam={!!myTeam} canRename={isCommish}
+          onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague} onRename={renameLeague}
           onCopyLeagueLink={copyLeagueLink} onCopyTeamLink={copyTeamLink} onClose={() => setShowLeagues(false)} />
       )}
       {showSettings && (
