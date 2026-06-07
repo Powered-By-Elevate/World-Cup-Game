@@ -70,6 +70,10 @@ export function Leagues({ leagues, activeCode, leagueName, hasTeam, canRename, o
             <p className="muted" style={{ fontSize: 11.5, marginTop: 10, marginBottom: 0, lineHeight: 1.45 }}>
               The <b>league invite</b> lets family join this pool and pick a team. The <b>team invite</b> drops someone straight onto your team.
             </p>
+            <button className="btn btn-ghost btn-sm btn-block" style={{ marginTop: 12, color: 'var(--live)', borderColor: 'var(--line)' }}
+              onClick={() => { if (confirm(`Leave “${leagueName || 'this league'}”? It stays for everyone else — you can rejoin any time with the invite link.`)) onRemove(activeCode); }}>
+              <Icon name="x" size={15} /> Leave this league
+            </button>
           </div>
 
           {/* switch */}

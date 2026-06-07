@@ -326,10 +326,21 @@ export default function App() {
     removeLeague(code);
     const rest = listLeagues();
     setLeagues(rest);
-    // If we removed the league we're currently in, hop to another one.
-    if (code === leagueCodeRef.current && rest[0]) await switchLeague(rest[0].code);
-    toast("League removed from your list");
-  }, [switchLeague, toast]);
+    // If we left the league we're currently in, go somewhere sensible:
+    // another league if we have one, otherwise a fresh empty pool at onboarding.
+    if (code === leagueCodeRef.current) {
+      if (rest[0]) { await switchLeague(rest[0].code); }
+      else {
+        const nc = newLeagueCode();
+        setActiveLeague(nc); leagueCodeRef.current = nc; setLeagueCode(nc);
+        await persistMe(nc, null);
+        try { window.history.replaceState(null, "", leagueLink(nc)); } catch { /* ignore */ }
+        setShowLeagues(false); setTab("home"); setLoaded(false);
+        await reload(nc);
+      }
+    }
+    toast("Left league");
+  }, [switchLeague, reload, toast]);
 
   const resetApp = useCallback(async () => {
     await resetActiveLeague();
