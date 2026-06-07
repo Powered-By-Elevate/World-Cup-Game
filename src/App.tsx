@@ -277,7 +277,10 @@ export default function App() {
       .sort((a, b) => b.total - a.total || b.gd - a.gd || b.gf - a.gf || a.team.name.localeCompare(b.team.name));
   }, [state.teams, state.scoring, scores, ko]);
 
-  const leagueName = state.leagueName || "Unnamed league";
+  // Prefer the live shared name; fall back to the locally-known registry name
+  // (e.g. right after switching, before shared state reloads) so a named league
+  // never flashes as "Unnamed league".
+  const leagueName = state.leagueName || leagues.find(l => l.code === leagueCode)?.name || "Unnamed league";
 
   /* ---------------- league actions ---------------- */
   const switchLeague = useCallback(async (code: string) => {
