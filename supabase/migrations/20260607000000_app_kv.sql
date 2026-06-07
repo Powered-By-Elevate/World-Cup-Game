@@ -33,3 +33,9 @@ create policy "app_kv anon update"
   on public.app_kv for update
   using (true)
   with check (true);
+
+-- RLS policies only filter rows; the role still needs table privileges.
+-- Without these GRANTs every anon request fails with "permission denied" (42501),
+-- which silently breaks all shared state (invites, cross-device sync).
+grant usage on schema public to anon, authenticated;
+grant select, insert, update on public.app_kv to anon, authenticated;

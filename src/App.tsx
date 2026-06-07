@@ -173,6 +173,11 @@ export default function App() {
       await setMeBoth({ id: mid, name: playerName, teamId: tid });
       setTab("home");
     },
+    // Re-attach to an existing member on a new device/context (the "login").
+    resume: async (tid: string, mid: string, nm: string) => {
+      await setMeBoth({ id: mid, name: nm, teamId: tid });
+      setTab("home");
+    },
     leave: async () => {
       await commitState(s => {
         const t = s.teams.find(t => t.id === me?.teamId);
@@ -413,7 +418,7 @@ export default function App() {
           <LeagueSwitch name={leagueName} onClick={() => setShowLeagues(true)} />
         </header>
         <div className="screen">
-          <Onboarding state={state} defaultName={me?.name || ""} inviteTeamId={inviteTeamId} onJoin={api.joinTeam} onCreate={api.createTeam} />
+          <Onboarding state={state} defaultName={me?.name || ""} inviteTeamId={inviteTeamId} onJoin={api.joinTeam} onCreate={api.createTeam} onResume={api.resume} />
         </div>
         {showLeagues && (
           <Leagues leagues={leagues} activeCode={leagueCode} leagueName={realLeagueName} hasTeam={false} canRename={isCommish}

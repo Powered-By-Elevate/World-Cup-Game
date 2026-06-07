@@ -10,12 +10,14 @@ interface Props {
   inviteTeamId: string | null;
   onJoin: (teamId: string, playerName: string) => void;
   onCreate: (teamName: string, playerName: string) => void;
+  onResume: (teamId: string, memberId: string, memberName: string) => void;
 }
 
 const DECO = ['ESP', 'ARG', 'FRA', 'BRA', 'POR', 'NED'];
 
-export function Onboarding({ state, defaultName, inviteTeamId, onJoin, onCreate }: Props) {
+export function Onboarding({ state, defaultName, inviteTeamId, onJoin, onCreate, onResume }: Props) {
   const teams = state.teams || [];
+  const roster = teams.flatMap(t => (t.members || []).map(m => ({ team: t, member: m })));
   const inviteTeam = inviteTeamId ? teams.find(t => t.id === inviteTeamId) : null;
   const [step, setStep] = useState(defaultName ? 1 : 0);
   const [name, setName] = useState(defaultName || '');
@@ -62,6 +64,11 @@ export function Onboarding({ state, defaultName, inviteTeamId, onJoin, onCreate 
             <button className="btn btn-lime btn-block" style={{ marginTop: 16 }} disabled={!name.trim()} onClick={() => setStep(1)}>
               Continue <Icon name="chevron" size={18} />
             </button>
+            {roster.length > 0 && (
+              <button className="chip" style={{ margin: '14px auto 0', display: 'flex' }} onClick={() => { setShowAll(true); setStep(1); }}>
+                Already playing? Tap your name to resume →
+              </button>
+            )}
           </>
         ) : inviteTeam && !showAll ? (
           <>
@@ -84,6 +91,19 @@ export function Onboarding({ state, defaultName, inviteTeamId, onJoin, onCreate 
           <>
             <h2 className="h2">Join or start a team</h2>
             <p className="muted" style={{ margin: '6px 0 16px', fontSize: 14 }}>A team is a “couple” — two people share one squad.</p>
+            {roster.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <div className="eyebrow" style={{ marginBottom: 8 }}>Returning? Tap your name to resume</div>
+                <div className="row wrap" style={{ gap: 8 }}>
+                  {roster.map(({ team, member }) => (
+                    <button key={member.id} className="chip" onClick={() => onResume(team.id, member.id, member.name)}>
+                      <Avatar name={member.name} idx={0} size={18} /> {member.name}
+                      <span className="muted" style={{ fontWeight: 600 }}>· {team.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {teams.length > 0 && (
               <div className="soft" style={{ overflow: 'hidden', marginBottom: 14 }}>
                 {teams.map((t, i) => (
