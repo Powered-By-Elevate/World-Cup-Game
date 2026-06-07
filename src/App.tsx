@@ -181,7 +181,18 @@ export default function App() {
       await commitState(s => { s.ko = s.ko || []; s.ko.push(k); return s; });
     },
     saveKO: async (id: string, v: Partial<KOMatch>) => {
-      await commitState(s => { const k = (s.ko || []).find(k => k.id === id); if (k) Object.assign(k, v); return s; });
+      await commitState(s => {
+        const k = (s.ko || []).find(k => k.id === id);
+        if (k) {
+          Object.assign(k, v);
+          // Stamp the matchday the first time a result lands so knockout
+          // results count toward the "biggest mover" on the Table.
+          if (!k.d && (k.st === "ft" || k.st === "live")) {
+            k.d = new Date().toISOString().slice(0, 10);
+          }
+        }
+        return s;
+      });
     },
     delKO: async (id: string) => {
       await commitState(s => { s.ko = (s.ko || []).filter(k => k.id !== id); return s; });
