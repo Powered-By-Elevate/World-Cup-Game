@@ -63,6 +63,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showLeagues, setShowLeagues] = useState(false);
   const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
+  const [shareSheet, setShareSheet] = useState<{ title: string; text: string; url: string } | null>(null);
 
   const [live, setLiveData] = useState<LiveData | null>(null);
   const [demo, setDemo] = useState(false);
@@ -354,24 +355,45 @@ export default function App() {
 
   // Prefer the native share sheet (opens straight into iMessage / Android Messages,
   // WhatsApp, etc.); fall back to copying the link on browsers without Web Share.
-  const shareInvite = useCallback(async (url: string, text: string, copiedMsg: string) => {
+  const shareInvite = useCallback(async (title: string, url: string, text: string) => {
+    // Native share sheet (iMessage / Android Messages / WhatsApp …) where supported.
     if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-      try { await navigator.share({ title: "World Cup Family Draft", text, url }); return; }
-      catch (e) { if (e instanceof Error && e.name === "AbortError") return; /* else fall through to copy */ }
+      try { await navigator.share({ title, text, url }); return; }
+      catch (e) { if (e instanceof Error && e.name === "AbortError") return; /* else show the prompt */ }
     }
-    try { await navigator.clipboard.writeText(url); toast(copiedMsg); }
-    catch { toast("Copy the page URL to invite others"); }
-  }, [toast]);
+    // Otherwise show an explicit prompt with the link — never a silent clipboard copy.
+    setShareSheet({ title, text, url });
+  }, []);
 
   const copyLeagueLink = useCallback(() => {
     const nm = realLeagueName ? ` “${realLeagueName}”` : "";
-    shareInvite(leagueLink(leagueCodeRef.current), `Join our family World Cup pool${nm} — pick your team here:`, "League invite copied");
+    shareInvite("Join our World Cup pool", leagueLink(leagueCodeRef.current), `Join our family World Cup pool${nm} — pick your team here:`);
   }, [shareInvite, realLeagueName]);
 
   const copyTeamLink = useCallback(() => {
     if (!myTeam) return;
-    shareInvite(teamLink(myTeam.id, leagueCodeRef.current), `Join my team “${myTeam.name}” in our World Cup pool:`, "Team invite copied");
+    shareInvite("Join my team", teamLink(myTeam.id, leagueCodeRef.current), `Join my team “${myTeam.name}” in our World Cup pool:`);
   }, [shareInvite, myTeam]);
+
+  const shareModal = shareSheet && (
+    <div className="modal-bg" onClick={() => setShareSheet(null)}>
+      <div className="sheet" onClick={e => e.stopPropagation()}>
+        <div className="sheet-grab" />
+        <div className="between" style={{ padding: "4px 18px 14px" }}>
+          <h2 className="display" style={{ fontSize: 24 }}>{shareSheet.title}</h2>
+          <button className="hdr-btn" onClick={() => setShareSheet(null)} style={{ border: "1.5px solid var(--line)" }}><Icon name="x" size={18} /></button>
+        </div>
+        <div style={{ padding: "0 18px 26px" }}>
+          <p className="muted" style={{ fontSize: 13.5, marginTop: 0, lineHeight: 1.5 }}>{shareSheet.text}</p>
+          <div className="card flat pad" style={{ wordBreak: "break-all", fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{shareSheet.url}</div>
+          <button className="btn btn-ink btn-block" onClick={() => {
+            try { navigator.clipboard.writeText(shareSheet.url); toast("Link copied — paste it into a message"); } catch { /* ignore */ }
+            setShareSheet(null);
+          }}><Icon name="copy" size={16} /> Copy link</button>
+        </div>
+      </div>
+    </div>
+  );
 
   if (!loaded) return (
     <div className="app">
@@ -398,6 +420,7 @@ export default function App() {
             onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague} onRename={renameLeague} onRemove={removeLeagueFromList}
             onCopyLeagueLink={copyLeagueLink} onCopyTeamLink={copyTeamLink} onClose={() => setShowLeagues(false)} />
         )}
+        {shareModal}
         {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
       </div>
     );
@@ -465,6 +488,7 @@ export default function App() {
           onRename={api.rename} onClaim={api.claimCommish} onResetApp={resetApp} onTeamInvite={copyTeamLink}
           demo={demo} onToggleDemo={toggleDemo} />
       )}
+      {shareModal}
       {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
     </div>
   );
