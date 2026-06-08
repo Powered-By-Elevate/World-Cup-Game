@@ -270,6 +270,19 @@ export default function App() {
         return s;
       });
     },
+    // Rename yourself (the player), updating both the member record in shared
+    // state and this device's identity so it shows everywhere immediately.
+    renameMe: async (nm: string) => {
+      const newName = nm.trim();
+      if (!newName || !me) return;
+      await commitState(s => {
+        const t = s.teams.find(t => t.id === me.teamId);
+        const mem = t?.members?.find(m => m.id === me.id);
+        if (mem) mem.name = newName;
+        return s;
+      });
+      await setMeBoth({ ...me, name: newName });
+    },
     runDraft: async () => {
       await commitState(s => {
         const minPot = Math.min(...POT_KEYS.map(pk => (s.pots[pk] || []).length));
@@ -588,7 +601,7 @@ export default function App() {
         <Settings
           state={state} myTeam={myTeam} me={me} isCommish={isCommish} commishName={commishName}
           onClose={() => setShowSettings(false)} onScoring={api.setScoring} onLeave={api.leave}
-          onRename={api.rename} onClaim={api.claimCommish} onResetApp={resetApp} onTeamInvite={copyTeamLink}
+          onRename={api.rename} onRenameMe={api.renameMe} onClaim={api.claimCommish} onResetApp={resetApp} onTeamInvite={copyTeamLink}
           demo={demo} onToggleDemo={toggleDemo}
           userEmail={user?.email ?? null} onSignOut={signOutNow} />
       )}

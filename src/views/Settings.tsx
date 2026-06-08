@@ -15,6 +15,7 @@ interface Props {
   onScoring: (sc: Scoring) => void;
   onLeave: () => void;
   onRename: (name: string) => void;
+  onRenameMe: (name: string) => void;
   onClaim: () => void;
   onResetApp: () => void;
   onTeamInvite: () => void;
@@ -24,9 +25,10 @@ interface Props {
   onSignOut?: () => void;
 }
 
-export function Settings({ state, myTeam, isCommish, commishName, onClose, onScoring, onLeave, onRename, onClaim, onResetApp, onTeamInvite, demo, onToggleDemo, userEmail, onSignOut }: Props) {
+export function Settings({ state, myTeam, me, isCommish, commishName, onClose, onScoring, onLeave, onRename, onRenameMe, onClaim, onResetApp, onTeamInvite, demo, onToggleDemo, userEmail, onSignOut }: Props) {
   const sc = state.scoring;
   const [name, setName] = useState(myTeam?.name || '');
+  const [playerName, setPlayerName] = useState(me?.name || '');
 
   const set = (k: 'win' | 'draw', v: number) => onScoring({ ...sc, [k]: clamp(v, 0, 9) });
   const setB = (k: string, v: number) => onScoring({ ...sc, b: { ...sc.b, [k]: clamp(v, 0, 50) } });
@@ -74,6 +76,23 @@ export function Settings({ state, myTeam, isCommish, commishName, onClose, onSco
                     <Icon name="refresh" size={16} /> Sign out
                   </button>
                 )}
+              </div>
+            </>
+          )}
+
+          {/* your name */}
+          {me && (
+            <>
+              <div className="eyebrow" style={{ marginBottom: 4 }}>Your name</div>
+              <div className="card flat pad" style={{ marginBottom: 14 }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <Avatar name={playerName || me.name} />
+                  <input className="ipt" value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="Your name" style={{ flex: 1 }} />
+                  <button className="btn btn-ink btn-sm" style={{ height: 48 }}
+                    disabled={!playerName.trim() || playerName.trim() === me.name}
+                    onClick={() => { onRenameMe(playerName.trim()); onClose(); }}>Save</button>
+                </div>
+                <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>How you show up on your team and the leaderboard.</div>
               </div>
             </>
           )}
