@@ -83,7 +83,7 @@ export function SignIn({ onSignedIn }: Props) {
               <>
                 <h2 className="h2">Enter your code</h2>
                 <p className="muted" style={{ margin: '6px 0 16px', fontSize: 14 }}>
-                  We sent a 6-digit code to <b>{email}</b>. Enter it here — or open the link in that email on this device.
+                  We sent a 6-digit code to <b>{email}</b>. Enter it below to finish signing in.
                 </p>
                 <input className="ipt" inputMode="numeric" autoComplete="one-time-code" autoFocus
                   value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
