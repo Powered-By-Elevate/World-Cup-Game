@@ -4,6 +4,9 @@ import { NATIONS } from './nations';
 export interface Member {
   id: string;
   name: string;
+  /** Auth account this member is linked to. Absent on legacy/pre-account
+   *  members until they sign in and claim their record. */
+  uid?: string;
 }
 
 export interface Team {

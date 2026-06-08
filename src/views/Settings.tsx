@@ -20,9 +20,11 @@ interface Props {
   onTeamInvite: () => void;
   demo: boolean;
   onToggleDemo: (v: boolean) => void;
+  userEmail?: string | null;
+  onSignOut?: () => void;
 }
 
-export function Settings({ state, myTeam, isCommish, commishName, onClose, onScoring, onLeave, onRename, onClaim, onResetApp, onTeamInvite, demo, onToggleDemo }: Props) {
+export function Settings({ state, myTeam, isCommish, commishName, onClose, onScoring, onLeave, onRename, onClaim, onResetApp, onTeamInvite, demo, onToggleDemo, userEmail, onSignOut }: Props) {
   const sc = state.scoring;
   const [name, setName] = useState(myTeam?.name || '');
 
@@ -51,6 +53,30 @@ export function Settings({ state, myTeam, isCommish, commishName, onClose, onSco
             <div><div style={{ fontWeight: 800 }}>Family sync</div><div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>{HAS_REAL ? 'On — everyone sees live updates' : 'Preview — changes stay on this device'}</div></div>
             <span className={`status ${HAS_REAL ? 'live' : 'preview'}`}><span className="dot" />{HAS_REAL ? 'Live' : 'Preview'}</span>
           </div>
+
+          {/* account */}
+          {userEmail && (
+            <>
+              <div className="eyebrow" style={{ marginBottom: 4 }}>Account</div>
+              <div className="card flat pad" style={{ marginBottom: 14 }}>
+                <div className="between">
+                  <div className="row" style={{ gap: 8, minWidth: 0 }}>
+                    <Avatar name={userEmail} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userEmail}</div>
+                      <div className="muted" style={{ fontSize: 12 }}>Signed in — your team follows you on every device</div>
+                    </div>
+                  </div>
+                </div>
+                {onSignOut && (
+                  <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }}
+                    onClick={() => { if (confirm('Sign out of this device?')) { onSignOut(); } }}>
+                    <Icon name="refresh" size={16} /> Sign out
+                  </button>
+                )}
+              </div>
+            </>
+          )}
 
           {/* scoring */}
           <div className="eyebrow" style={{ marginBottom: 4 }}>Scoring</div>

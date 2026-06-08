@@ -156,7 +156,14 @@ const SUPA_ON = !!(SUPA_URL && SUPA_KEY);
 let supa: SupabaseClient | null = null;
 function makeSupaStore(): KV | null {
   if (!SUPA_ON) return null;
-  try { supa = createClient(SUPA_URL!, SUPA_KEY!, { auth: { persistSession: false } }); }
+  try {
+    supa = createClient(SUPA_URL!, SUPA_KEY!, {
+      // Persist the auth session so a device stays signed in across reloads and
+      // refreshes tokens silently. This is what makes one account follow you
+      // across desktop, mobile Safari and the home-screen app.
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    });
+  }
   catch (e) { console.error('supabase init failed', e); return null; }
   return {
     get: async (k) => {
@@ -210,9 +217,111 @@ export async function sset<T>(key: string, val: T, shared?: boolean): Promise<bo
   catch (e) { console.error('storage set failed', e); return false; }
 }
 
-/* ---- per-league identity ---- */
+/* ---- per-league identity (device cache; the account is the source of truth) ---- */
 export async function getMe(code: string): Promise<MeState | null> { return sget<MeState>(`wc:me:${code}`, false); }
 export async function setMe(code: string, me: MeState | null): Promise<boolean> { return sset(`wc:me:${code}`, me, false); }
+
+/* ============================================================
+   AUTH (Supabase email magic link / OTP code)
+   ============================================================ */
+
+/** True when accounts are available (requires a configured Supabase backend). */
+export const AUTH_ON = SUPA_ON;
+
+export interface AuthUser { id: string; email: string | null; }
+
+function redirectTo(): string | undefined {
+  if (!hasWindow) return undefined;
+  try { const u = new URL(window.location.href); u.hash = ''; return u.toString(); } catch { return undefined; }
+}
+
+/** Send a sign-in email containing both a 6-digit code and a magic link. */
+export async function signInWithEmail(email: string): Promise<void> {
+  if (!supa) throw new Error('Accounts need a Supabase backend');
+  const { error } = await supa.auth.signInWithOtp({
+    email: email.trim(),
+    options: { shouldCreateUser: true, emailRedirectTo: redirectTo() },
+  });
+  if (error) throw error;
+}
+
+/** Verify the 6-digit code the user typed in. Returns the signed-in user. */
+export async function verifyCode(email: string, token: string): Promise<AuthUser | null> {
+  if (!supa) throw new Error('Accounts need a Supabase backend');
+  const { data, error } = await supa.auth.verifyOtp({ email: email.trim(), token: token.trim(), type: 'email' });
+  if (error) throw error;
+  const u = data.user;
+  return u ? { id: u.id, email: u.email ?? null } : null;
+}
+
+/** The currently signed-in user, or null. */
+export async function getAuthUser(): Promise<AuthUser | null> {
+  if (!supa) return null;
+  const { data } = await supa.auth.getSession();
+  const u = data.session?.user;
+  return u ? { id: u.id, email: u.email ?? null } : null;
+}
+
+/** Subscribe to sign-in / sign-out. Returns an unsubscribe function. */
+export function onAuthChange(cb: (user: AuthUser | null) => void): () => void {
+  if (!supa) return () => {};
+  const { data } = supa.auth.onAuthStateChange((_e, session) => {
+    const u = session?.user;
+    cb(u ? { id: u.id, email: u.email ?? null } : null);
+  });
+  return () => data.subscription.unsubscribe();
+}
+
+export async function signOut(): Promise<void> {
+  if (supa) { try { await supa.auth.signOut(); } catch { /* ignore */ } }
+}
+
+/* ---- per-account league registry (follows you across devices) ----
+   Stored in the SHARED backend under a per-user key (not league-namespaced),
+   so the leagues you belong to appear on every device you sign into. */
+export async function getUserLeagues(uid: string): Promise<League[]> {
+  try {
+    const r = await sharedStore.get(`user:${uid}:leagues`);
+    const arr = r ? JSON.parse(r.value) : [];
+    return Array.isArray(arr) ? arr.filter((l: League) => l && l.code) : [];
+  } catch { return []; }
+}
+
+async function setUserLeagues(uid: string, leagues: League[]): Promise<void> {
+  try { await sharedStore.set(`user:${uid}:leagues`, JSON.stringify(leagues)); } catch (e) { console.error('setUserLeagues failed', e); }
+}
+
+/** Merge this device's local registry with the account's, write both back, and
+ *  return the merged list. This is what connects pools a family already built
+ *  (held in device-local storage) to their new account on first sign-in. */
+export async function syncUserLeagues(uid: string): Promise<League[]> {
+  const byCode = new Map<string, League>();
+  for (const l of [...await getUserLeagues(uid), ...listLeagues()]) {
+    if (!l || !l.code) continue;
+    const cur = byCode.get(l.code);
+    if (!cur) byCode.set(l.code, { code: l.code, name: l.name || '' });
+    else if (!cur.name && l.name) cur.name = l.name;   // keep the named version
+  }
+  const merged = [...byCode.values()];
+  await setUserLeagues(uid, merged);
+  lsSet('wc:leagues', merged);   // reflect on this device too
+  return merged;
+}
+
+/** Add (or rename) one league in the account's registry. */
+export async function addUserLeague(uid: string, code: string, name: string): Promise<void> {
+  if (!code || !name) return;
+  const cur = await getUserLeagues(uid);
+  const i = cur.findIndex(l => l.code === code);
+  if (i >= 0) { if (name) cur[i].name = name; } else { cur.push({ code, name }); }
+  await setUserLeagues(uid, cur);
+}
+
+/** Remove one league from the account's registry. */
+export async function removeUserLeague(uid: string, code: string): Promise<void> {
+  const cur = await getUserLeagues(uid);
+  await setUserLeagues(uid, cur.filter(l => l.code !== code));
+}
 
 /* ============================================================
    RESET (testing) — wipe the active league's pool + all local app data

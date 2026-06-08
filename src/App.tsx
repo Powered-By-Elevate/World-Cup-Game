@@ -6,8 +6,9 @@ import {
   sget, sset, HAS_REAL, leagueLink, teamLink, parseLeagueCode,
   listLeagues, activeLeague, setActiveLeague, upsertLeague, removeLeague, pruneLeagues, newLeagueCode,
   getMe, setMe as persistMe, resetActiveLeague, clearLocal,
+  AUTH_ON, getAuthUser, onAuthChange, signOut, syncUserLeagues, addUserLeague, removeUserLeague,
 } from './utils/storage';
-import type { League } from './utils/storage';
+import type { League, AuthUser } from './utils/storage';
 import { groupResults, knockoutResults } from './data/results';
 import { fetchLiveResults } from './data/liveResults';
 import type { LiveData } from './data/liveResults';
@@ -24,6 +25,7 @@ import { MatchesView } from './views/MatchesView';
 import { Squads } from './views/Squads';
 import { Settings } from './views/Settings';
 import { Leagues } from './views/Leagues';
+import { SignIn } from './views/SignIn';
 import './styles.css';
 
 const NAV: { id: string; label: string; icon: IconName }[] = [
@@ -55,6 +57,8 @@ const ENGINE_KO = knockoutResults(ENGINE_SCORES);
 export default function App() {
   const [state, setState] = useState<AppState>(defaultState());
   const [me, setMe] = useState<MeState | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [authReady, setAuthReady] = useState(!AUTH_ON);   // no backend → no gate, run as preview
   const [leagueCode, setLeagueCode] = useState('');
   const [leagues, setLeagues] = useState<League[]>([]);
   const [tab, setTab] = useState("home");
@@ -90,38 +94,106 @@ export default function App() {
   stateRef.current = state;
   const leagueCodeRef = useRef(leagueCode);
   leagueCodeRef.current = leagueCode;
+  const userRef = useRef(user);
+  userRef.current = user;
 
   const toast = useCallback((msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 2200);
   }, []);
 
+  const commitState = useCallback(async (mutator: (s: AppState) => AppState) => {
+    const cur = withDefaults((await sget<AppState>("wc:state", true)) || stateRef.current || defaultState());
+    const next = mutator(JSON.parse(JSON.stringify(cur)));
+    setState(next);
+    await sset("wc:state", next, true);
+  }, []);
+
   const reload = useCallback(async (code: string) => {
-    const [s, m] = await Promise.all([
-      sget<AppState>("wc:state", true),
-      getMe(code),
-    ]);
+    const s = await sget<AppState>("wc:state", true);
     const ns = s ? withDefaults(s) : defaultState();
     setState(ns);
-    setMe(m || null);
+
+    const u = userRef.current;
+    // Identity follows the signed-in account: find the member linked to this
+    // account across the league's teams. This is derived from shared state, so
+    // the same account resolves to the same identity on every device.
+    let m: MeState | null = null;
+    if (u) {
+      for (const t of ns.teams) {
+        const mem = (t.members || []).find(mm => mm.uid === u.id);
+        if (mem) { m = { id: mem.id, name: mem.name, teamId: t.id }; break; }
+      }
+    }
+    // Not linked yet? Fall back to this device's legacy identity (a member made
+    // before accounts existed) and silently stamp it with the account so it
+    // shows up on their other devices too — existing pools keep working.
+    if (!m) {
+      const legacy = await getMe(code);
+      if (legacy && u) {
+        const t = ns.teams.find(tt => tt.id === legacy.teamId);
+        const mem = t?.members?.find(mm => mm.id === legacy.id);
+        if (mem) {
+          m = { id: mem.id, name: mem.name, teamId: t!.id };
+          if (!mem.uid) {
+            await commitState(s2 => {
+              const tt = s2.teams.find(x => x.id === legacy.teamId);
+              const mm = tt?.members?.find(x => x.id === legacy.id);
+              if (mm) mm.uid = u.id;
+              return s2;
+            });
+          }
+        }
+      } else {
+        m = legacy || null;
+      }
+    }
+    setMe(m);
+    if (m) persistMe(code, m);
+
     // Register the active league in the switch list only once it has a real
     // name. Nameless leagues never go in the registry (they'd show as a
     // permanent "Unnamed league" phantom); the active one still shows in the
     // "This league" card from shared state regardless.
-    if (ns.leagueName) { upsertLeague(code, ns.leagueName); setLeagues(listLeagues()); }
+    if (ns.leagueName) {
+      upsertLeague(code, ns.leagueName);
+      if (u) await addUserLeague(u.id, code, ns.leagueName);
+      setLeagues(listLeagues());
+    }
     setLoaded(true);
+  }, [commitState]);
+
+  // bootstrap auth: resolve the current session, then react to sign-in/out.
+  useEffect(() => {
+    if (!AUTH_ON) return;
+    let alive = true;
+    getAuthUser().then(u => { if (alive) { setUser(u); setAuthReady(true); } });
+    const unsub = onAuthChange(u => { if (alive) { setUser(u); setAuthReady(true); } });
+    return () => { alive = false; unsub(); };
   }, []);
 
-  // init: resolve active league + team invite, then load
+  // init: once auth is settled (and, when required, signed in), resolve the
+  // active league + team invite, pull the account's leagues onto this device,
+  // then load. Re-runs on sign-in so the right account's data loads.
   useEffect(() => {
-    const code = activeLeague();
-    leagueCodeRef.current = code;
-    setLeagueCode(code);
-    pruneLeagues();                 // clear out any nameless/duplicate legacy entries
-    setLeagues(listLeagues());
-    try { setInviteTeamId(new URL(window.location.href).searchParams.get("team")); } catch { /* ignore */ }
-    reload(code);
-  }, [reload]);
+    if (!authReady) return;
+    if (AUTH_ON && !user) return;   // render shows SignIn instead
+    let alive = true;
+    (async () => {
+      const code = activeLeague();
+      leagueCodeRef.current = code;
+      setLeagueCode(code);
+      pruneLeagues();               // clear out any nameless/duplicate legacy entries
+      if (user) await syncUserLeagues(user.id);   // merge the account's leagues with this device's
+      setLeagues(listLeagues());
+      try { setInviteTeamId(new URL(window.location.href).searchParams.get("team")); } catch { /* ignore */ }
+      if (alive) await reload(code);
+    })();
+    return () => { alive = false; };
+    // Keyed on user?.id (not the whole user object) so token refreshes, which
+    // emit a fresh user object with the same id, don't trigger a full reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authReady, user?.id, reload]);
 
   // poll shared state for the active league (teams/draft/scoring changes)
   useEffect(() => {
@@ -134,13 +206,6 @@ export default function App() {
     };
     const iv = setInterval(tick, 5000);
     return () => { alive = false; clearInterval(iv); };
-  }, []);
-
-  const commitState = useCallback(async (mutator: (s: AppState) => AppState) => {
-    const cur = withDefaults((await sget<AppState>("wc:state", true)) || stateRef.current || defaultState());
-    const next = mutator(JSON.parse(JSON.stringify(cur)));
-    setState(next);
-    await sset("wc:state", next, true);
   }, []);
 
   const setMeBoth = useCallback(async (m: MeState | null) => {
@@ -156,7 +221,7 @@ export default function App() {
     createTeam: async (teamName: string, playerName: string) => {
       const mid = uid(), tid = uid();
       await commitState(s => {
-        s.teams.push({ id: tid, name: teamName, members: [{ id: mid, name: playerName }], picks: null });
+        s.teams.push({ id: tid, name: teamName, members: [{ id: mid, name: playerName, uid: user?.id }], picks: null });
         if (!s.commissioner) s.commissioner = mid;
         return s;
       });
@@ -167,14 +232,21 @@ export default function App() {
       const mid = uid();
       await commitState(s => {
         const t = s.teams.find(t => t.id === tid);
-        if (t) { t.members = t.members || []; t.members.push({ id: mid, name: playerName }); }
+        if (t) { t.members = t.members || []; t.members.push({ id: mid, name: playerName, uid: user?.id }); }
         return s;
       });
       await setMeBoth({ id: mid, name: playerName, teamId: tid });
       setTab("home");
     },
-    // Re-attach to an existing member on a new device/context (the "login").
+    // Claim an existing member on a new device: link it to this account so the
+    // same identity (team, picks, history) follows you across every device.
     resume: async (tid: string, mid: string, nm: string) => {
+      await commitState(s => {
+        const t = s.teams.find(t => t.id === tid);
+        const mem = t?.members?.find(m => m.id === mid);
+        if (mem && user) mem.uid = user.id;
+        return s;
+      });
       await setMeBoth({ id: mid, name: nm, teamId: tid });
       setTab("home");
     },
@@ -251,7 +323,7 @@ export default function App() {
     setScoring: async (sc: Scoring) => {
       await commitState(s => { s.scoring = sc; return s; });
     },
-  }), [commitState, setMeBoth, me]);
+  }), [commitState, setMeBoth, me, user]);
 
   const myTeam = useMemo(
     () => state.teams?.find(t => t.id === me?.teamId) || null,
@@ -302,6 +374,7 @@ export default function App() {
     const code = newLeagueCode();
     setActiveLeague(code); leagueCodeRef.current = code;
     upsertLeague(code, name); setLeagues(listLeagues());
+    if (userRef.current) await addUserLeague(userRef.current.id, code, name);
     await sset("wc:state", { ...defaultState(), leagueName: name }, true);
     await persistMe(code, null);
     setLeagueCode(code);
@@ -334,6 +407,7 @@ export default function App() {
 
   const removeLeagueFromList = useCallback(async (code: string) => {
     removeLeague(code);
+    if (userRef.current) await removeUserLeague(userRef.current.id, code);
     const rest = listLeagues();
     setLeagues(rest);
     // If we left the league we're currently in, go somewhere sensible:
@@ -356,6 +430,14 @@ export default function App() {
     await resetActiveLeague();
     clearLocal();
     try { window.location.href = window.location.origin + window.location.pathname; } catch { window.location.reload(); }
+  }, []);
+
+  const signOutNow = useCallback(async () => {
+    await signOut();
+    setUser(null);
+    setMe(null);
+    setLoaded(false);
+    setShowSettings(false);
   }, []);
 
   // Prefer the native share sheet (opens straight into iMessage / Android Messages,
@@ -399,6 +481,16 @@ export default function App() {
       </div>
     </div>
   );
+
+  if (AUTH_ON && !authReady) return (
+    <div className="app">
+      <div className="screen" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
+        <div className="muted">Loading…</div>
+      </div>
+    </div>
+  );
+
+  if (AUTH_ON && !user) return <SignIn onSignedIn={setUser} />;
 
   if (!loaded) return (
     <div className="app">
@@ -491,7 +583,8 @@ export default function App() {
           state={state} myTeam={myTeam} me={me} isCommish={isCommish} commishName={commishName}
           onClose={() => setShowSettings(false)} onScoring={api.setScoring} onLeave={api.leave}
           onRename={api.rename} onClaim={api.claimCommish} onResetApp={resetApp} onTeamInvite={copyTeamLink}
-          demo={demo} onToggleDemo={toggleDemo} />
+          demo={demo} onToggleDemo={toggleDemo}
+          userEmail={user?.email ?? null} onSignOut={signOutNow} />
       )}
       {shareModal}
       {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
