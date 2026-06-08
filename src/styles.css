@@ -437,11 +437,11 @@
 .marquee{ overflow:hidden; position:relative;
   -webkit-mask:linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
   mask:linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent); }
-.marquee-track{ display:flex; gap:11px; width:max-content; animation:marq 26s linear infinite; }
+.marquee-track{ display:flex; gap:11px; width:max-content; animation:marq 26s linear infinite;
+  will-change:transform; backface-visibility:hidden; transform:translateZ(0); }
 .marquee.rev .marquee-track{ animation-direction:reverse; animation-duration:32s; }
 .marquee:hover .marquee-track{ animation-play-state:paused; }
 @keyframes marq{ to{ transform:translateX(-50%); } }
-@media (prefers-reduced-motion:reduce){ .marquee-track{ animation:none; } }
 
 /* how it works step */
 .step{ display:flex; gap:13px; align-items:flex-start; padding:14px; }
