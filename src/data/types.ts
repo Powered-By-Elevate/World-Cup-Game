@@ -32,6 +32,9 @@ export interface AppState {
   pots: Record<string, string[]>;
   commissioner: string | null;
   leagueName: string;
+  /** Scheduled draft time (epoch ms) the pre-draft countdown ticks toward.
+   *  Purely cosmetic — the commissioner still starts the draft manually. */
+  draftAt?: number | null;
   v: number;
 }
 
@@ -77,6 +80,7 @@ export function defaultState(): AppState {
     pots: defaultPots(),
     commissioner: null,
     leagueName: '',
+    draftAt: null,
     v: 1,
   };
 }
@@ -93,6 +97,7 @@ export function withDefaults(s: Partial<AppState> | null): AppState {
     pots: s.pots && s.pots.FAV ? s.pots : defaultPots(),
     commissioner: s.commissioner || null,
     leagueName: typeof s.leagueName === 'string' ? s.leagueName : '',
+    draftAt: typeof s.draftAt === 'number' ? s.draftAt : null,
     v: 1,
   };
 }

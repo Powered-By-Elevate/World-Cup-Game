@@ -345,6 +345,9 @@ export default function App() {
     setScoring: async (sc: Scoring) => {
       await commitState(s => { s.scoring = sc; return s; });
     },
+    setDraftTime: async (ts: number | null) => {
+      await commitState(s => { s.draftAt = ts; return s; });
+    },
   }), [commitState, setMeBoth, me, user]);
 
   const myTeam = useMemo(
@@ -582,7 +585,7 @@ export default function App() {
       </header>
 
       <div className="screen">
-        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} />}
+        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}

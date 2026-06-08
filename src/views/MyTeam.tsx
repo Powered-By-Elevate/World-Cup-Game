@@ -20,13 +20,14 @@ interface Props {
   onTeamInvite: () => void;
   isCommish: boolean;
   commishName: string | null;
+  onSetDraftTime: (ts: number | null) => void;
 }
 
 type MatchRow = Match & { nid: string; ko?: false };
 type KORow = KOMatch & { nid: string; ko: true };
 type Row = MatchRow | KORow;
 
-export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName }: Props) {
+export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime }: Props) {
   const drafted = state.draftDone && !!myTeam.picks;
 
   // Before the draft runs, the home screen is a hype poster, not an empty shell.
@@ -37,6 +38,8 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
         teams={state.teams || []}
         isCommish={isCommish}
         commishName={commishName}
+        draftAt={state.draftAt ?? null}
+        onSetDraftTime={onSetDraftTime}
         onStartDraft={() => setTab('draft')}
       />
     );

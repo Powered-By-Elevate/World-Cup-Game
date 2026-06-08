@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { NATIONS, POT_KEYS, POT_META } from '../data/nations';
 import { MATCHES } from '../data/fixtures';
 import type { Team } from '../data/types';
@@ -12,7 +12,19 @@ interface Props {
   teams: Team[];
   isCommish: boolean;
   commishName: string | null;
+  draftAt: number | null;
+  onSetDraftTime: (ts: number | null) => void;
   onStartDraft: () => void;
+}
+
+// epoch ms <-> the "YYYY-MM-DDTHH:mm" local string a datetime-local input wants
+function toLocalInput(ts: number): string {
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fmtDraft(ts: number): string {
+  return new Date(ts).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 const STEPS = [
@@ -28,12 +40,22 @@ function barGrad(seed: string, i: number) {
   return `linear-gradient(180deg, ${BAR[c % BAR.length]}, ${BAR[(c + 3) % BAR.length]})`;
 }
 
-export function PreDraftHome({ team, teams, isCommish, commishName, onStartDraft }: Props) {
+export function PreDraftHome({ team, teams, isCommish, commishName, draftAt, onSetDraftTime, onStartDraft }: Props) {
   const members = team.members || [];
-  // Real urgency: count down to the tournament's first whistle, not a made-up
-  // draft time (the draft is commissioner-triggered, with no scheduled slot).
+  const [editing, setEditing] = useState(false);
+  const [dt, setDt] = useState('');
+
+  // The countdown ticks toward the commissioner's scheduled draft time if one
+  // is set; otherwise it falls back to the real first-match kickoff. Either way
+  // the draft only actually starts when the commissioner hits the button.
   const kickoff = useMemo(() => Math.min(...MATCHES.map(m => parseDate(m.d).getTime())), []);
-  const preKickoff = kickoff > Date.now();
+  const target = draftAt ?? kickoff;
+  const future = target > Date.now();
+  const cdLabel = draftAt ? 'Draft begins in' : 'Kicks off in';
+
+  const openEditor = () => { setDt(draftAt ? toLocalInput(draftAt) : ''); setEditing(true); };
+  const saveTime = () => { if (!dt) return; onSetDraftTime(new Date(dt).getTime()); setEditing(false); };
+  const clearTime = () => { onSetDraftTime(null); setEditing(false); };
 
   // all 48 nations split into two marquee rows, each doubled for a seamless loop
   const rowA = NATIONS.filter((_, i) => i % 2 === 0);
@@ -63,14 +85,14 @@ export function PreDraftHome({ team, teams, isCommish, commishName, onStartDraft
             <b style={{ color: 'var(--paper)' }}>{members.map(m => m.name).join(' & ')}</b> — when the draft drops you'll get one Favorite, one Underdog and one Longshot to ride all the way to the final.
           </p>
 
-          {/* countdown to kickoff */}
+          {/* countdown */}
           <div className="between" style={{ marginTop: 20, padding: '15px 16px', borderRadius: 14, background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.12)' }}>
             <div>
-              <div className="eyebrow" style={{ color: '#9C988C', whiteSpace: 'nowrap' }}>{preKickoff ? 'Kicks off in' : 'The tournament'}</div>
+              <div className="eyebrow" style={{ color: '#9C988C', whiteSpace: 'nowrap' }}>{future ? cdLabel : (draftAt ? 'Draft day' : 'The tournament')}</div>
               <div style={{ marginTop: 9 }}>
-                {preKickoff
-                  ? <Countdown target={kickoff} compact />
-                  : <div className="num" style={{ fontSize: 22, color: 'var(--paper)' }}>Underway — draft now</div>}
+                {future
+                  ? <Countdown target={target} compact />
+                  : <div className="num" style={{ fontSize: 22, color: 'var(--paper)' }}>{draftAt ? 'Starting any moment' : 'Underway — draft now'}</div>}
               </div>
             </div>
             <span className="flagrow">
@@ -79,6 +101,24 @@ export function PreDraftHome({ team, teams, isCommish, commishName, onStartDraft
               <Flag id={NATIONS.find(n => n.pot === 'LNG')!.id} size={34} ring="magenta" />
             </span>
           </div>
+
+          {/* commissioner: schedule the draft time the countdown ticks toward */}
+          {isCommish && (
+            editing ? (
+              <div style={{ marginTop: 12 }}>
+                <input type="datetime-local" className="ipt" value={dt} onChange={e => setDt(e.target.value)} style={{ height: 46 }} />
+                <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                  <button className="btn btn-lime btn-sm" style={{ flex: 1 }} disabled={!dt} onClick={saveTime}>Save time</button>
+                  {draftAt && <button className="btn btn-sm" style={{ background: 'transparent', color: 'var(--paper)', borderColor: 'rgba(255,255,255,.3)', boxShadow: 'none' }} onClick={clearTime}>Clear</button>}
+                  <button className="btn btn-sm" style={{ background: 'transparent', color: 'var(--paper)', borderColor: 'rgba(255,255,255,.3)', boxShadow: 'none' }} onClick={() => setEditing(false)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={openEditor} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 34, marginTop: 12, padding: '0 13px', borderRadius: 999, border: '1px solid rgba(255,255,255,.25)', background: 'rgba(255,255,255,.06)', color: 'var(--paper)', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
+                <Icon name="cal" size={14} />{draftAt ? `Draft set · ${fmtDraft(draftAt)} · Change` : 'Set a draft time'}
+              </button>
+            )
+          )}
 
           {/* CTA */}
           {isCommish ? (
