@@ -133,7 +133,10 @@ export default function App() {
       if (legacy && u) {
         const t = ns.teams.find(tt => tt.id === legacy.teamId);
         const mem = t?.members?.find(mm => mm.id === legacy.id);
-        if (mem) {
+        // Only adopt this device's saved member if it's unclaimed or already
+        // ours — never one linked to a different account. Otherwise a second
+        // person signing in on a shared device would inherit the first's team.
+        if (mem && (!mem.uid || mem.uid === u.id)) {
           m = { id: mem.id, name: mem.name, teamId: t!.id };
           if (!mem.uid) {
             await commitState(s2 => {
@@ -434,6 +437,9 @@ export default function App() {
 
   const signOutNow = useCallback(async () => {
     await signOut();
+    // Drop this device's saved identity so the next person to sign in here
+    // isn't handed the previous account's team via the legacy fallback.
+    await persistMe(leagueCodeRef.current, null);
     setUser(null);
     setMe(null);
     setLoaded(false);
