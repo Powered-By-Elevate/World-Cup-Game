@@ -8,6 +8,7 @@ import { parseDate, dayKeyOf, fmtDayLabel, fmtTime } from '../utils/helpers';
 import { Flag } from '../components/Flag';
 import { Icon } from '../components/Icon';
 import { Avatar, Countdown, PotTag, teamGradient } from '../components/shared';
+import { PreDraftHome } from './PreDraftHome';
 
 interface Props {
   myTeam: Team;
@@ -17,15 +18,31 @@ interface Props {
   standings: StandingEntry[];
   setTab: (tab: string) => void;
   onTeamInvite: () => void;
+  isCommish: boolean;
+  commishName: string | null;
 }
 
 type MatchRow = Match & { nid: string; ko?: false };
 type KORow = KOMatch & { nid: string; ko: true };
 type Row = MatchRow | KORow;
 
-export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite }: Props) {
-  const grad = teamGradient(myTeam);
+export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName }: Props) {
   const drafted = state.draftDone && !!myTeam.picks;
+
+  // Before the draft runs, the home screen is a hype poster, not an empty shell.
+  if (!drafted) {
+    return (
+      <PreDraftHome
+        team={myTeam}
+        teams={state.teams || []}
+        isCommish={isCommish}
+        commishName={commishName}
+        onStartDraft={() => setTab('draft')}
+      />
+    );
+  }
+
+  const grad = teamGradient(myTeam);
   const myIds = POT_KEYS.map(pk => myTeam.picks?.[pk]).filter(Boolean) as string[];
   const rank = standings.findIndex(s => s.team.id === myTeam.id) + 1;
   const st = standings.find(s => s.team.id === myTeam.id);
@@ -66,22 +83,15 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
         </div>
         {/* picks */}
         <div style={{ padding: '14px 14px 16px' }}>
-          {drafted ? (
-            <div className="row" style={{ gap: 10, justifyContent: 'space-between' }}>
-              {POT_KEYS.map(pot => (
-                <div key={pot} style={{ flex: 1, textAlign: 'center' }}>
-                  <Flag id={myTeam.picks![pot]} size={56} ring="pot" />
-                  <div style={{ fontWeight: 800, fontSize: 13, marginTop: 8 }}>{NATION[myTeam.picks![pot]].name}</div>
-                  <div style={{ marginTop: 4 }}><PotTag pot={pot} /></div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
-              <div className="muted" style={{ fontSize: 14, marginBottom: 12 }}>The draft hasn't run yet — you don't have nations.</div>
-              <button className="btn btn-lime btn-block" onClick={() => setTab('draft')}><Icon name="bolt" size={18} /> Go to the draft</button>
-            </div>
-          )}
+          <div className="row" style={{ gap: 10, justifyContent: 'space-between' }}>
+            {POT_KEYS.map(pot => (
+              <div key={pot} style={{ flex: 1, textAlign: 'center' }}>
+                <Flag id={myTeam.picks![pot]} size={56} ring="pot" />
+                <div style={{ fontWeight: 800, fontSize: 13, marginTop: 8 }}>{NATION[myTeam.picks![pot]].name}</div>
+                <div style={{ marginTop: 4 }}><PotTag pot={pot} /></div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

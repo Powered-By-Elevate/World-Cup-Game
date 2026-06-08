@@ -582,7 +582,7 @@ export default function App() {
       </header>
 
       <div className="screen">
-        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} />}
+        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
