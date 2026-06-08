@@ -1,34 +1,19 @@
-import { useState } from 'react';
-import type { AppState, MeState, Scoring, Team } from '../data/types';
+import type { AppState, Scoring } from '../data/types';
 import { HAS_REAL } from '../utils/storage';
 import { clamp } from '../utils/helpers';
 import { Icon } from '../components/Icon';
-import { Avatar } from '../components/shared';
 
 interface Props {
   state: AppState;
-  myTeam: Team | null;
-  me: MeState | null;
-  isCommish: boolean;
-  commishName: string | null;
   onClose: () => void;
   onScoring: (sc: Scoring) => void;
-  onLeave: () => void;
-  onRename: (name: string) => void;
-  onRenameMe: (name: string) => void;
-  onClaim: () => void;
   onResetApp: () => void;
-  onTeamInvite: () => void;
   demo: boolean;
   onToggleDemo: (v: boolean) => void;
-  userEmail?: string | null;
-  onSignOut?: () => void;
 }
 
-export function Settings({ state, myTeam, me, isCommish, commishName, onClose, onScoring, onLeave, onRename, onRenameMe, onClaim, onResetApp, onTeamInvite, demo, onToggleDemo, userEmail, onSignOut }: Props) {
+export function Settings({ state, onClose, onScoring, onResetApp, demo, onToggleDemo }: Props) {
   const sc = state.scoring;
-  const [name, setName] = useState(myTeam?.name || '');
-  const [playerName, setPlayerName] = useState(me?.name || '');
 
   const set = (k: 'win' | 'draw', v: number) => onScoring({ ...sc, [k]: clamp(v, 0, 9) });
   const setB = (k: string, v: number) => onScoring({ ...sc, b: { ...sc.b, [k]: clamp(v, 0, 50) } });
@@ -45,7 +30,10 @@ export function Settings({ state, myTeam, me, isCommish, commishName, onClose, o
       <div className="sheet" onClick={e => e.stopPropagation()}>
         <div className="sheet-grab" />
         <div className="between" style={{ padding: '4px 18px 14px' }}>
-          <h2 className="display" style={{ fontSize: 26 }}>Settings</h2>
+          <div>
+            <h2 className="display" style={{ fontSize: 26 }}>League settings</h2>
+            <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>Commissioner controls — applies to everyone</div>
+          </div>
           <button className="hdr-btn" onClick={onClose} style={{ border: '1.5px solid var(--line)' }}><Icon name="x" size={18} /></button>
         </div>
 
@@ -55,47 +43,6 @@ export function Settings({ state, myTeam, me, isCommish, commishName, onClose, o
             <div><div style={{ fontWeight: 800 }}>Family sync</div><div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>{HAS_REAL ? 'On — everyone sees live updates' : 'Preview — changes stay on this device'}</div></div>
             <span className={`status ${HAS_REAL ? 'live' : 'preview'}`}><span className="dot" />{HAS_REAL ? 'Live' : 'Preview'}</span>
           </div>
-
-          {/* account */}
-          {userEmail && (
-            <>
-              <div className="eyebrow" style={{ marginBottom: 4 }}>Account</div>
-              <div className="card flat pad" style={{ marginBottom: 14 }}>
-                <div className="between">
-                  <div className="row" style={{ gap: 8, minWidth: 0 }}>
-                    <Avatar name={userEmail} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userEmail}</div>
-                      <div className="muted" style={{ fontSize: 12 }}>Signed in — your team follows you on every device</div>
-                    </div>
-                  </div>
-                </div>
-                {onSignOut && (
-                  <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }}
-                    onClick={() => { if (confirm('Sign out of this device?')) { onSignOut(); } }}>
-                    <Icon name="refresh" size={16} /> Sign out
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* your name */}
-          {me && (
-            <>
-              <div className="eyebrow" style={{ marginBottom: 4 }}>Your name</div>
-              <div className="card flat pad" style={{ marginBottom: 14 }}>
-                <div className="row" style={{ gap: 8 }}>
-                  <Avatar name={playerName || me.name} />
-                  <input className="ipt" value={playerName} onChange={e => setPlayerName(e.target.value)} placeholder="Your name" style={{ flex: 1 }} />
-                  <button className="btn btn-ink btn-sm" style={{ height: 48 }}
-                    disabled={!playerName.trim() || playerName.trim() === me.name}
-                    onClick={() => { onRenameMe(playerName.trim()); onClose(); }}>Save</button>
-                </div>
-                <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>How you show up on your team and the leaderboard.</div>
-              </div>
-            </>
-          )}
 
           {/* scoring */}
           <div className="eyebrow" style={{ marginBottom: 4 }}>Scoring</div>
@@ -115,32 +62,6 @@ export function Settings({ state, myTeam, me, isCommish, commishName, onClose, o
               </div>
             )}
           </div>
-
-          {/* commissioner */}
-          <div className="eyebrow" style={{ marginBottom: 4 }}>Commissioner</div>
-          <div className="between card flat pad" style={{ marginBottom: 14 }}>
-            <div className="row" style={{ gap: 8 }}>
-              <Avatar name={commishName || '?'} />
-              <div><div style={{ fontWeight: 800 }}>{commishName ? `${commishName} 👑` : 'No commissioner yet'}</div><div className="muted" style={{ fontSize: 12 }}>Runs the draft & rules</div></div>
-            </div>
-            {isCommish && commishName
-              ? <span className="muted" style={{ fontSize: 12 }}>That's you</span>
-              : <button className="btn btn-ghost btn-sm" onClick={() => { onClaim(); onClose(); }}>{commishName ? 'Take over' : 'Claim'}</button>}
-          </div>
-
-          {/* your team */}
-          {myTeam && <>
-            <div className="eyebrow" style={{ marginBottom: 4 }}>Your team</div>
-            <div className="card flat pad">
-              <div className="row" style={{ gap: 8, marginBottom: 10 }}>
-                <input className="ipt" value={name} onChange={e => setName(e.target.value)} style={{ flex: 1 }} />
-                <button className="btn btn-ink btn-sm" style={{ height: 48 }} disabled={!name.trim()} onClick={() => { onRename(name.trim()); onClose(); }}>Save</button>
-              </div>
-              <button className="btn btn-ghost btn-block" style={{ marginBottom: 8 }} onClick={() => { onTeamInvite(); onClose(); }}><Icon name="users" size={16} /> Invite your partner</button>
-              <button className="btn btn-ghost btn-block" style={{ color: 'var(--live)', borderColor: 'var(--live)' }}
-                onClick={() => { if (confirm('Leave this team?')) { onLeave(); onClose(); } }}>Leave team</button>
-            </div>
-          </>}
 
           {/* results */}
           <div className="eyebrow" style={{ margin: '18px 0 4px' }}>Results</div>

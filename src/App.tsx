@@ -17,6 +17,7 @@ import { teamStats, computeMovers } from './utils/scoring';
 import type { StandingEntry } from './utils/scoring';
 import { Icon, Mark } from './components/Icon';
 import type { IconName } from './components/Icon';
+import { Avatar } from './components/shared';
 import { Onboarding } from './views/Onboarding';
 import { MyTeam } from './views/MyTeam';
 import { DraftView } from './views/DraftView';
@@ -24,6 +25,7 @@ import { TableView } from './views/Leaderboard';
 import { MatchesView } from './views/MatchesView';
 import { Squads } from './views/Squads';
 import { Settings } from './views/Settings';
+import { Profile } from './views/Profile';
 import { Leagues } from './views/Leagues';
 import { SignIn } from './views/SignIn';
 import './styles.css';
@@ -65,6 +67,7 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [showLeagues, setShowLeagues] = useState(false);
   const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
   const [shareSheet, setShareSheet] = useState<{ title: string; text: string; url: string } | null>(null);
@@ -82,8 +85,11 @@ export default function App() {
     return () => { alive = false; clearInterval(iv); };
   }, []);
 
-  const scores = demo ? ENGINE_SCORES : (live?.scores ?? ENGINE_SCORES);
-  const ko = demo ? ENGINE_KO : (live?.ko ?? ENGINE_KO);
+  // Real results only. When the live feed has nothing (yet, or briefly down),
+  // scores stay empty and the UI shows fixtures as pending — never simulated
+  // numbers. The deterministic engine is reachable ONLY via the Demo toggle.
+  const scores = demo ? ENGINE_SCORES : (live?.scores ?? {});
+  const ko = demo ? ENGINE_KO : (live?.ko ?? []);
 
   const toggleDemo = useCallback((v: boolean) => {
     setDemo(v);
@@ -561,7 +567,8 @@ export default function App() {
         <div className="sb-bottom">
           <span className={`status ${HAS_REAL ? "live" : "preview"}`}><span className="dot" />{HAS_REAL ? "Live" : "Preview"}</span>
           <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
-          <button className="hdr-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="gear" size={18} /></button>
+          {isCommish && <button className="hdr-btn" onClick={() => setShowSettings(true)} title="League settings"><Icon name="gear" size={18} /></button>}
+          <button className="hdr-btn" onClick={() => setShowProfile(true)} title="You"><Avatar name={me?.name || user?.email || "?"} size={24} /></button>
         </div>
       </aside>
 
@@ -570,7 +577,8 @@ export default function App() {
         <Mark size={36} />
         <LeagueSwitch name={leagueName} onClick={() => setShowLeagues(true)} />
         <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
-        <button className="hdr-btn" onClick={() => setShowSettings(true)} title="Settings"><Icon name="gear" size={18} /></button>
+        {isCommish && <button className="hdr-btn" onClick={() => setShowSettings(true)} title="League settings"><Icon name="gear" size={18} /></button>}
+        <button className="hdr-btn" onClick={() => setShowProfile(true)} title="You"><Avatar name={me?.name || user?.email || "?"} size={24} /></button>
       </header>
 
       <div className="screen">
@@ -597,12 +605,18 @@ export default function App() {
           onSwitch={switchLeague} onCreate={createLeague} onJoin={joinLeague} onRename={renameLeague} onRemove={removeLeagueFromList}
           onCopyLeagueLink={copyLeagueLink} onCopyTeamLink={copyTeamLink} onClose={() => setShowLeagues(false)} />
       )}
-      {showSettings && (
+      {showSettings && isCommish && (
         <Settings
-          state={state} myTeam={myTeam} me={me} isCommish={isCommish} commishName={commishName}
-          onClose={() => setShowSettings(false)} onScoring={api.setScoring} onLeave={api.leave}
-          onRename={api.rename} onRenameMe={api.renameMe} onClaim={api.claimCommish} onResetApp={resetApp} onTeamInvite={copyTeamLink}
-          demo={demo} onToggleDemo={toggleDemo}
+          state={state}
+          onClose={() => setShowSettings(false)} onScoring={api.setScoring} onResetApp={resetApp}
+          demo={demo} onToggleDemo={toggleDemo} />
+      )}
+      {showProfile && (
+        <Profile
+          me={me} myTeam={myTeam} isCommish={isCommish} commishName={commishName}
+          onClose={() => setShowProfile(false)}
+          onRenameMe={api.renameMe} onRenameTeam={api.rename} onTeamInvite={copyTeamLink}
+          onLeave={api.leave} onClaim={api.claimCommish}
           userEmail={user?.email ?? null} onSignOut={signOutNow} />
       )}
       {shareModal}
