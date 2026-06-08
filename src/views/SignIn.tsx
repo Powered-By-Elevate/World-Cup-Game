@@ -11,6 +11,14 @@ interface Props {
 const DECO = ['ESP', 'ARG', 'FRA', 'BRA', 'POR', 'NED'];
 const emailOk = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.trim());
 
+// Turn raw Supabase auth errors into something a relative can act on.
+function niceErr(e: unknown, fallback: string): string {
+  const m = (e instanceof Error ? e.message : String(e || '')).toLowerCase();
+  if (m.includes('rate limit') || m.includes('only request')) return 'Too many tries — wait a minute, then ask for a new code.';
+  if (m.includes('expired') || m.includes('invalid') || m.includes('token')) return 'That code expired or was wrong. Tap "resend code" and use the newest one.';
+  return fallback;
+}
+
 export function SignIn({ onSignedIn }: Props) {
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
@@ -22,7 +30,7 @@ export function SignIn({ onSignedIn }: Props) {
     if (!emailOk(email) || busy) return;
     setBusy(true); setErr(null);
     try { await signInWithEmail(email); setStep('code'); }
-    catch (e) { setErr(e instanceof Error ? e.message : 'Could not send the code. Try again.'); }
+    catch (e) { setErr(niceErr(e, 'Could not send the code. Check the email and try again.')); }
     finally { setBusy(false); }
   };
 
@@ -34,7 +42,7 @@ export function SignIn({ onSignedIn }: Props) {
       if (user) onSignedIn(user);
       else setErr('That code did not work. Check it and try again.');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'That code did not work. Check it and try again.');
+      setErr(niceErr(e, 'That code did not work. Check it and try again.'));
     } finally { setBusy(false); }
   };
 
@@ -72,7 +80,8 @@ export function SignIn({ onSignedIn }: Props) {
                   Enter your email and we'll send you a sign-in code. No password needed.
                 </p>
                 <input className="ipt" type="email" inputMode="email" autoComplete="email" autoFocus
-                  value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com"
+                  autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                  value={email} onChange={e => setEmail(e.target.value.trimStart().toLowerCase())} placeholder="you@email.com"
                   onKeyDown={e => e.key === 'Enter' && send()} />
                 {err && <p style={{ color: 'var(--live)', fontSize: 13, margin: '10px 0 0' }}>{err}</p>}
                 <button className="btn btn-lime btn-block" style={{ marginTop: 16 }} disabled={!emailOk(email) || busy} onClick={send}>
