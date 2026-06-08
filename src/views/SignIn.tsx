@@ -69,7 +69,7 @@ export function SignIn({ onSignedIn }: Props) {
               <>
                 <h2 className="h2">Sign in</h2>
                 <p className="muted" style={{ margin: '6px 0 16px', fontSize: 14 }}>
-                  Enter your email and we'll send you a 6-digit code. No password needed.
+                  Enter your email and we'll send you a sign-in code. No password needed.
                 </p>
                 <input className="ipt" type="email" inputMode="email" autoComplete="email" autoFocus
                   value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com"
@@ -83,11 +83,11 @@ export function SignIn({ onSignedIn }: Props) {
               <>
                 <h2 className="h2">Enter your code</h2>
                 <p className="muted" style={{ margin: '6px 0 16px', fontSize: 14 }}>
-                  We sent a 6-digit code to <b>{email}</b>. Enter it below to finish signing in.
+                  We sent a code to <b>{email}</b>. Enter it below to finish signing in.
                 </p>
                 <input className="ipt" inputMode="numeric" autoComplete="one-time-code" autoFocus
-                  value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="123456" style={{ letterSpacing: '.4em', textAlign: 'center', fontSize: 22, fontWeight: 800 }}
+                  value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  placeholder="Enter code" style={{ letterSpacing: '.3em', textAlign: 'center', fontSize: 22, fontWeight: 800 }}
                   onKeyDown={e => e.key === 'Enter' && verify()} />
                 {err && <p style={{ color: 'var(--live)', fontSize: 13, margin: '10px 0 0' }}>{err}</p>}
                 <button className="btn btn-lime btn-block" style={{ marginTop: 16 }} disabled={code.length < 6 || busy} onClick={verify}>
