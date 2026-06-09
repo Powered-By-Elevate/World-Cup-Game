@@ -8,11 +8,12 @@ interface Props {
   onClose: () => void;
   onScoring: (sc: Scoring) => void;
   onResetApp: () => void;
+  onOpenManage: () => void;
   demo: boolean;
   onToggleDemo: (v: boolean) => void;
 }
 
-export function Settings({ state, onClose, onScoring, onResetApp, demo, onToggleDemo }: Props) {
+export function Settings({ state, onClose, onScoring, onResetApp, onOpenManage, demo, onToggleDemo }: Props) {
   const sc = state.scoring;
 
   const set = (k: 'win' | 'draw', v: number) => onScoring({ ...sc, [k]: clamp(v, 0, 9) });
@@ -43,6 +44,18 @@ export function Settings({ state, onClose, onScoring, onResetApp, demo, onToggle
             <div><div style={{ fontWeight: 800 }}>Family sync</div><div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>{HAS_REAL ? 'On — everyone sees live updates' : 'Preview — changes stay on this device'}</div></div>
             <span className={`status ${HAS_REAL ? 'live' : 'preview'}`}><span className="dot" />{HAS_REAL ? 'Live' : 'Preview'}</span>
           </div>
+
+          {/* roster admin */}
+          <div className="eyebrow" style={{ marginBottom: 4 }}>Roster</div>
+          <button className="between card flat pad" style={{ marginBottom: 14, width: '100%', textAlign: 'left', cursor: 'pointer' }} onClick={onOpenManage}>
+            <div>
+              <div style={{ fontWeight: 800 }}>Teams &amp; people</div>
+              <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
+                {state.teams.length} {state.teams.length === 1 ? 'team' : 'teams'} · {state.teams.reduce((n, t) => n + (t.members?.length || 0), 0)} {state.teams.reduce((n, t) => n + (t.members?.length || 0), 0) === 1 ? 'person' : 'people'} — add, move, edit
+              </div>
+            </div>
+            <Icon name="chevron" size={16} />
+          </button>
 
           {/* scoring */}
           <div className="eyebrow" style={{ marginBottom: 4 }}>Scoring</div>

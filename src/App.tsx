@@ -25,6 +25,7 @@ import { TableView } from './views/Leaderboard';
 import { MatchesView } from './views/MatchesView';
 import { Squads } from './views/Squads';
 import { Settings } from './views/Settings';
+import { Manage } from './views/Manage';
 import { Profile } from './views/Profile';
 import { Leagues } from './views/Leagues';
 import { SignIn } from './views/SignIn';
@@ -67,6 +68,7 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showManage, setShowManage] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showLeagues, setShowLeagues] = useState(false);
   const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
@@ -128,7 +130,39 @@ export default function App() {
     if (u) {
       for (const t of ns.teams) {
         const mem = (t.members || []).find(mm => mm.uid === u.id);
-        if (mem) { m = { id: mem.id, name: mem.name, teamId: t.id }; break; }
+        if (mem) {
+          m = { id: mem.id, name: mem.name, teamId: t.id };
+          // Capture the account email onto the member so the commissioner roster
+          // can show who's who. One-time stamp; skip if already current.
+          const email = u.email?.toLowerCase();
+          if (email && mem.email !== email) {
+            await commitState(s2 => {
+              const mm = s2.teams.flatMap(tt => tt.members || []).find(x => x.id === mem.id);
+              if (mm) mm.email = email;
+              return s2;
+            });
+          }
+          break;
+        }
+      }
+    }
+    // Reserved by the commissioner "by email" but not linked yet? Claim the
+    // unclaimed member whose email matches this account, so the slot (team,
+    // picks, history) follows them the moment they sign in. Never touch a member
+    // already linked to a different account.
+    if (!m && u?.email) {
+      const email = u.email.toLowerCase();
+      for (const t of ns.teams) {
+        const mem = (t.members || []).find(mm => !mm.uid && mm.email?.toLowerCase() === email);
+        if (mem) {
+          m = { id: mem.id, name: mem.name, teamId: t.id };
+          await commitState(s2 => {
+            const mm = s2.teams.flatMap(tt => tt.members || []).find(x => x.id === mem.id);
+            if (mm) { mm.uid = u.id; mm.email = email; }
+            return s2;
+          });
+          break;
+        }
       }
     }
     // Not linked yet? Fall back to this device's legacy identity (a member made
@@ -347,6 +381,73 @@ export default function App() {
     },
     setDraftTime: async (ts: number | null) => {
       await commitState(s => { s.draftAt = ts; return s; });
+    },
+
+    /* ---- commissioner roster admin (manages any team / person) ---- */
+    addTeam: async (name: string) => {
+      const nm = name.trim();
+      if (!nm) return;
+      await commitState(s => {
+        s.teams.push({ id: uid(), name: nm, members: [], picks: null });
+        return s;
+      });
+    },
+    renameTeamById: async (teamId: string, name: string) => {
+      const nm = name.trim();
+      if (!nm) return;
+      await commitState(s => {
+        const t = s.teams.find(t => t.id === teamId);
+        if (t) t.name = nm;
+        return s;
+      });
+    },
+    removeTeam: async (teamId: string) => {
+      await commitState(s => { s.teams = s.teams.filter(t => t.id !== teamId); return s; });
+      if (me?.teamId === teamId) { await setMeBoth(null); setMe(null); }
+    },
+    addMember: async (teamId: string, name: string, email?: string) => {
+      const nm = name.trim();
+      if (!nm) return;
+      const em = email?.trim().toLowerCase() || undefined;
+      await commitState(s => {
+        const t = s.teams.find(t => t.id === teamId);
+        if (t) { t.members = t.members || []; t.members.push({ id: uid(), name: nm, email: em }); }
+        return s;
+      });
+    },
+    renameMember: async (memberId: string, name: string) => {
+      const nm = name.trim();
+      if (!nm) return;
+      await commitState(s => {
+        const mem = s.teams.flatMap(t => t.members || []).find(m => m.id === memberId);
+        if (mem) mem.name = nm;
+        return s;
+      });
+      if (me?.id === memberId) await setMeBoth({ ...me, name: nm });
+    },
+    removeMember: async (memberId: string) => {
+      await commitState(s => {
+        for (const t of s.teams) t.members = (t.members || []).filter(m => m.id !== memberId);
+        if (s.commissioner === memberId) s.commissioner = null;
+        return s;
+      });
+      if (me?.id === memberId) { await setMeBoth(null); setMe(null); }
+    },
+    moveMember: async (memberId: string, toTeamId: string) => {
+      await commitState(s => {
+        let moved: typeof s.teams[number]['members'][number] | undefined;
+        for (const t of s.teams) {
+          const i = (t.members || []).findIndex(m => m.id === memberId);
+          if (i >= 0) { moved = t.members[i]; t.members.splice(i, 1); break; }
+        }
+        const dest = s.teams.find(t => t.id === toTeamId);
+        if (moved && dest) { dest.members = dest.members || []; dest.members.push(moved); }
+        return s;
+      });
+      if (me?.id === memberId) await setMeBoth({ ...me, teamId: toTeamId });
+    },
+    setCommissioner: async (memberId: string) => {
+      await commitState(s => { s.commissioner = memberId; return s; });
     },
   }), [commitState, setMeBoth, me, user]);
 
@@ -612,7 +713,15 @@ export default function App() {
         <Settings
           state={state}
           onClose={() => setShowSettings(false)} onScoring={api.setScoring} onResetApp={resetApp}
+          onOpenManage={() => { setShowSettings(false); setShowManage(true); }}
           demo={demo} onToggleDemo={toggleDemo} />
+      )}
+      {showManage && isCommish && (
+        <Manage
+          state={state} me={me} onClose={() => setShowManage(false)}
+          onAddTeam={api.addTeam} onRenameTeam={api.renameTeamById} onRemoveTeam={api.removeTeam}
+          onAddMember={api.addMember} onRenameMember={api.renameMember} onRemoveMember={api.removeMember}
+          onMoveMember={api.moveMember} onSetCommissioner={api.setCommissioner} />
       )}
       {showProfile && (
         <Profile

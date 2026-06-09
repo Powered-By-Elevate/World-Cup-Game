@@ -7,6 +7,10 @@ export interface Member {
   /** Auth account this member is linked to. Absent on legacy/pre-account
    *  members until they sign in and claim their record. */
   uid?: string;
+  /** Account email. Set when the commissioner reserves a slot "by email", or
+   *  captured automatically from the signed-in account on first link. Stored
+   *  lowercased so sign-in matching is case-insensitive. */
+  email?: string;
 }
 
 export interface Team {
