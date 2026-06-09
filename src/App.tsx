@@ -40,6 +40,7 @@ const NAV: { id: string; label: string; icon: IconName }[] = [
   { id: "table", label: "Table", icon: "table" },
   { id: "matches", label: "Matches", icon: "cal" },
   { id: "squads", label: "Squads", icon: "users" },
+  { id: "cabinet", label: "Cabinet", icon: "trophy" },
 ];
 
 // Prominent league switcher — the league name is the focus, tap to manage/switch.
@@ -72,7 +73,6 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showManage, setShowManage] = useState(false);
-  const [showTrophy, setShowTrophy] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showLeagues, setShowLeagues] = useState(false);
   const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
@@ -465,11 +465,11 @@ export default function App() {
     setCommissioner: async (memberId: string) => {
       await commitState(s => { s.commissioner = memberId; return s; });
     },
-    toggleAward: async (teamId: string, awardId: string) => {
+    // Single-holder: a funny trophy belongs to one team at a time (or nobody).
+    setAwardHolder: async (awardId: string, teamId: string | null) => {
       await commitState(s => {
-        s.awards = s.awards || [];
-        const i = s.awards.findIndex(a => a.teamId === teamId && a.awardId === awardId);
-        if (i >= 0) s.awards.splice(i, 1); else s.awards.push({ teamId, awardId });
+        s.awards = (s.awards || []).filter(a => a.awardId !== awardId);
+        if (teamId) s.awards.push({ teamId, awardId });
         return s;
       });
     },
@@ -727,7 +727,6 @@ export default function App() {
         </nav>
         <div className="sb-bottom">
           <span className={`status ${HAS_REAL ? "live" : "preview"}`}><span className="dot" />{HAS_REAL ? "Live" : "Preview"}</span>
-          <button className="hdr-btn" onClick={() => setShowTrophy(true)} title="Trophy Room"><Icon name="trophy" size={18} /></button>
           <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
           {isCommish && <button className="hdr-btn" onClick={() => setShowSettings(true)} title="League settings"><Icon name="gear" size={18} /></button>}
           <button className="hdr-btn" onClick={() => setShowProfile(true)} title="You"><Avatar name={me?.name || user?.email || "?"} size={24} /></button>
@@ -738,7 +737,6 @@ export default function App() {
       <header className="hdr">
         <Mark size={36} />
         <LeagueSwitch name={leagueName} onClick={() => setShowLeagues(true)} />
-        <button className="hdr-btn" onClick={() => setShowTrophy(true)} title="Trophy Room"><Icon name="trophy" size={16} /></button>
         <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
         {isCommish && <button className="hdr-btn" onClick={() => setShowSettings(true)} title="League settings"><Icon name="gear" size={18} /></button>}
         <button className="hdr-btn" onClick={() => setShowProfile(true)} title="You"><Avatar name={me?.name || user?.email || "?"} size={24} /></button>
@@ -750,6 +748,7 @@ export default function App() {
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
         {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
+        {tab === "cabinet" && <TrophyRoom teams={state.teams || []} awardsByTeam={awardsByTeam} myTeam={myTeam} isCommish={isCommish} onSetAwardHolder={api.setAwardHolder} onShare={toast} />}
       </div>
 
       <nav className="nav">
@@ -775,12 +774,6 @@ export default function App() {
           onOpenManage={() => { setShowSettings(false); setShowManage(true); }}
           onAnnounce={announce}
           demo={demo} onToggleDemo={toggleDemo} />
-      )}
-      {showTrophy && (
-        <TrophyRoom
-          teams={standings.map(s => s.team)} awardsByTeam={awardsByTeam} assigned={state.awards || []}
-          myTeamId={myTeam?.id} isCommish={isCommish} onToggleAward={api.toggleAward}
-          onClose={() => setShowTrophy(false)} />
       )}
       {showManage && isCommish && (
         <Manage

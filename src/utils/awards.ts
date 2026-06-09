@@ -1,42 +1,37 @@
 /* ============================================================
-   AWARDS — turns the live results into trophies so everyone has
-   something to win, not just first place overall.
+   AWARDS — decides which couple's TEAM holds each trophy.
 
-   Objective awards are computed automatically from the feed. Funny/subjective
-   ones are handed out by the commissioner and stored in state.awards.
+   Objective trophies are computed from the live feed; funny ones are handed out
+   by the commissioner (state.awards). Trophy ids + names/flavor live in
+   data/trophies.ts; the SVG render lives in components/Trophy.tsx.
    ============================================================ */
 import { NATION, POT_KEYS } from '../data/nations';
 import type { AssignedAward, ScoreEntry, Team } from '../data/types';
 import type { KOMatch } from '../data/fixtures';
-import { STAGES, STAGE_LABEL, stageWinners, stageComplete, teamStats } from './scoring';
+import { TROPHY_BY_ID } from '../data/trophies';
+import { stageWinners, stageComplete, teamStats } from './scoring';
 import type { StandingEntry, MoversResult } from './scoring';
 
 export type AwardKind = 'stage' | 'performance' | 'draft' | 'funny';
 
 export interface Award {
-  id: string;
+  id: string;        // matches a trophy id in the catalog
   label: string;
   emoji: string;
   kind: AwardKind;
   detail?: string;
 }
 
-/** Funny awards the commissioner assigns by hand (no objective rule). */
-export const CUSTOM_AWARDS: { id: string; label: string; emoji: string }[] = [
-  { id: 'pain',     label: 'Pain & Suffering',      emoji: '😩' },
-  { id: 'disaster', label: 'Group Stage Disaster',  emoji: '💥' },
-  { id: 'cold',     label: 'Coldest Roster',        emoji: '🧊' },
-  { id: 'thread',   label: 'Survived by a Thread',  emoji: '🧵' },
-  { id: 'somehow',  label: 'Still Alive Somehow',   emoji: '🫥' },
-  { id: 'buster',   label: 'Bracket Buster',        emoji: '🧨' },
-  { id: 'chaos',    label: 'Chaos Manager',         emoji: '🌪️' },
-  { id: 'lucky',    label: 'Better Lucky Than Good', emoji: '🍀' },
-];
-const CUSTOM_BY_ID = Object.fromEntries(CUSTOM_AWARDS.map(a => [a.id, a]));
-
-const STAGE_EMOJI: Record<string, string> = {
-  Group: '🥅', R32: '3️⃣', R16: '🔥', QF: '⚡', SF: '💪', Final: '🏆',
+/** group/knockout stage → its trophy id */
+const STAGE_TROPHY: Record<string, string> = {
+  Group: 'groupStage', R32: 'r32', R16: 'r16', QF: 'qf', SF: 'sf', Final: 'final',
 };
+
+/** Build an Award from the catalog meta for a trophy id. */
+function mk(id: string, kind: AwardKind, detail?: string): Award {
+  const m = TROPHY_BY_ID[id];
+  return { id, label: m?.name || id, emoji: m?.emoji || '🏅', kind, detail };
+}
 
 /** Has a nation been knocked out? Lost a finished KO match, or (once the group
  *  stage is done) never made it into the knockout bracket at all. */
@@ -54,7 +49,7 @@ function nationEliminated(nid: string, ko: KOMatch[], groupDone: boolean): boole
   return false;
 }
 
-/** Count how many of a team's nations are still alive in the tournament. */
+/** How many of a team's nations are still alive in the tournament. */
 export function aliveCount(team: Team, ko: KOMatch[], groupDone: boolean): number {
   return POT_KEYS.reduce((n, pk) => {
     const nid = team.picks?.[pk];
@@ -80,23 +75,16 @@ export function computeAwards({ teams, scores, ko, scoring, standings, movers, c
   const groupDone = stageComplete('Group', scores, ko);
   const finalDone = stageComplete('Final', scores, ko);
 
-  // Stage champions — whoever scored most in each completed stage.
+  // Per-stage MVPs — whoever scored most in each completed stage.
   for (const w of stageWinners(teams, scores, ko, scoring)) {
-    push(w.team.id, {
-      id: `stage-${w.stage}`,
-      label: `${STAGE_LABEL[w.stage] || w.stage} Champion`,
-      emoji: STAGE_EMOJI[w.stage] || '🏅',
-      kind: 'stage',
-      detail: `+${w.pts}`,
-    });
+    const tid = STAGE_TROPHY[w.stage];
+    if (tid) push(w.team.id, mk(tid, 'stage', `+${w.pts}`));
   }
 
   // Tournament Champion — overall #1 once the Final is done.
-  if (finalDone && standings[0]) {
-    push(standings[0].team.id, { id: 'tourney-champ', label: 'Tournament Champion', emoji: '👑', kind: 'performance' });
-  }
+  if (finalDone && standings[0]) push(standings[0].team.id, mk('champion', 'performance'));
 
-  // Champion / runner-up owners — from the final result.
+  // Champion / finalist owners — from the final result.
   const finalKo = ko.find(k => k.round === 'Final' && k.st === 'ft' && k.h_s != null && k.a_s != null);
   if (finalKo) {
     let winner: string | null = null;
@@ -107,34 +95,29 @@ export function computeAwards({ teams, scores, ko, scoring, standings, movers, c
     const ownerOf = (nid: string | null) => nid ? teams.find(t => POT_KEYS.some(pk => t.picks?.[pk] === nid)) : undefined;
     const champTeam = ownerOf(winner);
     const runnerTeam = ownerOf(runner);
-    if (champTeam && winner) push(champTeam.id, { id: 'champ-owner', label: 'Champion Owner', emoji: '🏆', kind: 'draft', detail: NATION[winner]?.name });
-    if (runnerTeam && runner) push(runnerTeam.id, { id: 'finalist-owner', label: 'Finalist Owner', emoji: '🥈', kind: 'draft', detail: NATION[runner]?.name });
+    if (champTeam && winner) push(champTeam.id, mk('championOwner', 'draft', NATION[winner]?.name));
+    if (runnerTeam && runner) push(runnerTeam.id, mk('finalistOwner', 'draft', NATION[runner]?.name));
   }
 
-  // Most Teams Alive — unique leader, only meaningful once knockouts begin.
+  // Most Teams Alive + Sole Survivor — once knockouts begin.
   if (groupDone && !finalDone) {
     const counts = teams.map(t => ({ t, n: aliveCount(t, ko, groupDone) }));
     const max = Math.max(...counts.map(c => c.n));
     const leaders = counts.filter(c => c.n === max && c.n > 0);
-    if (max > 0 && leaders.length === 1) {
-      push(leaders[0].t.id, { id: 'most-alive', label: 'Most Teams Alive', emoji: '🌳', kind: 'performance', detail: `${max} still in` });
-    }
-    // Last Team Standing — exactly one team has anyone left.
+    if (max > 0 && leaders.length === 1) push(leaders[0].t.id, mk('mostAlive', 'performance', `${max} still in`));
     const withAlive = counts.filter(c => c.n > 0);
-    if (withAlive.length === 1 && counts.length > 1) {
-      push(withAlive[0].t.id, { id: 'last-standing', label: 'Last Team Standing', emoji: '🛡️', kind: 'performance' });
-    }
+    if (withAlive.length === 1 && counts.length > 1) push(withAlive[0].t.id, mk('lastStanding', 'performance'));
   }
 
   // Biggest Mover — most points gained on the latest matchday.
   if (movers.mover && (movers.delta[movers.mover.id] || 0) > 0) {
-    push(movers.mover.id, { id: 'biggest-mover', label: 'Biggest Mover', emoji: '📈', kind: 'performance', detail: `+${movers.delta[movers.mover.id]}` });
+    push(movers.mover.id, mk('biggestMover', 'performance', `+${movers.delta[movers.mover.id]}`));
   }
 
-  // Commissioner-assigned funny awards.
+  // Commissioner-assigned funny trophies.
   for (const a of custom || []) {
-    const meta = CUSTOM_BY_ID[a.awardId];
-    if (meta) push(a.teamId, { id: meta.id, label: meta.label, emoji: meta.emoji, kind: 'funny' });
+    const m = TROPHY_BY_ID[a.awardId];
+    if (m && m.kind === 'commish') push(a.teamId, mk(a.awardId, 'funny'));
   }
 
   return out;
@@ -146,4 +129,11 @@ export function sortAwards(awards: Award[]): Award[] {
   return [...awards].sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
 }
 
-export { STAGES };
+/** Invert awardsByTeam → which team holds each trophy id (≤1 holder each). */
+export function holdersByTrophy(awardsByTeam: Record<string, Award[]>): Record<string, string> {
+  const holders: Record<string, string> = {};
+  for (const [teamId, list] of Object.entries(awardsByTeam)) {
+    for (const a of list) holders[a.id] = teamId;
+  }
+  return holders;
+}

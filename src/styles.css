@@ -454,3 +454,133 @@
 .ready-pill{ margin-left:auto; display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 10px;
   border-radius:999px; font-family:'Archivo',sans-serif; font-weight:800; font-size:9px; letter-spacing:.1em;
   text-transform:uppercase; background:rgba(31,178,87,.14); color:var(--up); }
+
+/* ============================================================
+   TROPHY CABINET — League honours grid (glass display case)
+   ============================================================ */
+.cab-progwrap{ display:flex; align-items:center; gap:11px; }
+.cab-prog{ flex:1; height:9px; border-radius:5px; background:rgba(21,18,12,.12); overflow:hidden; border:1px solid var(--line); }
+.cab-prog span{ display:block; height:100%; border-radius:5px; background:linear-gradient(90deg, var(--gold), var(--lime)); transition:width .5s var(--ease); }
+
+.cab-case{
+  position:relative; border-radius:18px; border:2px solid var(--ink); overflow:hidden;
+  background:linear-gradient(180deg,#221b12 0%, #18130c 60%, #120e08 100%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 16px 36px -18px rgba(21,18,12,.6);
+}
+.cab-case::before{ content:""; position:absolute; inset:0; pointer-events:none; z-index:1;
+  background:radial-gradient(120% 45% at 50% -8%, rgba(255,196,77,.16), transparent 62%); }
+.cab-case::after{ content:""; position:absolute; inset:0; pointer-events:none; z-index:3;
+  border-radius:16px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.05), inset 0 -26px 40px rgba(0,0,0,.45); }
+.cab-case-hd{ position:relative; z-index:2; display:flex; align-items:center; gap:9px; padding:12px 14px;
+  border-bottom:1px solid rgba(255,255,255,.07); color:var(--paper); }
+.cab-case-hd .t{ font-family:'Anton',sans-serif; text-transform:uppercase; font-size:15px; color:var(--paper); letter-spacing:.02em; }
+.cab-case-hd .c{ margin-left:auto; font-family:'Archivo',sans-serif; font-weight:800; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:#B7AF9C; }
+
+.cab-shelf{ position:relative; z-index:2; padding:16px 6px 4px; }
+.cab-row{ display:grid; grid-template-columns:repeat(3,1fr); gap:2px; align-items:end; }
+.cab-floor{ position:relative; height:14px; margin:0 12px 14px; }
+.cab-floor::before{ content:""; position:absolute; left:0; right:0; top:0; height:3px; border-radius:3px;
+  background:linear-gradient(90deg, transparent, rgba(255,213,120,.55) 20%, rgba(255,213,120,.55) 80%, transparent); }
+.cab-floor::after{ content:""; position:absolute; left:8%; right:8%; top:3px; height:11px;
+  background:linear-gradient(180deg, rgba(255,255,255,.06), transparent); }
+
+.cab-slot{ position:relative; border:0; background:transparent; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; padding:2px 0 0; }
+.cab-spot{ position:absolute; top:2px; left:50%; transform:translateX(-50%); width:78px; height:78px; border-radius:50%;
+  background:radial-gradient(circle, rgba(255,200,80,.30), transparent 66%); filter:blur(3px); z-index:0; }
+.cab-slot svg{ position:relative; z-index:1; transition:transform .22s var(--ease); filter:drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
+.cab-slot:active svg{ transform:translateY(-4px) scale(1.05); }
+.cab-slot.locked .cab-spot{ display:none; }
+.cab-plate{ margin-top:8px; font-family:'Archivo',sans-serif; font-weight:800; font-size:8px; letter-spacing:.05em;
+  text-transform:uppercase; color:#D6CFBD; text-align:center; line-height:1.25; max-width:98px; min-height:20px; }
+.cab-slot.locked .cab-plate{ color:#6E685C; }
+.cab-holder{ margin-top:5px; display:inline-flex; align-items:center; gap:5px; height:18px; padding:0 7px;
+  border-radius:999px; font-family:'Archivo',sans-serif; font-weight:800; font-size:7.5px; letter-spacing:.05em; text-transform:uppercase; }
+.cab-holder.other{ background:rgba(255,255,255,.08); color:#C9C1AE; }
+.cab-holder.open{ background:rgba(255,255,255,.05); color:#8C8472; }
+.cab-holder .gd{ width:8px; height:8px; border-radius:2px; }
+
+/* ============================================================
+   PERSONAL TROPHY CABINET (furniture)
+   ============================================================ */
+.tcab{ position:relative; border-radius:16px; overflow:hidden;
+  background:linear-gradient(180deg,#43301B,#2C1E0F);
+  border:1px solid #170f07;
+  box-shadow:0 22px 46px -20px rgba(21,18,12,.7), inset 0 0 0 1px rgba(255,220,150,.10); }
+.tcab-ped{ position:relative; padding:13px 16px 13px; text-align:center;
+  background:linear-gradient(180deg,#5C4124,#3C2915);
+  border-bottom:2px solid #170f07; box-shadow:inset 0 1px 0 rgba(255,220,150,.22); }
+.tcab-ped::after{ content:""; position:absolute; left:12px; right:12px; bottom:5px; height:2px;
+  background:linear-gradient(90deg,transparent,rgba(255,176,0,.65),transparent); }
+.tcab-plate .nm{ font-family:'Anton',sans-serif; text-transform:uppercase; font-size:18px; color:#FBEACB;
+  letter-spacing:.04em; text-shadow:0 1px 0 rgba(0,0,0,.45); line-height:1; }
+.tcab-plate .sub{ font-family:'Archivo',sans-serif; font-weight:800; font-size:8px; letter-spacing:.22em;
+  text-transform:uppercase; color:#CBA964; margin-top:5px; }
+.tcab-inner{ position:relative; padding:4px 11px 8px;
+  background:radial-gradient(110% 55% at 50% 0%, #2C2114, #19120A 72%); }
+.tcab-inner::before{ content:""; position:absolute; inset:0; pointer-events:none; z-index:5;
+  background:linear-gradient(116deg, rgba(255,255,255,.07) 0 16%, transparent 30% 66%, rgba(255,255,255,.045) 80% 100%); }
+.tcab-inner::after{ content:""; position:absolute; inset:0; pointer-events:none;
+  box-shadow:inset 8px 0 14px -7px rgba(0,0,0,.65), inset -8px 0 14px -7px rgba(0,0,0,.65), inset 0 10px 18px -10px rgba(0,0,0,.55); }
+.tcab-shelf{ position:relative; padding:14px 3px 0; }
+.tcab-deck{ position:relative; z-index:2; display:flex; align-items:flex-end; min-height:108px; }
+.tcab-board{ position:relative; height:13px; margin:2px 5px 9px; border-radius:2px;
+  background:linear-gradient(180deg,#5C4124,#34230F);
+  box-shadow:0 7px 11px -5px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,220,150,.28); }
+.tcab-board::before{ content:""; position:absolute; left:5%; right:5%; top:-1px; height:2px; border-radius:2px;
+  background:linear-gradient(90deg,transparent,rgba(255,213,120,.62),transparent); }
+.tcab-item{ position:relative; flex:1; min-width:0; border:0; background:transparent; cursor:pointer; padding:0;
+  display:flex; flex-direction:column; align-items:center; }
+.tcab-item .glow{ position:absolute; top:6px; left:50%; transform:translateX(-50%); width:72px; height:72px; border-radius:50%;
+  background:radial-gradient(circle, rgba(255,201,92,.34), transparent 66%); filter:blur(3px); z-index:0; }
+.tcab-item svg{ position:relative; z-index:1; filter:drop-shadow(0 7px 7px rgba(0,0,0,.55)); transition:transform .2s var(--ease); }
+.tcab-item:active svg{ transform:translateY(-5px) scale(1.06); }
+.tcab-item .nm{ position:relative; z-index:1; margin-top:3px; max-width:108px;
+  font-family:'Archivo',sans-serif; font-weight:800; font-size:7.5px; letter-spacing:.04em;
+  text-transform:uppercase; color:#E8D8B4; text-align:center; line-height:1.22; }
+.tcab-empty{ flex:1; min-width:0; }
+.tcab-base{ height:15px; background:linear-gradient(180deg,#3C2915,#1F140A); border-top:2px solid #170f07; }
+.tcab-emptymsg{ position:absolute; inset:0; z-index:6; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; text-align:center; padding:0 34px; pointer-events:none; }
+.tcab-emptymsg .ic{ width:48px; height:48px; border-radius:14px; display:grid; place-items:center;
+  background:rgba(255,176,0,.12); border:1.5px solid rgba(255,176,0,.3); color:var(--gold); margin-bottom:12px; }
+.tcab-emptymsg .h{ font-family:'Anton',sans-serif; text-transform:uppercase; font-size:17px; color:#F1E2C2; }
+.tcab-emptymsg .p{ font-size:12.5px; color:#AA9F86; margin-top:6px; line-height:1.45; max-width:230px; }
+
+/* ============================================================
+   TROPHY INSPECT (overlay)
+   ============================================================ */
+.inspect-bg{ position:fixed; inset:0; z-index:70; background:#0e0b06; overflow:auto; }
+.inspect-bg::before{ content:""; position:absolute; inset:0; pointer-events:none;
+  background:
+    radial-gradient(80% 42% at 50% 0%, rgba(255,196,77,.20), transparent 60%),
+    radial-gradient(60% 40% at 50% 30%, rgba(7,194,199,.08), transparent 70%); }
+.inspect-top{ position:relative; z-index:4; display:flex; align-items:center; justify-content:space-between; padding:14px; }
+.ins-btn{ width:38px; height:38px; display:grid; place-items:center; border-radius:11px;
+  border:1.5px solid rgba(255,255,255,.18); background:rgba(255,255,255,.06); color:var(--paper); cursor:pointer; }
+.ins-btn:active{ transform:scale(.92); }
+.inspect-hero{ position:relative; z-index:2; text-align:center; padding:14px 0 24px; }
+.tro-wrap{ position:relative; display:inline-block; }
+.tro-shine{ position:absolute; inset:-6% -2%; overflow:hidden; pointer-events:none; }
+.tro-shine::before{ content:""; position:absolute; top:-25%; left:-70%; width:45%; height:150%;
+  background:linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent); transform:skewX(-16deg);
+  mix-blend-mode:screen; animation:sweep 3.4s ease-in-out infinite; }
+@keyframes sweep{ 0%,12%{ left:-70% } 60%{ left:130% } 100%{ left:130% } }
+.tro-reflect{ margin-top:-10px; opacity:.14; transform:scaleY(-1);
+  -webkit-mask:linear-gradient(#000, transparent 62%); mask:linear-gradient(#000, transparent 62%); }
+.trophy-float{ animation:tfloat 3.6s ease-in-out infinite; }
+@keyframes tfloat{ 50%{ transform:translateY(-11px) } }
+.ins-tags{ display:flex; gap:7px; justify-content:center; margin-top:6px; }
+.ins-tag{ display:inline-flex; align-items:center; gap:5px; height:23px; padding:0 10px; border-radius:999px;
+  font-family:'Archivo',sans-serif; font-weight:800; font-size:9px; letter-spacing:.1em; text-transform:uppercase;
+  background:rgba(255,255,255,.08); color:#D6CFBD; border:1px solid rgba(255,255,255,.12); }
+.ins-tag.rare{ background:rgba(255,176,0,.16); color:var(--gold); border-color:rgba(255,176,0,.3); }
+.inspect-card{ position:relative; z-index:2; background:var(--paper);
+  border-radius:24px 24px 0 0; border:1.5px solid var(--ink); border-bottom:0; padding:22px 18px 26px;
+  animation:sheetUp .34s var(--ease); }
+@media (prefers-reduced-motion: reduce){ .inspect-card{ animation:none; } }
+.ins-crit{ display:flex; gap:10px; align-items:flex-start; padding:13px; border-radius:13px;
+  background:var(--paper-3); border:1px solid var(--line); }
+.ins-plaque{ margin-top:12px; border-radius:13px; border:1.5px solid var(--ink); overflow:hidden; }
+.ins-plaque-top{ background:var(--ink); color:var(--paper); padding:11px 13px; display:flex; align-items:center; gap:10px; }
+.ins-open{ padding:16px 13px; text-align:center; }
