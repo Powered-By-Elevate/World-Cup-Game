@@ -31,9 +31,14 @@ export default async function handler(req, res) {
   const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
   const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:noreply@worldcupdraft.app';
 
-  // Public config for the client to subscribe — no auth needed.
+  // Public config for the client to subscribe — no auth needed. Also reports
+  // (booleans only, no secrets) whether each notification channel is configured.
   if (req.method === 'GET') {
-    res.status(200).json({ publicKey: VAPID_PUBLIC || null });
+    res.status(200).json({
+      publicKey: VAPID_PUBLIC || null,
+      pushReady: !!(VAPID_PUBLIC && VAPID_PRIVATE),
+      emailReady: !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD),
+    });
     return;
   }
 
