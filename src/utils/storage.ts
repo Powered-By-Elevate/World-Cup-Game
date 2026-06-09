@@ -276,6 +276,28 @@ export async function signOut(): Promise<void> {
   if (supa) { try { await supa.auth.signOut(); } catch { /* ignore */ } }
 }
 
+/* ---- accounts directory (commissioner only) ----
+   Emails + last login live in Supabase's auth.users, which the anon key can't
+   read. The /api/users serverless endpoint (service-role) returns them, gated
+   to the league commissioner. Returns [] when unavailable (not configured, not
+   the commissioner, or no backend) so the UI falls back to inline lite emails. */
+export interface Account { id: string; email: string | null; last_sign_in_at: string | null; created_at: string | null; }
+
+export async function listAccounts(league: string): Promise<Account[]> {
+  if (!supa || !league) return [];
+  try {
+    const { data } = await supa.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return [];
+    const r = await fetch(`/api/users?league=${encodeURIComponent(league)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return [];
+    const j = await r.json();
+    return Array.isArray(j.accounts) ? j.accounts : [];
+  } catch { return []; }
+}
+
 /* ---- per-account league registry (follows you across devices) ----
    Stored in the SHARED backend under a per-user key (not league-namespaced),
    so the leagues you belong to appear on every device you sign into. */

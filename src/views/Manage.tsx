@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { AppState, Member, MeState } from '../data/types';
+import type { Account } from '../utils/storage';
 import { Icon } from '../components/Icon';
 import { Avatar } from '../components/shared';
 
@@ -15,11 +16,27 @@ interface Props {
   onRemoveMember: (memberId: string) => void;
   onMoveMember: (memberId: string, toTeamId: string) => void;
   onSetCommissioner: (memberId: string) => void;
+  onLoadAccounts?: () => Promise<Account[]>;
+}
+
+/* Compact relative time, e.g. "3d ago". Empty for missing/invalid input. */
+function ago(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (!t || Number.isNaN(t)) return '';
+  const s = Math.floor((Date.now() - t) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24); if (d < 30) return `${d}d ago`;
+  const mo = Math.floor(d / 30); if (mo < 12) return `${mo}mo ago`;
+  return `${Math.floor(mo / 12)}y ago`;
 }
 
 /* One person in a team — view by default, expands to an editor on tap. */
-function MemberRow({ mem, teams, teamId, commissioner, meId, onRename, onRemove, onMove, onSetCommish }: {
+function MemberRow({ mem, account, teams, teamId, commissioner, meId, onRename, onRemove, onMove, onSetCommish }: {
   mem: Member;
+  account?: Account | null;
   teams: AppState['teams'];
   teamId: string;
   commissioner: string | null;
@@ -34,6 +51,13 @@ function MemberRow({ mem, teams, teamId, commissioner, meId, onRename, onRemove,
   const isCommish = commissioner === mem.id;
   const isMe = meId === mem.id;
 
+  // Prefer the live account email (from /api/users) over the captured one.
+  const email = account?.email || mem.email || '';
+  const lastSeen = ago(account?.last_sign_in_at);
+  const status = email
+    ? email
+    : (mem.uid ? 'Signed in' : 'Not signed in yet');
+
   return (
     <div style={{ padding: '10px 0', borderBottom: '1px solid var(--line-2)' }}>
       <div className="between">
@@ -45,8 +69,9 @@ function MemberRow({ mem, teams, teamId, commissioner, meId, onRename, onRemove,
               {isMe && <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>you</span>}
             </div>
             <div className="muted" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {mem.email ? mem.email : (mem.uid ? 'Signed in' : 'Not signed in yet')}
+              {status}
             </div>
+            {lastSeen && <div className="muted" style={{ fontSize: 11, opacity: 0.8 }}>Last seen {lastSeen}</div>}
           </div>
         </div>
         <button className="hdr-btn" title="Edit" style={{ border: '1.5px solid var(--line)' }}
@@ -86,9 +111,10 @@ function MemberRow({ mem, teams, teamId, commissioner, meId, onRename, onRemove,
 }
 
 /* One team card — rename, manage its people, add a person, remove the team. */
-function TeamCard({ team, teams, commissioner, meId, onRenameTeam, onRemoveTeam, onAddMember, onRenameMember, onRemoveMember, onMoveMember, onSetCommissioner }: {
+function TeamCard({ team, teams, accounts, commissioner, meId, onRenameTeam, onRemoveTeam, onAddMember, onRenameMember, onRemoveMember, onMoveMember, onSetCommissioner }: {
   team: AppState['teams'][number];
   teams: AppState['teams'];
+  accounts: Record<string, Account>;
   commissioner: string | null;
   meId?: string;
 } & Pick<Props, 'onRenameTeam' | 'onRemoveTeam' | 'onAddMember' | 'onRenameMember' | 'onRemoveMember' | 'onMoveMember' | 'onSetCommissioner'>) {
@@ -113,7 +139,7 @@ function TeamCard({ team, teams, commissioner, meId, onRenameTeam, onRemoveTeam,
       {(team.members || []).length === 0
         ? <div className="muted" style={{ fontSize: 12.5, padding: '4px 0 10px' }}>No one on this team yet.</div>
         : (team.members || []).map(mem => (
-          <MemberRow key={mem.id} mem={mem} teams={teams} teamId={team.id} commissioner={commissioner} meId={meId}
+          <MemberRow key={mem.id} mem={mem} account={mem.uid ? accounts[mem.uid] : null} teams={teams} teamId={team.id} commissioner={commissioner} meId={meId}
             onRename={onRenameMember} onRemove={onRemoveMember} onMove={onMoveMember} onSetCommish={onSetCommissioner} />
         ))}
 
@@ -141,9 +167,25 @@ function TeamCard({ team, teams, commissioner, meId, onRenameTeam, onRemoveTeam,
   );
 }
 
-export function Manage({ state, me, onClose, onAddTeam, onRenameTeam, onRemoveTeam, onAddMember, onRenameMember, onRemoveMember, onMoveMember, onSetCommissioner }: Props) {
+export function Manage({ state, me, onClose, onAddTeam, onRenameTeam, onRemoveTeam, onAddMember, onRenameMember, onRemoveMember, onMoveMember, onSetCommissioner, onLoadAccounts }: Props) {
   const [addingTeam, setAddingTeam] = useState('');
+  const [accounts, setAccounts] = useState<Record<string, Account>>({});
   const teams = state.teams || [];
+
+  // Pull the real accounts directory (emails + last login) once on open. Gated
+  // server-side to the commissioner; silently no-ops when unavailable, leaving
+  // the inline "lite" emails captured on sign-in.
+  useEffect(() => {
+    if (!onLoadAccounts) return;
+    let alive = true;
+    onLoadAccounts().then(list => {
+      if (!alive) return;
+      const map: Record<string, Account> = {};
+      for (const a of list) map[a.id] = a;
+      setAccounts(map);
+    });
+    return () => { alive = false; };
+  }, [onLoadAccounts]);
 
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -163,7 +205,7 @@ export function Manage({ state, me, onClose, onAddTeam, onRenameTeam, onRemoveTe
           )}
 
           {teams.map(team => (
-            <TeamCard key={team.id} team={team} teams={teams} commissioner={state.commissioner} meId={me?.id}
+            <TeamCard key={team.id} team={team} teams={teams} accounts={accounts} commissioner={state.commissioner} meId={me?.id}
               onRenameTeam={onRenameTeam} onRemoveTeam={onRemoveTeam} onAddMember={onAddMember}
               onRenameMember={onRenameMember} onRemoveMember={onRemoveMember} onMoveMember={onMoveMember}
               onSetCommissioner={onSetCommissioner} />

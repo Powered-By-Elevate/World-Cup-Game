@@ -7,6 +7,7 @@ import {
   listLeagues, activeLeague, setActiveLeague, upsertLeague, removeLeague, pruneLeagues, newLeagueCode,
   getMe, setMe as persistMe, resetActiveLeague, clearLocal,
   AUTH_ON, getAuthUser, onAuthChange, signOut, syncUserLeagues, addUserLeague, removeUserLeague,
+  listAccounts,
 } from './utils/storage';
 import type { League, AuthUser } from './utils/storage';
 import { groupResults, knockoutResults } from './data/results';
@@ -259,6 +260,10 @@ export default function App() {
       try { window.history.replaceState(null, "", leagueLink(leagueCodeRef.current)); } catch { /* ignore */ }
     }
   }, []);
+
+  // Stable loader for the commissioner accounts directory — reads the league via
+  // ref so its identity never changes, avoiding a re-fetch on every poll tick.
+  const loadAccounts = useCallback(() => listAccounts(leagueCodeRef.current), []);
 
   const api = useMemo(() => ({
     createTeam: async (teamName: string, playerName: string) => {
@@ -721,7 +726,8 @@ export default function App() {
           state={state} me={me} onClose={() => setShowManage(false)}
           onAddTeam={api.addTeam} onRenameTeam={api.renameTeamById} onRemoveTeam={api.removeTeam}
           onAddMember={api.addMember} onRenameMember={api.renameMember} onRemoveMember={api.removeMember}
-          onMoveMember={api.moveMember} onSetCommissioner={api.setCommissioner} />
+          onMoveMember={api.moveMember} onSetCommissioner={api.setCommissioner}
+          onLoadAccounts={loadAccounts} />
       )}
       {showProfile && (
         <Profile
