@@ -26,6 +26,21 @@ export default async function handler(req, res) {
     return;
   }
 
+  // TEMP diagnostic: report the configured key's role + whether the admin API
+  // works, without exposing any emails/PII. Remove after debugging.
+  if (req.query?.selftest === '1') {
+    let role = null;
+    try { role = JSON.parse(Buffer.from(serviceKey.split('.')[1], 'base64').toString('utf8')).role; } catch { /* not a JWT */ }
+    let listUsersOk = false, listError = null;
+    try {
+      const probe = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      const { error } = await probe.auth.admin.listUsers({ page: 1, perPage: 1 });
+      if (error) listError = error.message; else listUsersOk = true;
+    } catch (e) { listError = String(e?.message || e); }
+    res.status(200).json({ selftest: true, urlPresent: !!url, serviceKeyRole: role, listUsersOk, listError });
+    return;
+  }
+
   // Caller's session token (Authorization: Bearer <access_token>).
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
