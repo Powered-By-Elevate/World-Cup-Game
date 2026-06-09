@@ -7,6 +7,11 @@
  * the caller's Supabase session JWT is verified, then checked against the
  * commissioner member recorded in that league's shared state.
  *
+ * The league state lives in app_kv, which is intentionally anon-readable (the
+ * app's whole sharing model). We read it with the anon key — the service_role
+ * role isn't granted table privileges on app_kv (see the migration), and the
+ * service key is only needed for the auth.users listing.
+ *
  * Returns { accounts: [{ id, email, last_sign_in_at, created_at }] }.
  * On any non-fatal misconfiguration it returns HTTP 200 with an { error }
  * field so the client cleanly falls back to the "lite" inline emails.
@@ -14,30 +19,45 @@
  * Env (set in the Vercel project, server-side only):
  *   SUPABASE_SERVICE_ROLE_KEY  (required) service-role key
  *   SUPABASE_URL               (optional) falls back to VITE_SUPABASE_URL
+ *   SUPABASE_ANON_KEY          (optional) falls back to VITE_SUPABASE_ANON_KEY
  */
 
 import { createClient } from '@supabase/supabase-js';
 
+const NOAUTH = { auth: { persistSession: false, autoRefreshToken: false } };
+
 export default async function handler(req, res) {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !serviceKey) {
     res.status(200).json({ error: 'not_configured', reason: 'SUPABASE_SERVICE_ROLE_KEY not set' });
     return;
   }
 
-  // TEMP diagnostic: report the configured key's role + whether the admin API
-  // works, without exposing any emails/PII. Remove after debugging.
+  // Read league state with the anon key (service_role lacks app_kv grants).
+  const reader = createClient(url, anonKey || serviceKey, NOAUTH);
+  const readState = async (league) => {
+    const { data, error } = await reader
+      .from('app_kv').select('value').eq('key', `${league}:wc:state`).maybeSingle();
+    if (error) throw error;
+    return data?.value || null;
+  };
+
+  // TEMP diagnostic: report config + whether the admin/list and state reads
+  // work, without exposing any emails/PII. Remove after debugging.
   if (req.query?.selftest === '1') {
     let role = null;
     try { role = JSON.parse(Buffer.from(serviceKey.split('.')[1], 'base64').toString('utf8')).role; } catch { /* not a JWT */ }
-    let listUsersOk = false, listError = null;
+    let listUsersOk = false, listError = null, stateReadOk = false, stateError = null;
     try {
-      const probe = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      const probe = createClient(url, serviceKey, NOAUTH);
       const { error } = await probe.auth.admin.listUsers({ page: 1, perPage: 1 });
       if (error) listError = error.message; else listUsersOk = true;
     } catch (e) { listError = String(e?.message || e); }
-    res.status(200).json({ selftest: true, urlPresent: !!url, serviceKeyRole: role, listUsersOk, listError });
+    try { await readState(req.query.league || 'x'); stateReadOk = true; }
+    catch (e) { stateError = String(e?.message || e); }
+    res.status(200).json({ selftest: true, urlPresent: !!url, anonKeyPresent: !!anonKey, serviceKeyRole: role, listUsersOk, listError, stateReadOk, stateError });
     return;
   }
 
@@ -49,9 +69,7 @@ export default async function handler(req, res) {
   const league = (req.query?.league || '').toString().trim();
   if (!league) { res.status(400).json({ error: 'bad_request', reason: 'missing league' }); return; }
 
-  const admin = createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const admin = createClient(url, serviceKey, NOAUTH);
 
   // 1. Verify the caller is a real, signed-in account.
   const { data: userData, error: userErr } = await admin.auth.getUser(token);
@@ -60,10 +78,9 @@ export default async function handler(req, res) {
 
   // 2. Commissioner gate: the requester's uid must match the commissioner
   //    member recorded in this league's shared state.
-  const { data: row, error: rowErr } = await admin
-    .from('app_kv').select('value').eq('key', `${league}:wc:state`).maybeSingle();
-  if (rowErr) { res.status(500).json({ error: 'state_read_failed', reason: rowErr.message }); return; }
-  const state = row?.value || null;
+  let state;
+  try { state = await readState(league); }
+  catch (e) { res.status(500).json({ error: 'state_read_failed', reason: String(e?.message || e) }); return; }
   const commishId = state?.commissioner || null;
   let allowed = false;
   if (commishId) {
