@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { NATION, POT_KEYS } from '../data/nations';
 import { GROUP_LETTERS } from '../data/fixtures';
 import type { AppState, ScoreEntry, Team } from '../data/types';
-import type { StandingEntry, MoversResult } from '../utils/scoring';
-import { groupTable } from '../utils/scoring';
+import type { StandingEntry, MoversResult, StageWinner } from '../utils/scoring';
+import { groupTable, STAGE_LABEL } from '../utils/scoring';
 import { fmtDayLabel } from '../utils/helpers';
 import { Flag } from '../components/Flag';
 import { Icon } from '../components/Icon';
-import { TeamFlags, teamGradient } from '../components/shared';
+import { Avatar, TeamFlags, teamGradient } from '../components/shared';
 
 interface Props {
   state: AppState;
@@ -15,9 +15,10 @@ interface Props {
   standings: StandingEntry[];
   movers: MoversResult;
   myTeam: Team | null;
+  stageWins: StageWinner[];
 }
 
-export function TableView({ state, scores, standings, movers, myTeam }: Props) {
+export function TableView({ state, scores, standings, movers, myTeam, stageWins }: Props) {
   const [mode, setMode] = useState<'couples' | 'groups'>('couples');
   const [open, setOpen] = useState<string | null>(null);
   const [grp, setGrp] = useState('A');
@@ -43,6 +44,27 @@ export function TableView({ state, scores, standings, movers, myTeam }: Props) {
       </div>
 
       {mode === 'couples' ? <>
+        {/* stage champions — a trophy for whoever scored most in each completed stage */}
+        {stageWins.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div className="sec-head"><span className="eyebrow">🏆 Stage Champions</span><span className="muted" style={{ fontSize: 12 }}>most points that stage</span></div>
+            <div className="scroll-x">
+              {stageWins.map(w => (
+                <div key={w.stage} className="card flat" style={{ minWidth: 150, padding: '12px 14px', flex: '0 0 auto' }}>
+                  <div className="eyebrow" style={{ fontSize: 10, color: 'var(--gold)' }}>{STAGE_LABEL[w.stage] || w.stage}</div>
+                  <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                    <Avatar name={w.team.name} size={26} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.team.name}</div>
+                      <div className="muted" style={{ fontSize: 11 }}>+{w.pts} pts</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* biggest mover */}
         {mover && moverGain > 0 && (
           <div className="card" style={{ overflow: 'hidden', border: '2px solid var(--ink)' }}>
