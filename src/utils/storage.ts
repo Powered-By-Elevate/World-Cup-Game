@@ -326,6 +326,70 @@ export async function touchPresence(uid: string): Promise<void> {
   } catch { /* presence is best-effort */ }
 }
 
+/* ============================================================
+   WEB PUSH (draft-day notifications) + draft-run notify trigger
+   ============================================================ */
+
+export type PushState = 'unsupported' | 'default' | 'granted' | 'denied';
+
+/** Whether this device can do web push, and its current permission. iOS only
+ *  supports push for apps added to the Home Screen — unsupported in a tab. */
+export function pushState(): PushState {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator) ||
+      !('PushManager' in window) || !('Notification' in window)) return 'unsupported';
+  return Notification.permission as PushState;
+}
+
+async function getVapidPublicKey(): Promise<string | null> {
+  try {
+    const r = await fetch('/api/notify-draft');
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j.publicKey || null;
+  } catch { return null; }
+}
+
+/** Ask permission, subscribe to push, and store the subscription (keyed by uid)
+ *  in the league's shared push list. Returns true on success. */
+export async function enablePush(uid: string): Promise<boolean> {
+  if (pushState() === 'unsupported' || !supa) return false;
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return false;
+    const key = await getVapidPublicKey();
+    if (!key) return false;
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    const sub = existing || await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: key,   // base64url string is accepted by the Push API
+    });
+    const json = sub.toJSON();
+    const list = (await sget<{ uid: string; sub: PushSubscriptionJSON }[]>('wc:push', true)) || [];
+    const next = list.filter(e => e.sub?.endpoint !== json.endpoint);
+    next.push({ uid, sub: json });
+    await sset('wc:push', next, true);
+    return true;
+  } catch { return false; }
+}
+
+/** Tell the server the draft just ran, so it fans out push + email to everyone.
+ *  Commissioner-only (the server re-checks). `names` maps nation id → name. */
+export async function notifyDraftRun(league: string, names: Record<string, string>, link: string): Promise<void> {
+  if (!supa) return;
+  try {
+    const { data } = await supa.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    await fetch('/api/notify-draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ league, names, url: link }),
+    });
+  } catch { /* best-effort */ }
+}
+
 /* ---- per-account league registry (follows you across devices) ----
    Stored in the SHARED backend under a per-user key (not league-namespaced),
    so the leagues you belong to appear on every device you sign into. */

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { MeState, Team } from '../data/types';
 import { Icon } from '../components/Icon';
 import { Avatar } from '../components/shared';
+import { pushState } from '../utils/storage';
 
 interface Props {
   me: MeState | null;
@@ -16,11 +17,13 @@ interface Props {
   onClaim: () => void;
   userEmail?: string | null;
   onSignOut?: () => void;
+  onEnablePush?: () => void;
 }
 
-export function Profile({ me, myTeam, isCommish, commishName, onClose, onRenameMe, onRenameTeam, onTeamInvite, onLeave, onClaim, userEmail, onSignOut }: Props) {
+export function Profile({ me, myTeam, isCommish, commishName, onClose, onRenameMe, onRenameTeam, onTeamInvite, onLeave, onClaim, userEmail, onSignOut, onEnablePush }: Props) {
   const [playerName, setPlayerName] = useState(me?.name || '');
   const [teamName, setTeamName] = useState(myTeam?.name || '');
+  const [push, setPush] = useState(pushState());
 
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -66,6 +69,30 @@ export function Profile({ me, myTeam, isCommish, commishName, onClose, onRenameM
                     onClick={() => { if (confirm('Sign out of this device?')) { onSignOut(); } }}>
                     <Icon name="refresh" size={16} /> Sign out
                   </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* draft alerts (web push, per device) */}
+          {userEmail && onEnablePush && push !== 'unsupported' && (
+            <>
+              <div className="eyebrow" style={{ marginBottom: 4 }}>Draft alerts</div>
+              <div className="card flat pad" style={{ marginBottom: 14 }}>
+                {push === 'granted' ? (
+                  <div className="row" style={{ gap: 8 }}>
+                    <Icon name="check" size={16} />
+                    <div className="muted" style={{ fontSize: 13 }}>On for this device — you'll get a notification the moment the draft runs.</div>
+                  </div>
+                ) : push === 'denied' ? (
+                  <div className="muted" style={{ fontSize: 12.5 }}>Notifications are blocked for this site. Re-enable them in your browser settings to get the draft alert (you'll still get the email).</div>
+                ) : (
+                  <>
+                    <div className="muted" style={{ fontSize: 12.5, marginBottom: 10 }}>Get a notification on this device the instant the draft runs. (On iPhone, add the app to your Home Screen first.)</div>
+                    <button className="btn btn-ink btn-block" onClick={() => { onEnablePush(); setTimeout(() => setPush(pushState()), 600); }}>
+                      <Icon name="bolt" size={16} /> Enable draft alerts
+                    </button>
+                  </>
                 )}
               </div>
             </>

@@ -7,7 +7,7 @@ import {
   listLeagues, activeLeague, setActiveLeague, upsertLeague, removeLeague, pruneLeagues, newLeagueCode,
   getMe, setMe as persistMe, resetActiveLeague, clearLocal,
   AUTH_ON, getAuthUser, onAuthChange, signOut, syncUserLeagues, addUserLeague, removeUserLeague,
-  listAccounts, touchPresence,
+  listAccounts, touchPresence, enablePush, notifyDraftRun,
 } from './utils/storage';
 import type { League, AuthUser } from './utils/storage';
 import { groupResults, knockoutResults } from './data/results';
@@ -333,9 +333,11 @@ export default function App() {
       await setMeBoth({ ...me, name: newName });
     },
     runDraft: async () => {
+      let ran = false;
       await commitState(s => {
         const minPot = Math.min(...POT_KEYS.map(pk => (s.pots[pk] || []).length));
         if (s.teams.length < 1 || s.teams.length > minPot) return s;
+        ran = true;
         const order = shuffle(s.teams);
         const pots = {
           FAV: shuffle(s.pots.FAV.map(id => NATION[id])),
@@ -366,6 +368,11 @@ export default function App() {
         return s;
       });
       setTab("draft");
+      // Fan out the reveal: push + email to everyone (server re-checks commissioner).
+      if (ran) {
+        const names = Object.fromEntries(Object.keys(NATION).map(id => [id, NATION[id].name]));
+        void notifyDraftRun(leagueCodeRef.current, names, leagueLink(leagueCodeRef.current));
+      }
     },
     movePot: async (nid: string, target: string | null) => {
       await commitState(s => {
@@ -588,6 +595,12 @@ export default function App() {
     try { window.location.href = window.location.origin + window.location.pathname; } catch { window.location.reload(); }
   }, []);
 
+  const enableDraftAlerts = useCallback(async () => {
+    if (!user) return;
+    const ok = await enablePush(user.id);
+    toast(ok ? "Draft alerts on for this device" : "Couldn't enable alerts here");
+  }, [user, toast]);
+
   const signOutNow = useCallback(async () => {
     await signOut();
     // Drop this device's saved identity so the next person to sign in here
@@ -768,7 +781,7 @@ export default function App() {
           onClose={() => setShowProfile(false)}
           onRenameMe={api.renameMe} onRenameTeam={api.rename} onTeamInvite={copyTeamLink}
           onLeave={api.leave} onClaim={api.claimCommish}
-          userEmail={user?.email ?? null} onSignOut={signOutNow} />
+          userEmail={user?.email ?? null} onSignOut={signOutNow} onEnablePush={enableDraftAlerts} />
       )}
       {shareModal}
       {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
