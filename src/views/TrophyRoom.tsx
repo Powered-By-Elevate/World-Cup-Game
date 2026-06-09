@@ -17,6 +17,9 @@ interface Props {
 export function TrophyRoom({ teams, awardsByTeam, assigned, myTeamId, isCommish, onToggleAward, onClose }: Props) {
   const has = (teamId: string, awardId: string) => assigned.some(a => a.teamId === teamId && a.awardId === awardId);
   const totalTrophies = teams.reduce((n, t) => n + (awardsByTeam[t.id]?.length || 0), 0);
+  // Commissioner sees every team (to hand out trophies); everyone else only
+  // sees teams that have actually earned something — no empty clutter.
+  const visibleTeams = isCommish ? teams : teams.filter(t => (awardsByTeam[t.id]?.length || 0) > 0);
 
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -33,7 +36,12 @@ export function TrophyRoom({ teams, awardsByTeam, assigned, myTeamId, isCommish,
         </div>
 
         <div style={{ padding: '0 18px 30px' }}>
-          {teams.map(t => {
+          {visibleTeams.length === 0 && (
+            <div className="muted" style={{ fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
+              No trophies handed out yet — they'll show up here as the tournament unfolds.
+            </div>
+          )}
+          {visibleTeams.map(t => {
             const list = sortAwards(awardsByTeam[t.id] || []);
             return (
               <div key={t.id} className="card flat pad" style={{ marginBottom: 12, background: t.id === myTeamId ? 'rgba(200,242,60,.1)' : undefined }}>
