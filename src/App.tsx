@@ -7,7 +7,7 @@ import {
   listLeagues, activeLeague, setActiveLeague, upsertLeague, removeLeague, pruneLeagues, newLeagueCode,
   getMe, setMe as persistMe, resetActiveLeague, clearLocal,
   AUTH_ON, getAuthUser, onAuthChange, signOut, syncUserLeagues, addUserLeague, removeUserLeague,
-  listAccounts,
+  listAccounts, touchPresence,
 } from './utils/storage';
 import type { League, AuthUser } from './utils/storage';
 import { groupResults, knockoutResults } from './data/results';
@@ -124,6 +124,7 @@ export default function App() {
     setState(ns);
 
     const u = userRef.current;
+    if (u) void touchPresence(u.id);   // record this app-open for the roster's "last seen"
     // Identity follows the signed-in account: find the member linked to this
     // account across the league's teams. This is derived from shared state, so
     // the same account resolves to the same identity on every device.

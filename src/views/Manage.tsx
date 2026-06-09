@@ -19,10 +19,11 @@ interface Props {
   onLoadAccounts?: () => Promise<Account[]>;
 }
 
-/* Compact relative time, e.g. "3d ago". Empty for missing/invalid input. */
-function ago(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const t = new Date(iso).getTime();
+/* Compact relative time, e.g. "3d ago". Accepts an ISO string or epoch ms.
+ * Empty for missing/invalid input. */
+function ago(when: string | number | null | undefined): string {
+  if (!when) return '';
+  const t = typeof when === 'number' ? when : new Date(when).getTime();
   if (!t || Number.isNaN(t)) return '';
   const s = Math.floor((Date.now() - t) / 1000);
   if (s < 60) return 'just now';
@@ -53,7 +54,8 @@ function MemberRow({ mem, account, teams, teamId, commissioner, meId, onRename, 
 
   // Prefer the live account email (from /api/users) over the captured one.
   const email = account?.email || mem.email || '';
-  const lastSeen = ago(account?.last_sign_in_at);
+  // True last app-open (our presence stamp); fall back to last sign-in.
+  const lastSeen = ago(account?.lastSeen ?? account?.last_sign_in_at);
   const status = email
     ? email
     : (mem.uid ? 'Signed in' : 'Not signed in yet');

@@ -281,7 +281,16 @@ export async function signOut(): Promise<void> {
    read. The /api/users serverless endpoint (service-role) returns them, gated
    to the league commissioner. Returns [] when unavailable (not configured, not
    the commissioner, or no backend) so the UI falls back to inline lite emails. */
-export interface Account { id: string; email: string | null; last_sign_in_at: string | null; created_at: string | null; }
+export interface Account {
+  id: string;
+  email: string | null;
+  last_sign_in_at: string | null;
+  created_at: string | null;
+  /** Last time the account actually opened the app (our own presence stamp,
+   *  epoch ms). Truer "last seen" than last_sign_in_at, which only changes on
+   *  a fresh authentication. Absent until they next open the app. */
+  lastSeen?: number | null;
+}
 
 export async function listAccounts(league: string): Promise<Account[]> {
   if (!supa || !league) return [];
@@ -294,8 +303,27 @@ export async function listAccounts(league: string): Promise<Account[]> {
     });
     if (!r.ok) return [];
     const j = await r.json();
-    return Array.isArray(j.accounts) ? j.accounts : [];
+    const accounts: Account[] = Array.isArray(j.accounts) ? j.accounts : [];
+    // Merge in our own last-opened presence (read with the anon key).
+    const seen = (await sget<Record<string, number>>('wc:seen', true)) || {};
+    for (const a of accounts) a.lastSeen = seen[a.id] ?? null;
+    return accounts;
   } catch { return []; }
+}
+
+/** Stamp "this account just opened the app" into the league's shared presence
+ *  map. Throttled per device (10 min) so reopening doesn't spam writes. */
+export async function touchPresence(uid: string): Promise<void> {
+  if (!supa || !uid) return;
+  try {
+    const guard = `wc:seen:wrote:${activeLeague()}:${uid}`;
+    const last = Number(lsGet<string>(guard, '0')) || 0;
+    if (Date.now() - last < 10 * 60 * 1000) return;
+    const map = (await sget<Record<string, number>>('wc:seen', true)) || {};
+    map[uid] = Date.now();
+    await sset('wc:seen', map, true);
+    lsSet(guard, String(Date.now()));
+  } catch { /* presence is best-effort */ }
 }
 
 /* ---- per-account league registry (follows you across devices) ----

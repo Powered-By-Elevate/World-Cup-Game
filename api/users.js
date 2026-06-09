@@ -44,23 +44,6 @@ export default async function handler(req, res) {
     return data?.value || null;
   };
 
-  // TEMP diagnostic: report config + whether the admin/list and state reads
-  // work, without exposing any emails/PII. Remove after debugging.
-  if (req.query?.selftest === '1') {
-    let role = null;
-    try { role = JSON.parse(Buffer.from(serviceKey.split('.')[1], 'base64').toString('utf8')).role; } catch { /* not a JWT */ }
-    let listUsersOk = false, listError = null, stateReadOk = false, stateError = null;
-    try {
-      const probe = createClient(url, serviceKey, NOAUTH);
-      const { error } = await probe.auth.admin.listUsers({ page: 1, perPage: 1 });
-      if (error) listError = error.message; else listUsersOk = true;
-    } catch (e) { listError = String(e?.message || e); }
-    try { await readState(req.query.league || 'x'); stateReadOk = true; }
-    catch (e) { stateError = String(e?.message || e); }
-    res.status(200).json({ selftest: true, urlPresent: !!url, anonKeyPresent: !!anonKey, serviceKeyRole: role, listUsersOk, listError, stateReadOk, stateError });
-    return;
-  }
-
   // Caller's session token (Authorization: Bearer <access_token>).
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
