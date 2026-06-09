@@ -16,6 +16,7 @@ import type { LiveData } from './data/liveResults';
 import { uid, shuffle } from './utils/helpers';
 import { teamStats, computeMovers, stageWinners } from './utils/scoring';
 import type { StandingEntry, StageWinner } from './utils/scoring';
+import { computeAwards } from './utils/awards';
 import { Icon, Mark } from './components/Icon';
 import type { IconName } from './components/Icon';
 import { Avatar } from './components/shared';
@@ -27,6 +28,7 @@ import { MatchesView } from './views/MatchesView';
 import { Squads } from './views/Squads';
 import { Settings } from './views/Settings';
 import { Manage } from './views/Manage';
+import { TrophyRoom } from './views/TrophyRoom';
 import { Profile } from './views/Profile';
 import { Leagues } from './views/Leagues';
 import { SignIn } from './views/SignIn';
@@ -70,6 +72,7 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showManage, setShowManage] = useState(false);
+  const [showTrophy, setShowTrophy] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showLeagues, setShowLeagues] = useState(false);
   const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
@@ -455,6 +458,14 @@ export default function App() {
     setCommissioner: async (memberId: string) => {
       await commitState(s => { s.commissioner = memberId; return s; });
     },
+    toggleAward: async (teamId: string, awardId: string) => {
+      await commitState(s => {
+        s.awards = s.awards || [];
+        const i = s.awards.findIndex(a => a.teamId === teamId && a.awardId === awardId);
+        if (i >= 0) s.awards.splice(i, 1); else s.awards.push({ teamId, awardId });
+        return s;
+      });
+    },
   }), [commitState, setMeBoth, me, user]);
 
   const myTeam = useMemo(
@@ -490,6 +501,14 @@ export default function App() {
   const stageWins: StageWinner[] = useMemo(
     () => stageWinners(state.teams || [], scores, ko, state.scoring || DEFAULT_SCORING),
     [state.teams, state.scoring, scores, ko]
+  );
+
+  const awardsByTeam = useMemo(
+    () => computeAwards({
+      teams: state.teams || [], scores, ko, scoring: state.scoring || DEFAULT_SCORING,
+      standings, movers, custom: state.awards || [],
+    }),
+    [state.teams, state.scoring, state.awards, scores, ko, standings, movers]
   );
 
   // The active league's real name: prefer the live shared name, fall back to the
@@ -681,6 +700,7 @@ export default function App() {
         </nav>
         <div className="sb-bottom">
           <span className={`status ${HAS_REAL ? "live" : "preview"}`}><span className="dot" />{HAS_REAL ? "Live" : "Preview"}</span>
+          <button className="hdr-btn" onClick={() => setShowTrophy(true)} title="Trophy Room"><Icon name="trophy" size={18} /></button>
           <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
           {isCommish && <button className="hdr-btn" onClick={() => setShowSettings(true)} title="League settings"><Icon name="gear" size={18} /></button>}
           <button className="hdr-btn" onClick={() => setShowProfile(true)} title="You"><Avatar name={me?.name || user?.email || "?"} size={24} /></button>
@@ -691,6 +711,7 @@ export default function App() {
       <header className="hdr">
         <Mark size={36} />
         <LeagueSwitch name={leagueName} onClick={() => setShowLeagues(true)} />
+        <button className="hdr-btn" onClick={() => setShowTrophy(true)} title="Trophy Room"><Icon name="trophy" size={16} /></button>
         <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
         {isCommish && <button className="hdr-btn" onClick={() => setShowSettings(true)} title="League settings"><Icon name="gear" size={18} /></button>}
         <button className="hdr-btn" onClick={() => setShowProfile(true)} title="You"><Avatar name={me?.name || user?.email || "?"} size={24} /></button>
@@ -726,6 +747,12 @@ export default function App() {
           onClose={() => setShowSettings(false)} onScoring={api.setScoring} onResetApp={resetApp}
           onOpenManage={() => { setShowSettings(false); setShowManage(true); }}
           demo={demo} onToggleDemo={toggleDemo} />
+      )}
+      {showTrophy && (
+        <TrophyRoom
+          teams={standings.map(s => s.team)} awardsByTeam={awardsByTeam} assigned={state.awards || []}
+          myTeamId={myTeam?.id} isCommish={isCommish} onToggleAward={api.toggleAward}
+          onClose={() => setShowTrophy(false)} />
       )}
       {showManage && isCommish && (
         <Manage

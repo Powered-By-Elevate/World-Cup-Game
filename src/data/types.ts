@@ -39,6 +39,8 @@ export interface AppState {
   /** Scheduled draft time (epoch ms) the pre-draft countdown ticks toward.
    *  Purely cosmetic — the commissioner still starts the draft manually. */
   draftAt?: number | null;
+  /** Funny awards the commissioner has handed out by hand. */
+  awards?: AssignedAward[];
   v: number;
 }
 
@@ -47,6 +49,13 @@ export interface BoardPick {
   teamId: string;
   nationId: string;
   pot: string;
+}
+
+/** A funny/subjective award the commissioner has handed to a team by hand
+ *  (objective awards are computed automatically and never stored). */
+export interface AssignedAward {
+  teamId: string;
+  awardId: string;
 }
 
 export interface ScoreEntry {
@@ -85,6 +94,7 @@ export function defaultState(): AppState {
     commissioner: null,
     leagueName: '',
     draftAt: null,
+    awards: [],
     v: 1,
   };
 }
@@ -102,6 +112,7 @@ export function withDefaults(s: Partial<AppState> | null): AppState {
     commissioner: s.commissioner || null,
     leagueName: typeof s.leagueName === 'string' ? s.leagueName : '',
     draftAt: typeof s.draftAt === 'number' ? s.draftAt : null,
+    awards: Array.isArray(s.awards) ? s.awards : [],
     v: 1,
   };
 }
