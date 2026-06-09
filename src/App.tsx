@@ -14,9 +14,9 @@ import { groupResults, knockoutResults } from './data/results';
 import { fetchLiveResults } from './data/liveResults';
 import type { LiveData } from './data/liveResults';
 import { uid, shuffle } from './utils/helpers';
-import { teamStats, computeMovers, stageWinners } from './utils/scoring';
+import { teamStats, computeMovers, stageWinners, stageComplete } from './utils/scoring';
 import type { StandingEntry, StageWinner } from './utils/scoring';
-import { computeAwards } from './utils/awards';
+import { computeAwards, aliveCount } from './utils/awards';
 import { Icon, Mark } from './components/Icon';
 import type { IconName } from './components/Icon';
 import { Avatar } from './components/shared';
@@ -518,6 +518,14 @@ export default function App() {
     [state.teams, state.scoring, state.awards, scores, ko, standings, movers]
   );
 
+  // How many of each couple's 3 nations are still alive (shown once knockouts begin).
+  const { aliveByTeam, koStarted } = useMemo(() => {
+    const groupDone = stageComplete('Group', scores, ko);
+    const m: Record<string, number> = {};
+    for (const t of state.teams || []) m[t.id] = aliveCount(t, ko, groupDone);
+    return { aliveByTeam: m, koStarted: groupDone };
+  }, [state.teams, scores, ko]);
+
   // The active league's real name: prefer the live shared name, fall back to the
   // locally-known registry name (e.g. right after switching, before shared state
   // reloads) so a named league never flashes as "Unnamed". Empty if truly unnamed.
@@ -733,7 +741,7 @@ export default function App() {
       <div className="screen">
         {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
-        {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} />}
+        {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
         {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
       </div>

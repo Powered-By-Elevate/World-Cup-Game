@@ -4,6 +4,8 @@ import { GROUP_LETTERS } from '../data/fixtures';
 import type { AppState, ScoreEntry, Team } from '../data/types';
 import type { StandingEntry, MoversResult, StageWinner } from '../utils/scoring';
 import { groupTable, STAGE_LABEL } from '../utils/scoring';
+import type { Award } from '../utils/awards';
+import { sortAwards } from '../utils/awards';
 import { fmtDayLabel } from '../utils/helpers';
 import { Flag } from '../components/Flag';
 import { Icon } from '../components/Icon';
@@ -16,9 +18,12 @@ interface Props {
   movers: MoversResult;
   myTeam: Team | null;
   stageWins: StageWinner[];
+  awardsByTeam: Record<string, Award[]>;
+  aliveByTeam: Record<string, number>;
+  koStarted: boolean;
 }
 
-export function TableView({ state, scores, standings, movers, myTeam, stageWins }: Props) {
+export function TableView({ state, scores, standings, movers, myTeam, stageWins, awardsByTeam, aliveByTeam, koStarted }: Props) {
   const [mode, setMode] = useState<'couples' | 'groups'>('couples');
   const [open, setOpen] = useState<string | null>(null);
   const [grp, setGrp] = useState('A');
@@ -104,6 +109,18 @@ export function TableView({ state, scores, standings, movers, myTeam, stageWins 
                       {t.id === myTeam?.id && <span className="badge you">You</span>}
                     </div>
                     <div style={{ marginTop: 5 }}><TeamFlags team={t} size={24} /></div>
+                    {(() => {
+                      const aw = sortAwards(awardsByTeam[t.id] || []);
+                      const alive = aliveByTeam[t.id] ?? 0;
+                      if (!aw.length && !koStarted) return null;
+                      return (
+                        <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                          {aw.length > 0 && <span className="badge" style={{ fontSize: 10, background: 'var(--lime)' }}>🏆 {aw.length}</span>}
+                          {koStarted && <span className="badge" style={{ fontSize: 10 }}>{alive} still in</span>}
+                          {aw[0] && <span className="muted" style={{ fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{aw[0].emoji} {aw[0].label}</span>}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="row" style={{ gap: 13 }}>
                     {gained > 0 && <span style={{ color: 'var(--up)', display: 'flex', alignItems: 'center' }}><Icon name="arrow" size={13} /></span>}
