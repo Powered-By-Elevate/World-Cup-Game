@@ -7,7 +7,7 @@ import {
   listLeagues, activeLeague, setActiveLeague, upsertLeague, removeLeague, pruneLeagues, newLeagueCode,
   getMe, setMe as persistMe, resetActiveLeague, clearLocal,
   AUTH_ON, getAuthUser, onAuthChange, signOut, syncUserLeagues, addUserLeague, removeUserLeague,
-  listAccounts, touchPresence, enablePush, notifyDraftRun,
+  listAccounts, touchPresence, enablePush, notifyDraftRun, sendAnnouncement,
 } from './utils/storage';
 import type { League, AuthUser } from './utils/storage';
 import { groupResults, knockoutResults } from './data/results';
@@ -370,8 +370,8 @@ export default function App() {
       setTab("draft");
       // Fan out the reveal: push + email to everyone (server re-checks commissioner).
       if (ran) {
-        const names = Object.fromEntries(Object.keys(NATION).map(id => [id, NATION[id].name]));
-        void notifyDraftRun(leagueCodeRef.current, names, leagueLink(leagueCodeRef.current));
+        const nations = Object.fromEntries(Object.keys(NATION).map(id => [id, { n: NATION[id].name, f: NATION[id].flag }]));
+        void notifyDraftRun(leagueCodeRef.current, nations, leagueLink(leagueCodeRef.current));
       }
     },
     movePot: async (nid: string, target: string | null) => {
@@ -609,6 +609,12 @@ export default function App() {
     toast(ok ? "Draft alerts on for this device" : "Couldn't enable alerts here");
   }, [user, toast]);
 
+  const announce = useCallback(async (message: string) => {
+    const subject = `📣 ${realLeagueName || 'World Cup pool'}`;
+    const r = await sendAnnouncement(leagueCodeRef.current, subject, message, leagueLink(leagueCodeRef.current));
+    toast(r ? `Sent to ${r.emailed} ${r.emailed === 1 ? 'inbox' : 'inboxes'}${r.pushed ? ` · ${r.pushed} push` : ''}` : "Couldn't send message");
+  }, [realLeagueName, toast]);
+
   const signOutNow = useCallback(async () => {
     await signOut();
     // Drop this device's saved identity so the next person to sign in here
@@ -767,6 +773,7 @@ export default function App() {
           state={state}
           onClose={() => setShowSettings(false)} onScoring={api.setScoring} onResetApp={resetApp}
           onOpenManage={() => { setShowSettings(false); setShowManage(true); }}
+          onAnnounce={announce}
           demo={demo} onToggleDemo={toggleDemo} />
       )}
       {showTrophy && (

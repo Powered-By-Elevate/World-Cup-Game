@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { AppState, Scoring } from '../data/types';
 import { HAS_REAL } from '../utils/storage';
 import { clamp } from '../utils/helpers';
@@ -9,12 +10,15 @@ interface Props {
   onScoring: (sc: Scoring) => void;
   onResetApp: () => void;
   onOpenManage: () => void;
+  onAnnounce: (message: string) => void;
   demo: boolean;
   onToggleDemo: (v: boolean) => void;
 }
 
-export function Settings({ state, onClose, onScoring, onResetApp, onOpenManage, demo, onToggleDemo }: Props) {
+export function Settings({ state, onClose, onScoring, onResetApp, onOpenManage, onAnnounce, demo, onToggleDemo }: Props) {
   const sc = state.scoring;
+  const [msg, setMsg] = useState('');
+  const [sending, setSending] = useState(false);
 
   const set = (k: 'win' | 'draw', v: number) => onScoring({ ...sc, [k]: clamp(v, 0, 9) });
   const setB = (k: string, v: number) => onScoring({ ...sc, b: { ...sc.b, [k]: clamp(v, 0, 50) } });
@@ -56,6 +60,18 @@ export function Settings({ state, onClose, onScoring, onResetApp, onOpenManage, 
             </div>
             <Icon name="chevron" size={16} />
           </button>
+
+          {/* message the pool */}
+          <div className="eyebrow" style={{ marginBottom: 4 }}>Message the pool</div>
+          <div className="card flat pad" style={{ marginBottom: 14 }}>
+            <div className="muted" style={{ fontSize: 12.5, marginBottom: 8 }}>Email (and push) a note to everyone — e.g. "Draft is tonight at 8!"</div>
+            <textarea className="ipt" value={msg} onChange={e => setMsg(e.target.value)} placeholder="Your message to the whole pool…"
+              rows={3} style={{ width: '100%', resize: 'vertical', minHeight: 70, padding: 12, lineHeight: 1.4 }} />
+            <button className="btn btn-ink btn-block" style={{ marginTop: 10 }} disabled={!msg.trim() || sending}
+              onClick={() => { setSending(true); onAnnounce(msg.trim()); setMsg(''); setSending(false); onClose(); }}>
+              <Icon name="share" size={16} /> Send to everyone
+            </button>
+          </div>
 
           {/* scoring */}
           <div className="eyebrow" style={{ marginBottom: 4 }}>Scoring</div>

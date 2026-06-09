@@ -374,20 +374,34 @@ export async function enablePush(uid: string): Promise<boolean> {
   } catch { return false; }
 }
 
-/** Tell the server the draft just ran, so it fans out push + email to everyone.
- *  Commissioner-only (the server re-checks). `names` maps nation id → name. */
-export async function notifyDraftRun(league: string, names: Record<string, string>, link: string): Promise<void> {
-  if (!supa) return;
+type NationInfo = { n: string; f: string };   // name + flag code, for the email reveal
+
+async function postNotify(payload: Record<string, unknown>): Promise<{ emailed: number; pushed: number } | null> {
+  if (!supa) return null;
   try {
     const { data } = await supa.auth.getSession();
     const token = data.session?.access_token;
-    if (!token) return;
-    await fetch('/api/notify-draft', {
+    if (!token) return null;
+    const r = await fetch('/api/notify-draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ league, names, url: link }),
+      body: JSON.stringify(payload),
     });
-  } catch { /* best-effort */ }
+    if (!r.ok) return null;
+    const j = await r.json();
+    return { emailed: j.emailed || 0, pushed: j.pushed || 0 };
+  } catch { return null; }
+}
+
+/** Tell the server the draft just ran, so it fans out push + email to everyone.
+ *  Commissioner-only (the server re-checks). `nations` maps id → {n: name, f: flag}. */
+export async function notifyDraftRun(league: string, nations: Record<string, NationInfo>, link: string): Promise<void> {
+  await postNotify({ league, nations, url: link });
+}
+
+/** Commissioner blast: email + push a free-text message to the whole pool. */
+export async function sendAnnouncement(league: string, subject: string, message: string, link: string): Promise<{ emailed: number; pushed: number } | null> {
+  return postNotify({ league, mode: 'announce', subject, message, url: link });
 }
 
 /* ---- per-account league registry (follows you across devices) ----
