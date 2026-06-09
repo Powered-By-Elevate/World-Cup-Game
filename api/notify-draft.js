@@ -80,29 +80,52 @@ export default async function handler(req, res) {
   // "Spain · Morocco · Ghana" for a team, using the names map the client sent.
   const teamLine = (t) => ['FAV', 'UND', 'LNG'].map(pk => names[t.picks?.[pk]] || null).filter(Boolean).join(' · ');
 
-  // ---- EMAIL (every member with an address) ----
+  // Resolve every member's email. Prefer the captured member.email, then fall
+  // back to the real account email (service role) so people who haven't reopened
+  // the app since email-capture shipped are still reached.
+  const uidToEmail = {};
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceKey) {
+    try {
+      const admin = createClient(url, serviceKey, NOAUTH);
+      for (let page = 1; page <= 25; page++) {
+        const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+        if (error) break;
+        const users = data?.users || [];
+        for (const u of users) if (u.email) uidToEmail[u.id] = u.email;
+        if (users.length < 200) break;
+      }
+    } catch { /* fall back to captured emails only */ }
+  }
+
+  // ---- EMAIL (one per unique address, personalized to their team) ----
   let emailed = 0;
   const emailErrors = [];
   const gmailUser = process.env.GMAIL_USER, gmailPass = process.env.GMAIL_APP_PASSWORD;
   if (gmailUser && gmailPass) {
-    const transport = nodemailer.createTransport({ service: 'gmail', auth: { user: gmailUser, pass: gmailPass } });
+    const recipients = {};   // email → { teamName, line }
     for (const t of (state.teams || [])) {
       const line = teamLine(t);
       for (const m of (t.members || [])) {
-        if (!m.email) continue;
-        try {
-          await transport.sendMail({
-            from: `World Cup Draft <${gmailUser}>`,
-            to: m.email,
-            subject: '🏆 The draft is done!',
-            text: `The draft has run!\n\nYour team "${t.name}"${line ? `: ${line}` : ''}.\n\nTap to view your teams: ${link}`,
-            html: `<p style="font-size:16px">The draft has run! 🎉</p>`
-              + `<p style="font-size:16px">Your team <b>${t.name}</b>${line ? `:<br><b style="font-size:18px">${line}</b>` : ''}.</p>`
-              + `<p><a href="${link}" style="font-size:16px">Tap to view your teams →</a></p>`,
-          });
-          emailed++;
-        } catch (e) { emailErrors.push(String(e?.message || e)); }
+        const email = (m.email || uidToEmail[m.uid] || '').trim().toLowerCase();
+        if (email && !recipients[email]) recipients[email] = { teamName: t.name, line };
       }
+    }
+    const transport = nodemailer.createTransport({ service: 'gmail', auth: { user: gmailUser, pass: gmailPass } });
+    for (const [email, info] of Object.entries(recipients)) {
+      const line = info.line;
+      try {
+        await transport.sendMail({
+          from: `World Cup Draft <${gmailUser}>`,
+          to: email,
+          subject: '🏆 The draft is done!',
+          text: `The draft has run!\n\nYour team "${info.teamName}"${line ? `: ${line}` : ''}.\n\nTap to view your teams: ${link}`,
+          html: `<p style="font-size:16px">The draft has run! 🎉</p>`
+            + `<p style="font-size:16px">Your team <b>${info.teamName}</b>${line ? `:<br><b style="font-size:18px">${line}</b>` : ''}.</p>`
+            + `<p><a href="${link}" style="font-size:16px">Tap to view your teams →</a></p>`,
+        });
+        emailed++;
+      } catch (e) { emailErrors.push(String(e?.message || e)); }
     }
   }
 
