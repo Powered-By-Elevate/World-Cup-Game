@@ -13,15 +13,15 @@ import { Icon } from '../components/Icon';
 
 /* ---- world (logical, LANDSCAPE pitch). All physics in these units. ---- */
 const W = 480, H = 300;
-const GOAL_H = 100;                 // goal-mouth height (on the left/right edges)
+const GOAL_H = 110;                 // goal-mouth height (on the left/right edges)
 const GT = (H - GOAL_H) / 2, GB = (H + GOAL_H) / 2;
 const R_P = 18, R_B = 12;           // radii: player disc / ball
-const MASS_P = 1.5, MASS_B = 0.8;
-const WALL_E = 0.74, HIT_E = 0.94;  // restitution: walls / disc-on-disc
-const FRICTION = 0.978;             // per-frame velocity decay
-const STOP = 0.14;                  // settle threshold (speed)
-const MAX_SPEED = 18;               // top shot speed (units/frame)
-const MIN_PULL = 9, MAX_PULL = 135; // pull distance → power
+const MASS_P = 1.55, MASS_B = 0.78; // ball a touch lighter → zippier off a strike
+const WALL_E = 0.72, HIT_E = 0.95;  // restitution: walls / disc-on-disc (bumper-car bounce)
+const FRICTION = 0.971;             // per-frame velocity decay (snappier settle)
+const STOP = 0.2;                   // settle threshold (speed) — ends turns sooner
+const MAX_SPEED = 18.5;             // top shot speed (units/frame)
+const MIN_PULL = 9, MAX_PULL = 118; // pull distance → power (full power easier to reach)
 const WIN_GOALS = 3;
 const SUBSTEPS = 5;
 
@@ -111,11 +111,13 @@ export function SoccerStars({ team, onClose }: Props) {
     let ax = ball.x - best.x, ay = ball.y - best.y;
     const al = Math.hypot(ax, ay) || 1; ax /= al; ay /= al;
     ax = ax * 0.7 + gnx * 0.3; ay = ay * 0.7 + gny * 0.3;
-    const wob = (((best.x * 7 + best.y * 13 + scoreRef.current.cpu) % 10) / 10 - 0.5) * 0.22;
+    // a bit of aim wobble so the family can win; widens when the CPU is ahead.
+    const lead = Math.max(0, scoreRef.current.cpu - scoreRef.current.me);
+    const wob = (((best.x * 7 + best.y * 13 + scoreRef.current.cpu) % 10) / 10 - 0.5) * (0.30 + lead * 0.06);
     const ca = Math.cos(wob), sa = Math.sin(wob);
     const fx = ax * ca - ay * sa, fy = ax * sa + ay * ca;
     const fl = Math.hypot(fx, fy) || 1;
-    const power = MAX_SPEED * (0.74 + ((best.x % 5) / 5) * 0.2);
+    const power = MAX_SPEED * (0.70 + ((best.x % 5) / 5) * 0.16);
     best.vx = (fx / fl) * power; best.vy = (fy / fl) * power;
 
     lastMover.current = 'cpu';
