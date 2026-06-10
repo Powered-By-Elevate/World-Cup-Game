@@ -7,7 +7,9 @@ import { matchStatus } from '../utils/scoring';
 import { parseDate, dayKeyOf, fmtDayLabel, fmtTime } from '../utils/helpers';
 import { Flag } from '../components/Flag';
 import { Icon } from '../components/Icon';
-import { Avatar, Countdown, PotTag, teamGradient } from '../components/shared';
+import { Avatar, Countdown, PotTag, teamGradient, AnimatedNumber } from '../components/shared';
+import { CallCard } from './CallOfDay';
+import type { CallsMap, NameInfo } from '../utils/calls';
 import { PreDraftHome } from './PreDraftHome';
 
 interface Props {
@@ -21,13 +23,17 @@ interface Props {
   isCommish: boolean;
   commishName: string | null;
   onSetDraftTime: (ts: number | null) => void;
+  calls: CallsMap;
+  meId: string;
+  names: Record<string, NameInfo>;
+  onCall: (matchId: string, nationId: string) => void;
 }
 
 type MatchRow = Match & { nid: string; ko?: false };
 type KORow = KOMatch & { nid: string; ko: true };
 type Row = MatchRow | KORow;
 
-export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime }: Props) {
+export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime, calls, meId, names, onCall }: Props) {
   const drafted = state.draftDone && !!myTeam.picks;
 
   // Before the draft runs, the home screen is a hype poster, not an empty shell.
@@ -65,8 +71,8 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
   return (
     <div className="content">
       {/* hero */}
-      <div className="card" style={{ overflow: 'hidden', border: '2px solid var(--ink)' }}>
-        <div style={{ background: grad, padding: '2px' }}>
+      <div className="card lux-sheen" style={{ overflow: 'hidden', border: '2px solid var(--ink)' }}>
+        <div className="grad-live" style={{ background: grad, padding: '2px' }}>
           <div style={{ background: 'rgba(21,18,12,.82)', backdropFilter: 'blur(2px)', color: 'var(--paper)', padding: '18px 18px 20px', borderRadius: '13px' }}>
             <div className="between">
               <span className="eyebrow" style={{ color: 'var(--lime)' }}>Your Team</span>
@@ -77,7 +83,7 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
             <div className="display" style={{ fontSize: 34, marginTop: 8, color: 'var(--paper)' }}>{myTeam.name}</div>
             {drafted && (
               <div className="row" style={{ gap: 20, marginTop: 14 }}>
-                <div><div className="num" style={{ fontSize: 38, color: 'var(--lime)', lineHeight: 1 }}>{st?.total ?? 0}</div><div className="eyebrow" style={{ color: '#CFCBBE' }}>Points</div></div>
+                <div><AnimatedNumber className="num" style={{ fontSize: 38, color: 'var(--lime)', lineHeight: 1, display: 'inline-block' }} value={st?.total ?? 0} /><div className="eyebrow" style={{ color: '#CFCBBE' }}>Points</div></div>
                 <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,.18)' }} />
                 <div><div className="num" style={{ fontSize: 38, lineHeight: 1 }}>#{rank}</div><div className="eyebrow" style={{ color: '#CFCBBE' }}>of {state.teams.length} teams</div></div>
               </div>
@@ -96,6 +102,11 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Call of the Day — the one-tap daily habit, front and center */}
+      <div style={{ marginTop: 14 }}>
+        <CallCard calls={calls} scores={scores} meId={meId} names={names} onCall={onCall} onSeeBoard={() => setTab('calls')} />
       </div>
 
       <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={onTeamInvite}>

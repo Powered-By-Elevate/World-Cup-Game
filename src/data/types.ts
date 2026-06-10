@@ -41,6 +41,8 @@ export interface AppState {
   draftAt?: number | null;
   /** Funny awards the commissioner has handed out by hand. */
   awards?: AssignedAward[];
+  /** "Call of the Day" predictions: memberId → matchId → picked nation id. */
+  calls?: Record<string, Record<string, string>>;
   v: number;
 }
 
@@ -95,6 +97,7 @@ export function defaultState(): AppState {
     leagueName: '',
     draftAt: null,
     awards: [],
+    calls: {},
     v: 1,
   };
 }
@@ -113,6 +116,7 @@ export function withDefaults(s: Partial<AppState> | null): AppState {
     leagueName: typeof s.leagueName === 'string' ? s.leagueName : '',
     draftAt: typeof s.draftAt === 'number' ? s.draftAt : null,
     awards: Array.isArray(s.awards) ? s.awards : [],
+    calls: s.calls && typeof s.calls === 'object' && !Array.isArray(s.calls) ? s.calls : {},
     v: 1,
   };
 }

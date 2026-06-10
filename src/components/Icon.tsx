@@ -3,7 +3,7 @@
 export type IconName =
   | 'home' | 'draft' | 'table' | 'cal' | 'users' | 'gear' | 'share'
   | 'bolt' | 'trophy' | 'check' | 'plus' | 'x' | 'chevron' | 'flame' | 'arrow'
-  | 'globe' | 'copy' | 'refresh' | 'edit';
+  | 'globe' | 'copy' | 'refresh' | 'edit' | 'chat';
 
 interface IconProps {
   name: IconName;
@@ -37,6 +37,7 @@ export function Icon({ name, size = 21, stroke = 2 }: IconProps) {
     case 'copy':   return <svg {...p}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h8" /></svg>;
     case 'refresh':return <svg {...p}><path d="M21 12a9 9 0 1 1-2.6-6.3M21 4v5h-5" /></svg>;
     case 'edit':   return <svg {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>;
+    case 'chat':   return <svg {...p}><path d="M21 11.5a7.5 8 0 0 1-10.6 7.3L4 20.5l1.8-5A7.6 8 0 1 1 21 11.5z" /><path d="M8.5 10.5h7M8.5 13.5h4.5" /></svg>;
     default:       return null;
   }
 }

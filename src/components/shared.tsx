@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import type { CSSProperties } from 'react';
 import { NATION } from '../data/nations';
 import type { Team } from '../data/types';
 import { Flag } from './Flag';
@@ -83,6 +84,42 @@ export function Countdown({ target, compact }: { target: number; compact?: boole
       <Cell v={s} l="SEC" />
     </div>
   );
+}
+
+/* ---------- Celebration : full-screen confetti + a popped message ---------- */
+export function Celebration({ message, onDone }: { message: string; onDone: () => void }) {
+  useEffect(() => { const t = setTimeout(onDone, 2600); return () => clearTimeout(t); }, [onDone]);
+  return (
+    <div className="celebrate-bg">
+      <Confetti count={120} />
+      <div className="celebrate-msg">{message}</div>
+    </div>
+  );
+}
+
+/* ---------- AnimatedNumber : count-up + glow when the value changes ---------- */
+export function AnimatedNumber({ value, className, style, duration = 700 }: { value: number; className?: string; style?: CSSProperties; duration?: number }) {
+  const [disp, setDisp] = useState(value);
+  const [glow, setGlow] = useState(false);
+  const prev = useRef(value);
+  useEffect(() => {
+    const from = prev.current, to = value;
+    prev.current = value;
+    if (from === to) { setDisp(to); return; }
+    setGlow(true);
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const e = 1 - Math.pow(1 - t, 3);
+      setDisp(Math.round(from + (to - from) * e));
+      if (t < 1) raf = requestAnimationFrame(tick);
+      else { setDisp(to); window.setTimeout(() => setGlow(false), 420); }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value, duration]);
+  return <span className={(className || '') + (glow ? ' num-pop' : '')} style={style}>{disp}</span>;
 }
 
 /* ---------- Confetti burst ---------- */

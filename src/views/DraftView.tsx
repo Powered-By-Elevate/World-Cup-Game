@@ -4,6 +4,7 @@ import type { AppState } from '../data/types';
 import { Flag } from '../components/Flag';
 import { Icon } from '../components/Icon';
 import { Confetti, PotTag, POT_OF } from '../components/shared';
+import { fx } from '../utils/fx';
 
 interface Props {
   state: AppState;
@@ -24,6 +25,7 @@ export function DraftView({ state, isCommish, commishName, onRunDraft, onReset, 
   const board = state.board || [];
   const pots = state.pots;
   const [reveal, setReveal] = useState(state.draftDone ? board.length : 0);
+  const [spinId, setSpinId] = useState<string | null>(null);   // slot-machine flag while a pick "spins"
   const [editPot, setEditPot] = useState<string | null>(null);
   const played = useRef(false);
 
@@ -35,12 +37,23 @@ export function DraftView({ state, isCommish, commishName, onRunDraft, onReset, 
       const iv = setInterval(() => {
         n++;
         setReveal(n);
-        if (n >= board.length) clearInterval(iv);
-      }, 820);
+        if (n >= board.length) { clearInterval(iv); fx.win(); }
+      }, 900);
       return () => clearInterval(iv);
     }
     if (state.draftDone && played.current) setReveal(board.length);
   }, [state.draftDone, board.length]);
+
+  // each pick spins through random flags, then settles on the real one
+  useEffect(() => {
+    if (!state.draftDone || reveal >= board.length) { setSpinId(null); return; }
+    fx.riser();
+    const ids = NATIONS.map(n => n.id);
+    setSpinId(ids[(Math.random() * ids.length) | 0]);
+    const spin = setInterval(() => setSpinId(ids[(Math.random() * ids.length) | 0]), 70);
+    const stop = setTimeout(() => { clearInterval(spin); setSpinId(null); fx.reveal(); }, 580);
+    return () => { clearInterval(spin); clearTimeout(stop); };
+  }, [reveal, state.draftDone, board.length]);
 
   const teamName = (id: string) => teams.find(t => t.id === id)?.name || '';
   const minPot = Math.min(...POT_KEYS.map(pk => (pots[pk] || []).length));
@@ -57,11 +70,13 @@ export function DraftView({ state, isCommish, commishName, onRunDraft, onReset, 
           <div className="reveal-stage onclock">
             <div className="eyebrow" style={{ color: 'var(--lime)', letterSpacing: '.3em' }}>● On the clock</div>
             <div className="display" style={{ fontSize: 18, color: '#9C988C', marginTop: 14 }}>{teamName(current.teamId)}</div>
-            <div className="pop" key={reveal} style={{ margin: '14px 0 4px' }}>
-              <Flag id={current.nationId} size={104} ring="pot" />
+            <div style={{ margin: '14px 0 4px', perspective: 700 }}>
+              {spinId
+                ? <div className="reveal-spin"><Flag id={spinId} size={104} ring="ink" /></div>
+                : <div className="reveal-flip" key={'f' + reveal}><Flag id={current.nationId} size={104} ring="pot" /></div>}
             </div>
-            <div className="display pop" key={'n' + reveal} style={{ fontSize: 40, color: 'var(--paper)', marginTop: 8 }}>{NATION[current.nationId].name}</div>
-            <div style={{ marginTop: 10 }}><PotTag pot={current.pot} /></div>
+            <div className="display" key={'n' + reveal} style={{ fontSize: 40, color: 'var(--paper)', marginTop: 8, minHeight: 44, opacity: spinId ? 0 : 1, transition: 'opacity .25s' }}>{spinId ? '' : NATION[current.nationId].name}</div>
+            <div style={{ marginTop: 10, opacity: spinId ? 0 : 1, transition: 'opacity .25s' }}><PotTag pot={current.pot} /></div>
             <div className="row" style={{ justifyContent: 'center', gap: 5, marginTop: 20, flexWrap: 'wrap' }}>
               {board.map((_, i) => <span key={i} style={{ width: i < reveal ? 18 : 7, height: 7, borderRadius: 4, background: i < reveal ? 'var(--lime)' : 'rgba(255,255,255,.2)', transition: 'all .3s' }} />)}
             </div>

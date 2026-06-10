@@ -9,7 +9,8 @@ import { sortAwards } from '../utils/awards';
 import { fmtDayLabel } from '../utils/helpers';
 import { Flag } from '../components/Flag';
 import { Icon } from '../components/Icon';
-import { Avatar, TeamFlags, teamGradient } from '../components/shared';
+import { Avatar, TeamFlags, teamGradient, AnimatedNumber } from '../components/shared';
+import { useFlip } from '../utils/useFlip';
 
 interface Props {
   state: AppState;
@@ -27,6 +28,7 @@ export function TableView({ state, scores, standings, movers, myTeam, stageWins,
   const [mode, setMode] = useState<'couples' | 'groups'>('couples');
   const [open, setOpen] = useState<string | null>(null);
   const [grp, setGrp] = useState('A');
+  const flipRef = useFlip(standings.map(s => s.team.id).join(','));
   const myIds = myTeam?.picks ? POT_KEYS.map(pk => myTeam.picks![pk]) : [];
 
   if (!state.draftDone) return (
@@ -98,7 +100,7 @@ export function TableView({ state, scores, standings, movers, myTeam, stageWins,
             const rank = i + 1; const isOpen = open === t.id;
             const gained = movers.delta[t.id] || 0;
             return (
-              <div key={t.id} style={{ borderBottom: i < standings.length - 1 ? '1px solid var(--line-2)' : '0', background: t.id === myTeam?.id ? 'rgba(200,242,60,.1)' : 'transparent' }}>
+              <div key={t.id} ref={flipRef(t.id)} style={{ borderBottom: i < standings.length - 1 ? '1px solid var(--line-2)' : '0', background: t.id === myTeam?.id ? 'rgba(200,242,60,.1)' : 'transparent' }}>
                 <div className="lb-row" onClick={() => setOpen(isOpen ? null : t.id)} style={{ borderBottom: 0 }}>
                   <span className={`rank ${rank <= 3 ? 'r' + rank : ''}`}>{rank}</span>
                   <span className="grad-bar" style={{ background: teamGradient(t) }} />
@@ -124,7 +126,7 @@ export function TableView({ state, scores, standings, movers, myTeam, stageWins,
                   </div>
                   <div className="row" style={{ gap: 13 }}>
                     {gained > 0 && <span style={{ color: 'var(--up)', display: 'flex', alignItems: 'center' }}><Icon name="arrow" size={13} /></span>}
-                    <div style={{ textAlign: 'right' }}><div className="num" style={{ fontSize: 24, lineHeight: 1 }}>{s.total}</div><div className="eyebrow" style={{ fontSize: 8 }}>PTS</div></div>
+                    <div style={{ textAlign: 'right' }}><AnimatedNumber className="num" style={{ fontSize: 24, lineHeight: 1, display: 'inline-block' }} value={s.total} /><div className="eyebrow" style={{ fontSize: 8 }}>PTS</div></div>
                   </div>
                 </div>
                 {isOpen && (

@@ -3,6 +3,7 @@ import type { MeState, Team } from '../data/types';
 import { Icon } from '../components/Icon';
 import { Avatar } from '../components/shared';
 import { pushState } from '../utils/storage';
+import { fx } from '../utils/fx';
 
 interface Props {
   me: MeState | null;
@@ -24,6 +25,7 @@ export function Profile({ me, myTeam, isCommish, commishName, onClose, onRenameM
   const [playerName, setPlayerName] = useState(me?.name || '');
   const [teamName, setTeamName] = useState(myTeam?.name || '');
   const [push, setPush] = useState(pushState());
+  const [sound, setSound] = useState(fx.enabled());
 
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -51,6 +53,16 @@ export function Profile({ me, myTeam, isCommish, commishName, onClose, onRenameM
               </div>
             </>
           )}
+
+          {/* sound + haptics (per device) */}
+          <div className="eyebrow" style={{ marginBottom: 4 }}>Sound &amp; haptics</div>
+          <div className="between card flat pad" style={{ marginBottom: 14 }}>
+            <div className="row" style={{ gap: 8 }}>
+              <span style={{ fontSize: 20 }}>{sound ? '🔊' : '🔇'}</span>
+              <div><div style={{ fontWeight: 800 }}>Game sounds</div><div className="muted" style={{ fontSize: 12 }}>Whistles, taps &amp; buzzes</div></div>
+            </div>
+            <button className={`toggle ${sound ? 'on' : ''}`} aria-label="Toggle sound" onClick={() => { const v = !sound; setSound(v); fx.setEnabled(v); }}><span className="knob" /></button>
+          </div>
 
           {/* account */}
           {userEmail && (

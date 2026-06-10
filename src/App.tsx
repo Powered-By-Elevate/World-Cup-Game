@@ -19,7 +19,8 @@ import type { StandingEntry, StageWinner } from './utils/scoring';
 import { computeAwards, aliveCount } from './utils/awards';
 import { Icon, Mark } from './components/Icon';
 import type { IconName } from './components/Icon';
-import { Avatar } from './components/shared';
+import { Avatar, Celebration } from './components/shared';
+import { fx } from './utils/fx';
 import { Onboarding } from './views/Onboarding';
 import { MyTeam } from './views/MyTeam';
 import { DraftView } from './views/DraftView';
@@ -29,9 +30,13 @@ import { Squads } from './views/Squads';
 import { Settings } from './views/Settings';
 import { Manage } from './views/Manage';
 import { TrophyRoom } from './views/TrophyRoom';
+import { CallersBoard } from './views/CallOfDay';
 import { Profile } from './views/Profile';
 import { Leagues } from './views/Leagues';
 import { SignIn } from './views/SignIn';
+import { Chat } from './views/Chat';
+import { loadChat, sendChat, visibleTo } from './utils/chat';
+import type { ChatMessage } from './utils/chat';
 import './styles.css';
 
 const NAV: { id: string; label: string; icon: IconName }[] = [
@@ -39,6 +44,7 @@ const NAV: { id: string; label: string; icon: IconName }[] = [
   { id: "draft", label: "Draft", icon: "draft" },
   { id: "table", label: "Table", icon: "table" },
   { id: "matches", label: "Matches", icon: "cal" },
+  { id: "calls", label: "Calls", icon: "bolt" },
   { id: "squads", label: "Squads", icon: "users" },
   { id: "cabinet", label: "Cabinet", icon: "trophy" },
 ];
@@ -75,6 +81,11 @@ export default function App() {
   const [showManage, setShowManage] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showLeagues, setShowLeagues] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [celebrate, setCelebrate] = useState<string | null>(null);
+  const prevRank = useRef<number | null>(null);
+  const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [chatSeen, setChatSeen] = useState(0);
   const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
   const [shareSheet, setShareSheet] = useState<{ title: string; text: string; url: string } | null>(null);
 
@@ -255,6 +266,21 @@ export default function App() {
     const iv = setInterval(tick, 5000);
     return () => { alive = false; clearInterval(iv); };
   }, []);
+
+  // poll league chat (global + whispers) while signed in with a team
+  useEffect(() => {
+    if (!loaded || !me) return;
+    let alive = true;
+    const tick = async () => { const c = await loadChat(); if (alive) setChat(c); };
+    tick();
+    const iv = setInterval(tick, 5000);
+    return () => { alive = false; clearInterval(iv); };
+  }, [loaded, me, leagueCode]);
+
+  // remember how far we've read this league's chat (drives the unread dot)
+  useEffect(() => {
+    try { setChatSeen(Number(localStorage.getItem(`wc:chat:seen:${leagueCode}`)) || 0); } catch { /* ignore */ }
+  }, [leagueCode]);
 
   const setMeBoth = useCallback(async (m: MeState | null) => {
     setMe(m);
@@ -473,6 +499,18 @@ export default function App() {
         return s;
       });
     },
+    // Lock in a "Call of the Day" pick. First call for a match wins — never
+    // overwrite an existing one (UI only offers the un-kicked-off fixture).
+    makeCall: async (matchId: string, nationId: string) => {
+      if (!me) return;
+      await commitState(s => {
+        const all = (s.calls = s.calls || {});
+        const mine = (all[me.id] = all[me.id] || {});
+        if (mine[matchId]) return s;   // already locked
+        mine[matchId] = nationId;
+        return s;
+      });
+    },
   }), [commitState, setMeBoth, me, user]);
 
   const myTeam = useMemo(
@@ -493,6 +531,42 @@ export default function App() {
 
   const isCommish = !state.commissioner || (me != null && me.id === state.commissioner) || !commishName;
 
+  // memberId → who they are, for the Best Caller leaderboard.
+  const callerNames = useMemo(() => {
+    const m: Record<string, { name: string; team: string }> = {};
+    for (const t of state.teams || [])
+      for (const mem of (t.members || [])) m[mem.id] = { name: mem.name, team: t.name };
+    return m;
+  }, [state.teams]);
+
+  // everyone else in the league — the people you can whisper.
+  const chatMembers = useMemo(() => {
+    const out: { id: string; name: string; team: string }[] = [];
+    for (const t of state.teams || [])
+      for (const mem of (t.members || [])) if (mem.id !== me?.id) out.push({ id: mem.id, name: mem.name, team: t.name });
+    return out;
+  }, [state.teams, me?.id]);
+
+  const chatUnread = useMemo(
+    () => !!me && chat.some(m => m.from !== me.id && visibleTo(me.id, m) && m.ts > chatSeen),
+    [chat, me, chatSeen],
+  );
+
+  const openChat = useCallback(() => {
+    setShowChat(true);
+    const maxTs = chat.reduce((a, m) => (m.ts > a ? m.ts : a), 0);
+    setChatSeen(maxTs);
+    try { localStorage.setItem(`wc:chat:seen:${leagueCodeRef.current}`, String(maxTs)); } catch { /* ignore */ }
+  }, [chat]);
+
+  const sendChatMsg = useCallback(async (to: string | null, text: string) => {
+    const t = text.trim();
+    if (!t || !me) return;
+    const msg: ChatMessage = { id: uid(), from: me.id, fromName: me.name, to, text: t.slice(0, 1000), ts: Date.now() };
+    const next = await sendChat(msg);
+    setChat(next);
+  }, [me]);
+
   const movers = useMemo(
     () => computeMovers(state.teams || [], scores, ko, state.scoring || DEFAULT_SCORING),
     [state.teams, state.scoring, scores, ko]
@@ -504,6 +578,15 @@ export default function App() {
       .map(team => ({ team, ...teamStats(team, scores, ko, sc) }))
       .sort((a, b) => b.total - a.total || b.gd - a.gd || b.gf - a.gf || a.team.name.localeCompare(b.team.name));
   }, [state.teams, state.scoring, scores, ko]);
+
+  // Celebrate when your team climbs to #1.
+  useEffect(() => {
+    if (!loaded || !myTeam || !state.draftDone || standings.length < 2) return;
+    const rank = standings.findIndex(s => s.team.id === myTeam.id) + 1;
+    const was = prevRank.current;
+    prevRank.current = rank;
+    if (was != null && was > 1 && rank === 1) { setCelebrate('👑 You took #1!'); fx.win(); }
+  }, [standings, myTeam, loaded, state.draftDone]);
 
   const stageWins: StageWinner[] = useMemo(
     () => stageWinners(state.teams || [], scores, ko, state.scoring || DEFAULT_SCORING),
@@ -727,6 +810,7 @@ export default function App() {
         </nav>
         <div className="sb-bottom">
           <span className={`status ${HAS_REAL ? "live" : "preview"}`}><span className="dot" />{HAS_REAL ? "Live" : "Preview"}</span>
+          <button className="hdr-btn chat-btn" onClick={openChat} title="Chat"><Icon name="chat" size={17} />{chatUnread && <span className="chat-badge" />}</button>
           <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
           {isCommish && <button className="hdr-btn" onClick={() => setShowSettings(true)} title="League settings"><Icon name="gear" size={18} /></button>}
           <button className="hdr-btn" onClick={() => setShowProfile(true)} title="You"><Avatar name={me?.name || user?.email || "?"} size={24} /></button>
@@ -737,16 +821,18 @@ export default function App() {
       <header className="hdr">
         <Mark size={36} />
         <LeagueSwitch name={leagueName} onClick={() => setShowLeagues(true)} />
+        <button className="hdr-btn chat-btn" onClick={openChat} title="Chat"><Icon name="chat" size={17} />{chatUnread && <span className="chat-badge" />}</button>
         <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
         {isCommish && <button className="hdr-btn" onClick={() => setShowSettings(true)} title="League settings"><Icon name="gear" size={18} /></button>}
         <button className="hdr-btn" onClick={() => setShowProfile(true)} title="You"><Avatar name={me?.name || user?.email || "?"} size={24} /></button>
       </header>
 
       <div className="screen">
-        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} />}
+        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} calls={state.calls || {}} meId={me!.id} names={callerNames} onCall={api.makeCall} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
+        {tab === "calls" && <CallersBoard calls={state.calls || {}} scores={scores} meId={me!.id} names={callerNames} onCall={api.makeCall} />}
         {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
         {tab === "cabinet" && <TrophyRoom teams={state.teams || []} awardsByTeam={awardsByTeam} myTeam={myTeam} isCommish={isCommish} onSetAwardHolder={api.setAwardHolder} onShare={toast} />}
       </div>
@@ -791,7 +877,11 @@ export default function App() {
           onLeave={api.leave} onClaim={api.claimCommish}
           userEmail={user?.email ?? null} onSignOut={signOutNow} onEnablePush={enableDraftAlerts} />
       )}
+      {showChat && (
+        <Chat meId={me!.id} messages={chat} members={chatMembers} onSend={sendChatMsg} onClose={() => setShowChat(false)} />
+      )}
       {shareModal}
+      {celebrate && <Celebration message={celebrate} onDone={() => setCelebrate(null)} />}
       {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
     </div>
   );
