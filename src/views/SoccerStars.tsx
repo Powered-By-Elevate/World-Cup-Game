@@ -45,6 +45,12 @@ interface Props { team: Team; onClose: () => void; }
 
 const RIVALS = ['BRA', 'ARG', 'FRA', 'ENG', 'GER', 'ESP', 'NED', 'POR', 'ITA'];
 
+/** A random rival to face — never the player's own nation. Re-rolled per game. */
+const pickRival = (exclude: string) => {
+  const pool = RIVALS.filter(r => r !== exclude);
+  return pool[Math.floor(Math.random() * pool.length)] || 'GER';
+};
+
 /** Deterministic "level" badge from a string (purely decorative). */
 const levelOf = (s: string) => 12 + (Array.from(s).reduce((a, c) => a + c.charCodeAt(0), 0) % 11);
 
@@ -91,7 +97,7 @@ function buildConfetti() {
 
 export function SoccerStars({ team, onClose }: Props) {
   const shooterId = POT_KEYS.map(pk => team.picks?.[pk]).find(Boolean) || 'BRA';
-  const cpuId = RIVALS.find(r => r !== shooterId) || 'GER';
+  const [cpuId, setCpuId] = useState(() => pickRival(shooterId));   // random opponent, re-rolled each game
   const me = NATION[shooterId], cpu = NATION[cpuId];
   const meColor = me?.c1 || '#2BD4D4', meAlt = me?.c2 || '#0E3C7A';
   const cpuColor = cpu?.c1 || '#E8552B', cpuAlt = cpu?.c2 || '#111';
@@ -113,6 +119,10 @@ export function SoccerStars({ team, onClose }: Props) {
   const scoreRef = useRef({ me: 0, cpu: 0 });
   const drag = useRef<{ i: number; px: number; py: number } | null>(null);
   const sizeRef = useRef({ w: 1, h: 1, dpr: 1 });
+  // current palette/ids the draw loop reads (kept fresh so re-rolling the
+  // opponent updates the canvas without restarting the rAF loop).
+  const lookRef = useRef({ meColor, meAlt, cpuColor, cpuAlt, meId: shooterId, cpuId });
+  lookRef.current = { meColor, meAlt, cpuColor, cpuAlt, meId: shooterId, cpuId };
 
   const [phase, setPhaseS] = useState<Phase>('me');
   const [score, setScore] = useState({ me: 0, cpu: 0 });
@@ -255,11 +265,10 @@ export function SoccerStars({ team, onClose }: Props) {
       raf = requestAnimationFrame(loop);
       if (phaseRef.current === 'sim') step();
       draw(ctx, bodies.current, drag.current, sizeRef.current, phaseRef.current, t,
-        { meColor, meAlt, cpuColor, cpuAlt, meId: shooterId, cpuId, meImg: meImg.current, cpuImg: cpuImg.current });
+        { ...lookRef.current, meImg: meImg.current, cpuImg: cpuImg.current });
     };
     raf = requestAnimationFrame(loop);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
   // ---- pointer (pull-back aim) ----
@@ -302,6 +311,7 @@ export function SoccerStars({ team, onClose }: Props) {
   const replay = () => {
     bodies.current = formation();
     scoreRef.current = { me: 0, cpu: 0 }; setScore({ me: 0, cpu: 0 });
+    setCpuId(pickRival(shooterId));          // fresh opponent each rematch
     setCelebrate(null); setTurn('me');
   };
 
