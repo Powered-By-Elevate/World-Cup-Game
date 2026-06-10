@@ -5,7 +5,7 @@
    just tap-and-time — built for the whole family.
    ============================================================ */
 import { useState, useEffect, useRef } from 'react';
-import { NATION, POT_KEYS } from '../data/nations';
+import { POT_KEYS } from '../data/nations';
 import type { Team } from '../data/types';
 import type { StrikerEntry } from '../utils/storage';
 import { Flag } from '../components/Flag';
@@ -96,9 +96,9 @@ export function PenaltyShootout({ team, board, onClose, onFinish }: Props) {
   };
 
   const ballPos = aim != null && phase !== 'aim'
-    ? (outcome === 'MISS' ? { left: ZONES[aim].x, top: '-8%' } : ZONES[aim])
+    ? (outcome === 'MISS' ? { left: ZONES[aim].x, top: '-8%' } : { left: ZONES[aim].x, top: ZONES[aim].y })
     : { left: '50%', top: '92%' };
-  const keeperPos = keeper != null ? ZONES[keeper] : { left: '50%', top: '52%' };
+  const keeperPos = keeper != null ? { left: ZONES[keeper].x, top: ZONES[keeper].y } : { left: '50%', top: '52%' };
 
   const myBest = board.find(e => e.teamId === team.id)?.score;
 

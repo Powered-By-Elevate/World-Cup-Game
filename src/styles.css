@@ -633,3 +633,24 @@
 .pk-board{ width:100%; max-width:380px; margin-top:20px; background:rgba(255,255,255,.05);
   border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:13px; }
 .pk-board-row{ display:flex; align-items:center; gap:9px; padding:7px 8px; border-radius:9px; }
+
+/* ---- Soccer Stars (top-down table soccer) ---- */
+.ss-overlay{ background:linear-gradient(180deg,#0a140a,#070b07 70%); }
+.ss-top{ display:flex; align-items:center; justify-content:space-between; padding:14px 14px 8px; gap:10px; }
+.ss-scoreline{ display:flex; align-items:center; gap:10px; }
+.ss-side{ display:flex; align-items:center; gap:7px; }
+.ss-num{ font-family:'Anton',sans-serif; font-size:28px; color:var(--paper); line-height:1; }
+.ss-dash{ color:#6f6c63; font-size:20px; }
+.ss-first{ font-family:'Archivo',sans-serif; font-weight:800; font-size:8px; letter-spacing:.13em;
+  text-transform:uppercase; color:#9C988C; }
+.ss-stagewrap{ position:relative; width:100%; max-width:440px; margin:0 auto; padding:0 12px; }
+.ss-canvas{ display:block; width:100%; border-radius:10px; box-shadow:0 8px 26px rgba(0,0,0,.5);
+  border:2px solid rgba(255,255,255,.08); }
+.ss-toast{ position:absolute; left:50%; top:46%; transform:translate(-50%,-50%); pointer-events:none;
+  font-family:'Anton',sans-serif; font-size:52px; letter-spacing:.02em; animation:pop .4s var(--ease) both; z-index:5; }
+.ss-toast.goal{ color:var(--lime); text-shadow:0 3px 0 #15120C; }
+.ss-toast.miss{ color:#FF6A3D; text-shadow:0 3px 0 #15120C; }
+.ss-end{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; padding:24px; background:rgba(8,12,8,.82); backdrop-filter:blur(3px); border-radius:10px; z-index:6; }
+.ss-end .row{ width:100%; max-width:320px; }
+.ss-controls{ padding:14px 18px 28px; }

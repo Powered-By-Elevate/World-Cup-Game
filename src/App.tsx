@@ -31,6 +31,7 @@ import { Settings } from './views/Settings';
 import { Manage } from './views/Manage';
 import { TrophyRoom } from './views/TrophyRoom';
 import { PenaltyShootout } from './views/PenaltyShootout';
+import { SoccerStars } from './views/SoccerStars';
 import { Profile } from './views/Profile';
 import { Leagues } from './views/Leagues';
 import { SignIn } from './views/SignIn';
@@ -77,6 +78,7 @@ export default function App() {
   const [showManage, setShowManage] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showShootout, setShowShootout] = useState(false);
+  const [showSoccer, setShowSoccer] = useState(false);
   const [strikerBoard, setStrikerBoard] = useState<StrikerEntry[]>([]);
   const [showLeagues, setShowLeagues] = useState(false);
   const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
@@ -757,7 +759,7 @@ export default function App() {
       </header>
 
       <div className="screen">
-        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} onPlayShootout={openShootout} />}
+        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} onPlayShootout={openShootout} onPlaySoccer={() => setShowSoccer(true)} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
@@ -791,6 +793,9 @@ export default function App() {
       )}
       {showShootout && myTeam && (
         <PenaltyShootout team={myTeam} board={strikerBoard} onClose={() => setShowShootout(false)} onFinish={finishShootout} />
+      )}
+      {showSoccer && myTeam && (
+        <SoccerStars team={myTeam} onClose={() => setShowSoccer(false)} />
       )}
       {showManage && isCommish && (
         <Manage

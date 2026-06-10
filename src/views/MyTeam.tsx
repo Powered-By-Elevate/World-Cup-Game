@@ -22,13 +22,14 @@ interface Props {
   commishName: string | null;
   onSetDraftTime: (ts: number | null) => void;
   onPlayShootout: () => void;
+  onPlaySoccer: () => void;
 }
 
 type MatchRow = Match & { nid: string; ko?: false };
 type KORow = KOMatch & { nid: string; ko: true };
 type Row = MatchRow | KORow;
 
-export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime, onPlayShootout }: Props) {
+export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime, onPlayShootout, onPlaySoccer }: Props) {
   const drafted = state.draftDone && !!myTeam.picks;
 
   // Before the draft runs, the home screen is a hype poster, not an empty shell.
@@ -110,6 +111,18 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
           <div>
             <div style={{ fontFamily: 'Anton, sans-serif', textTransform: 'uppercase', fontSize: 18, color: 'var(--lime)' }}>Penalty Shootout</div>
             <div className="muted" style={{ fontSize: 12.5, color: '#CFCBBE' }}>Take 5 spot-kicks · climb the Top Striker board</div>
+          </div>
+        </div>
+        <Icon name="chevron" size={18} />
+      </button>
+
+      {/* play — Soccer Stars: pull-back table soccer vs the CPU, in your kit */}
+      <button className="card pad between" style={{ marginTop: 10, width: '100%', cursor: 'pointer', textAlign: 'left', border: '2px solid var(--ink)', background: 'var(--ink)', color: 'var(--paper)' }} onClick={onPlaySoccer}>
+        <div className="row" style={{ gap: 12 }}>
+          <span style={{ fontSize: 30 }}>🥅</span>
+          <div>
+            <div style={{ fontFamily: 'Anton, sans-serif', textTransform: 'uppercase', fontSize: 18, color: 'var(--lime)' }}>Soccer Stars</div>
+            <div className="muted" style={{ fontSize: 12.5, color: '#CFCBBE' }}>Pull back, take aim · table soccer vs the CPU</div>
           </div>
         </div>
         <Icon name="chevron" size={18} />
