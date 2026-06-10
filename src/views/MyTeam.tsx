@@ -21,13 +21,14 @@ interface Props {
   isCommish: boolean;
   commishName: string | null;
   onSetDraftTime: (ts: number | null) => void;
+  onPlayShootout: () => void;
 }
 
 type MatchRow = Match & { nid: string; ko?: false };
 type KORow = KOMatch & { nid: string; ko: true };
 type Row = MatchRow | KORow;
 
-export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime }: Props) {
+export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime, onPlayShootout }: Props) {
   const drafted = state.draftDone && !!myTeam.picks;
 
   // Before the draft runs, the home screen is a hype poster, not an empty shell.
@@ -100,6 +101,18 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
 
       <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={onTeamInvite}>
         <Icon name="users" size={16} /> Invite your partner to this team
+      </button>
+
+      {/* play — a quick arcade kick-about, no soccer skill needed */}
+      <button className="card pad between" style={{ marginTop: 12, width: '100%', cursor: 'pointer', textAlign: 'left', border: '2px solid var(--ink)', background: 'var(--ink)', color: 'var(--paper)' }} onClick={onPlayShootout}>
+        <div className="row" style={{ gap: 12 }}>
+          <span style={{ fontSize: 30 }}>⚽</span>
+          <div>
+            <div style={{ fontFamily: 'Anton, sans-serif', textTransform: 'uppercase', fontSize: 18, color: 'var(--lime)' }}>Penalty Shootout</div>
+            <div className="muted" style={{ fontSize: 12.5, color: '#CFCBBE' }}>Take 5 spot-kicks · climb the Top Striker board</div>
+          </div>
+        </div>
+        <Icon name="chevron" size={18} />
       </button>
 
       {drafted && <>

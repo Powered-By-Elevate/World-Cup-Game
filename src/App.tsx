@@ -8,8 +8,9 @@ import {
   getMe, setMe as persistMe, resetActiveLeague, clearLocal,
   AUTH_ON, getAuthUser, onAuthChange, signOut, syncUserLeagues, addUserLeague, removeUserLeague,
   listAccounts, touchPresence, enablePush, notifyDraftRun, sendAnnouncement,
+  getStrikerBoard, saveStrikerScore,
 } from './utils/storage';
-import type { League, AuthUser } from './utils/storage';
+import type { League, AuthUser, StrikerEntry } from './utils/storage';
 import { groupResults, knockoutResults } from './data/results';
 import { fetchLiveResults } from './data/liveResults';
 import type { LiveData } from './data/liveResults';
@@ -29,6 +30,7 @@ import { Squads } from './views/Squads';
 import { Settings } from './views/Settings';
 import { Manage } from './views/Manage';
 import { TrophyRoom } from './views/TrophyRoom';
+import { PenaltyShootout } from './views/PenaltyShootout';
 import { Profile } from './views/Profile';
 import { Leagues } from './views/Leagues';
 import { SignIn } from './views/SignIn';
@@ -74,6 +76,8 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showManage, setShowManage] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showShootout, setShowShootout] = useState(false);
+  const [strikerBoard, setStrikerBoard] = useState<StrikerEntry[]>([]);
   const [showLeagues, setShowLeagues] = useState(false);
   const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
   const [shareSheet, setShareSheet] = useState<{ title: string; text: string; url: string } | null>(null);
@@ -609,6 +613,16 @@ export default function App() {
     toast(ok ? "Draft alerts on for this device" : "Couldn't enable alerts here");
   }, [user, toast]);
 
+  const openShootout = useCallback(async () => {
+    setStrikerBoard(await getStrikerBoard());
+    setShowShootout(true);
+  }, []);
+  const finishShootout = useCallback(async (score: number) => {
+    if (!myTeam) return;
+    await saveStrikerScore(myTeam.id, myTeam.name, score);
+    setStrikerBoard(await getStrikerBoard());
+  }, [myTeam]);
+
   const announce = useCallback(async (message: string) => {
     const subject = `📣 ${realLeagueName || 'World Cup pool'}`;
     const r = await sendAnnouncement(leagueCodeRef.current, subject, message, leagueLink(leagueCodeRef.current));
@@ -743,7 +757,7 @@ export default function App() {
       </header>
 
       <div className="screen">
-        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} />}
+        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} onPlayShootout={openShootout} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
@@ -774,6 +788,9 @@ export default function App() {
           onOpenManage={() => { setShowSettings(false); setShowManage(true); }}
           onAnnounce={announce}
           demo={demo} onToggleDemo={toggleDemo} />
+      )}
+      {showShootout && myTeam && (
+        <PenaltyShootout team={myTeam} board={strikerBoard} onClose={() => setShowShootout(false)} onFinish={finishShootout} />
       )}
       {showManage && isCommish && (
         <Manage

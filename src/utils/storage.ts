@@ -393,6 +393,27 @@ async function postNotify(payload: Record<string, unknown>): Promise<{ emailed: 
   } catch { return null; }
 }
 
+/* ---- Penalty Shootout: "Top Striker" leaderboard (best score per team) ---- */
+export interface StrikerEntry { teamId: string; name: string; score: number; when: number; }
+
+export async function getStrikerBoard(): Promise<StrikerEntry[]> {
+  const arr = (await sget<StrikerEntry[]>('wc:striker', true)) || [];
+  return Array.isArray(arr) ? [...arr].sort((a, b) => b.score - a.score || a.when - b.when) : [];
+}
+
+/** Record a shootout result; keeps only each team's best. Returns true if a new best. */
+export async function saveStrikerScore(teamId: string, name: string, score: number): Promise<boolean> {
+  try {
+    const list = (await sget<StrikerEntry[]>('wc:striker', true)) || [];
+    const prev = list.find(e => e.teamId === teamId);
+    if (prev && prev.score >= score) return false;
+    const next = list.filter(e => e.teamId !== teamId);
+    next.push({ teamId, name, score, when: Date.now() });
+    await sset('wc:striker', next, true);
+    return true;
+  } catch { return false; }
+}
+
 /** Tell the server the draft just ran, so it fans out push + email to everyone.
  *  Commissioner-only (the server re-checks). `nations` maps id → {n: name, f: flag}. */
 export async function notifyDraftRun(league: string, nations: Record<string, NationInfo>, link: string): Promise<void> {

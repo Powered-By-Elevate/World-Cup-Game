@@ -584,3 +584,52 @@
 .ins-plaque{ margin-top:12px; border-radius:13px; border:1.5px solid var(--ink); overflow:hidden; }
 .ins-plaque-top{ background:var(--ink); color:var(--paper); padding:11px 13px; display:flex; align-items:center; gap:10px; }
 .ins-open{ padding:16px 13px; text-align:center; }
+
+/* ============================================================
+   PENALTY SHOOTOUT (mini-game)
+   ============================================================ */
+.pk-overlay{ position:fixed; inset:0; z-index:75; background:linear-gradient(180deg,#0c1b0c,#0a0f0a 70%);
+  display:flex; flex-direction:column; overflow:auto; }
+.pk-top{ display:flex; align-items:center; justify-content:space-between; padding:14px; gap:10px; }
+.pk-score{ display:flex; gap:6px; }
+.pk-dot{ width:11px; height:11px; border-radius:50%; }
+.pk-goals{ display:flex; flex-direction:column; align-items:flex-end; line-height:1; }
+.pk-goals .num{ font-size:24px; color:var(--lime); }
+.pk-goals .lbl{ font-family:'Archivo',sans-serif; font-weight:800; font-size:8px; letter-spacing:.13em; text-transform:uppercase; color:#9C988C; }
+
+.pk-stage{ flex:1; display:flex; align-items:center; justify-content:center; padding:8px 16px; min-height:240px; }
+.pk-goal{ position:relative; width:100%; max-width:420px; height:220px;
+  border:6px solid #F4EEE1; border-bottom:none; border-radius:8px 8px 0 0;
+  box-shadow:0 0 0 2px rgba(0,0,0,.4); }
+.pk-net{ position:absolute; inset:0;
+  background-image:repeating-linear-gradient(0deg, transparent 0 13px, rgba(255,255,255,.10) 13px 14px),
+    repeating-linear-gradient(90deg, transparent 0 13px, rgba(255,255,255,.10) 13px 14px); }
+.pk-zone{ position:absolute; transform:translate(-50%,-50%); width:46px; height:46px; border-radius:50%;
+  border:2px dashed rgba(200,242,60,.5); background:rgba(200,242,60,.08); color:var(--lime);
+  display:grid; place-items:center; cursor:pointer; transition:transform .12s var(--ease); }
+.pk-zone svg{ transform:rotate(-45deg); }
+.pk-zone:disabled{ opacity:0; pointer-events:none; }
+.pk-zone.on{ background:var(--lime); color:var(--ink); border-style:solid; }
+.pk-keeper{ position:absolute; transform:translate(-50%,-50%); width:44px; height:40px; border-radius:10px 10px 7px 7px;
+  background:linear-gradient(180deg,#FF6A3D,#C0392B); border:2px solid #15120C; z-index:3;
+  box-shadow:0 4px 8px rgba(0,0,0,.4); }
+.pk-keeper::after{ content:""; position:absolute; left:50%; top:-9px; transform:translateX(-50%);
+  width:15px; height:15px; border-radius:50%; background:#F8D154; border:2px solid #15120C; }
+.pk-ball{ position:absolute; z-index:4; font-size:30px; line-height:1; filter:drop-shadow(0 3px 4px rgba(0,0,0,.5)); }
+.pk-flash{ position:absolute; left:50%; top:42%; transform:translate(-50%,-50%); z-index:5;
+  font-family:'Anton',sans-serif; font-size:46px; letter-spacing:.02em; animation:pop .4s var(--ease) both; }
+.pk-flash.goal{ color:var(--lime); text-shadow:0 3px 0 #15120C; }
+.pk-flash.miss{ color:#FF6A3D; text-shadow:0 3px 0 #15120C; }
+
+.pk-controls{ padding:0 18px 28px; }
+.pk-hint{ text-align:center; color:#CFCBBE; font-size:12.5px; }
+.pk-power{ position:relative; height:20px; border-radius:10px; background:rgba(255,255,255,.12);
+  border:1.5px solid rgba(255,255,255,.2); overflow:hidden; margin-bottom:12px; }
+.pk-power-good{ position:absolute; top:0; bottom:0; left:55%; width:37%; background:rgba(200,242,60,.32);
+  border-left:2px solid var(--lime); border-right:2px solid var(--lime); }
+.pk-power-fill{ position:absolute; top:0; bottom:0; left:0; background:var(--lime); border-radius:10px; }
+
+.pk-done{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px 22px 40px; }
+.pk-board{ width:100%; max-width:380px; margin-top:20px; background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:13px; }
+.pk-board-row{ display:flex; align-items:center; gap:9px; padding:7px 8px; border-radius:9px; }
