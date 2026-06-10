@@ -23,6 +23,7 @@ import { Avatar, Celebration } from './components/shared';
 import { fx } from './utils/fx';
 import { Onboarding } from './views/Onboarding';
 import { MyTeam } from './views/MyTeam';
+import { SoccerStars } from './views/SoccerStars';
 import { DraftView } from './views/DraftView';
 import { TableView } from './views/Leaderboard';
 import { MatchesView } from './views/MatchesView';
@@ -82,6 +83,7 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showLeagues, setShowLeagues] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [showSoccer, setShowSoccer] = useState(false);
   const [celebrate, setCelebrate] = useState<string | null>(null);
   const prevRank = useRef<number | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
@@ -828,7 +830,7 @@ export default function App() {
       </header>
 
       <div className="screen">
-        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} calls={state.calls || {}} meId={me!.id} names={callerNames} onCall={api.makeCall} />}
+        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} calls={state.calls || {}} meId={me!.id} names={callerNames} onCall={api.makeCall} onPlaySoccer={() => setShowSoccer(true)} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
@@ -879,6 +881,9 @@ export default function App() {
       )}
       {showChat && (
         <Chat meId={me!.id} messages={chat} members={chatMembers} onSend={sendChatMsg} onClose={() => setShowChat(false)} />
+      )}
+      {showSoccer && myTeam && (
+        <SoccerStars team={myTeam} onClose={() => setShowSoccer(false)} />
       )}
       {shareModal}
       {celebrate && <Celebration message={celebrate} onDone={() => setCelebrate(null)} />}

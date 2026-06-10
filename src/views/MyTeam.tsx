@@ -27,13 +27,14 @@ interface Props {
   meId: string;
   names: Record<string, NameInfo>;
   onCall: (matchId: string, nationId: string) => void;
+  onPlaySoccer: () => void;
 }
 
 type MatchRow = Match & { nid: string; ko?: false };
 type KORow = KOMatch & { nid: string; ko: true };
 type Row = MatchRow | KORow;
 
-export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime, calls, meId, names, onCall }: Props) {
+export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime, calls, meId, names, onCall, onPlaySoccer }: Props) {
   const drafted = state.draftDone && !!myTeam.picks;
 
   // Before the draft runs, the home screen is a hype poster, not an empty shell.
@@ -111,6 +112,11 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
 
       <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={onTeamInvite}>
         <Icon name="users" size={16} /> Invite your partner to this team
+      </button>
+
+      {/* Soccer Stars — pull-back table-soccer mini-game vs the CPU, themed to your picks */}
+      <button className="btn btn-lime btn-block" style={{ marginTop: 10 }} onClick={onPlaySoccer}>
+        ⚽ Play Soccer Stars
       </button>
 
       {drafted && <>
