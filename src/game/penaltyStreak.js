@@ -128,23 +128,15 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
 
   /* ---------------- DRAW INPUT ---------------- */
   let pts = [], drawing = false, fade = null, lineCol = '#C8F23C';
-  let dw = innerWidth, dh = innerHeight;   // draw-canvas CSS size (from its own rect)
-
-  // Pointer → canvas-local coordinates via the canvas's actual on-screen rect.
-  // Using the rect (not raw clientX/Y) keeps the drawn line glued to the finger
-  // even when a mobile URL bar offsets the visual viewport from the layout one.
-  const toLocal = (e) => { const r = drawC.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top, t: performance.now() }; };
 
   function sizeDraw() {
     const dpr = Math.min(devicePixelRatio || 1, 2);
-    const r = drawC.getBoundingClientRect();
-    dw = r.width || innerWidth; dh = r.height || innerHeight;
-    drawC.width = dw * dpr; drawC.height = dh * dpr;
+    drawC.width = innerWidth * dpr; drawC.height = innerHeight * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   function renderLine(alpha = 1) {
-    ctx.clearRect(0, 0, dw, dh);
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
     if (pts.length < 2) return;
     ctx.save(); ctx.globalAlpha = alpha;
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -183,13 +175,13 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
   const onDown = (e) => {
     if (state.phase !== 'play' || state.busy || !state.ready) return;
     drawing = true; lineCol = '#C8F23C';
-    pts = [toLocal(e)];
+    pts = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
     if (fade) { cancelAnimationFrame(fade.raf); fade = null; }
     drawC.setPointerCapture(e.pointerId);
   };
   const onPMove = (e) => {
     if (!drawing) return;
-    const p = toLocal(e), last = pts[pts.length - 1];
+    const p = { x: e.clientX, y: e.clientY, t: performance.now() }, last = pts[pts.length - 1];
     if (Math.hypot(p.x - last.x, p.y - last.y) < 3) return;
     pts.push(p);
     // live power readout: speed over the trailing ~5 samples colors the line
@@ -198,7 +190,7 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
     lineCol = powerColor(speedToPower(segLen / segT));
     renderLine();
     // free-aim: reticle follows the raw goal-plane point; warns red when off target
-    const g = scene.projectNDC((p.x / dw) * 2 - 1, -(p.y / dh) * 2 + 1);
+    const g = scene.projectNDC((p.x / innerWidth) * 2 - 1, -(p.y / innerHeight) * 2 + 1);
     scene.setAimPoint(g.x, g.y);
     scene.setReticleWarn(Math.abs(g.x) > GOAL_W / 2 - 0.10 || g.y > GOAL_H - 0.10);
   };
@@ -220,15 +212,12 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
     }
     state.busy = true; state.ready = false;
 
-    // flick speed -> power: use the RELEASE velocity (last few samples), not the
-    // whole-stroke average — so a slow aim then a fast flick still fires hard, and
-    // the power matches the live colour readout the player sees while drawing.
-    const rk = Math.max(0, pts.length - 6), rel = pts.slice(rk);
-    const relLen = pathLength(rel), relT = Math.max(1, rel[rel.length - 1].t - rel[0].t);
-    const power = speedToPower(relLen / relT);
+    // flick speed -> power (fast = flat & fierce but scattered, slow = placed)
+    const dur = Math.max(1, pe.t - p0.t);
+    const power = speedToPower(len / dur);
 
     // free aim: the ball goes exactly where you drew it — including wide or over
-    const g = scene.projectNDC((pe.x / dw) * 2 - 1, -(pe.y / dh) * 2 + 1);
+    const g = scene.projectNDC((pe.x / innerWidth) * 2 - 1, -(pe.y / innerHeight) * 2 + 1);
     let tx = g.x, ty = g.y;
     // power scatter: hammering it costs accuracy (and can put it in the stands)
     const err = power * power * 0.5;
@@ -245,7 +234,7 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
     }
     const chordMidX = p0.x + (pe.x - p0.x) * 0.5;
     const a = scene.projectGoal(-GOAL_W / 2, 1), b = scene.projectGoal(GOAL_W / 2, 1);
-    const goalPx = Math.max(1, (b.x - a.x) * dw);
+    const goalPx = Math.max(1, (b.x - a.x) * innerWidth);
     const mPerPx = GOAL_W / goalPx;
     const curl = Math.max(-1.4, Math.min(1.4, (mid.x - chordMidX) * mPerPx * 1.5));
 
@@ -338,10 +327,8 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
   }
 
   /* ---------------- BOOT ---------------- */
-  const onOrient = () => { sizeDraw(); setTimeout(sizeDraw, 250); };   // iOS settles late after a rotate
   sizeDraw();
   addEventListener('resize', sizeDraw);
-  addEventListener('orientationchange', onOrient);
   state = { star: null, nid: null, phase: 'setup', streak: 0, busy: false, ready: false, aim: { x: 0, y: 1.2 }, opponents: [], oppIdx: 0 };
   scene = createPenaltyScene(stage, { onAim: (a) => { state.aim = a; }, onResult, theme: 'night',
     stars: { takers: { messi:   { url: `${MODELS}/taker_messi.glb` },
@@ -363,7 +350,6 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
   // teardown: stop the rAF loop, drop the window listener, free GL resources
   return function dispose() {
     removeEventListener('resize', sizeDraw);
-    removeEventListener('orientationchange', onOrient);
     if (fade) cancelAnimationFrame(fade.raf);
     try { scene && scene.dispose && scene.dispose(); } catch (e) { /* ignore */ }
   };

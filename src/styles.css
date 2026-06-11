@@ -1038,7 +1038,3 @@
   .ss-pitchwrap{ max-width: 440px; padding: 0 32px; }
 }
 
-/* #draw is a <canvas> (a replaced element): position:fixed + inset:0 does NOT
-   stretch it the way it stretches a div, so it must be sized explicitly or its
-   touch/draw area collapses to the bitmap's intrinsic box. Fill the viewport. */
-.pen-overlay #draw{ width:100%; height:100%; }

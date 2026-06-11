@@ -620,11 +620,16 @@ export default function App() {
     setChat(next);
     // notify recipients in-app (a whisper → that person; global → everyone else)
     const body = t.slice(0, 120);
+    const link = leagueLink(leagueCodeRef.current);
     if (to) {
       const cTitle = `${me.name} messaged you`;
       await pushNotifs([{ to, kind: 'chat', ts: Date.now(), title: cTitle, body }]);
-      void pushToMember(leagueCodeRef.current, to, cTitle, body, leagueLink(leagueCodeRef.current));
-    } else if (chatMembers.length) await pushNotifs(chatMembers.map(m => ({ to: m.id, kind: 'chat' as const, ts: Date.now(), title: `${me.name} in league chat`, body })));
+      void pushToMember(leagueCodeRef.current, to, cTitle, body, link);
+    } else if (chatMembers.length) {
+      const gTitle = `${me.name} · league chat`;
+      await pushNotifs(chatMembers.map(m => ({ to: m.id, kind: 'chat' as const, ts: Date.now(), title: gTitle, body })));
+      for (const m of chatMembers) void pushToMember(leagueCodeRef.current, m.id, gTitle, body, link);   // push group chat too
+    }
   }, [me, chatMembers]);
 
   const openNotifs = useCallback(async () => {
