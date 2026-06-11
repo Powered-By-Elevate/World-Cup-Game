@@ -339,7 +339,13 @@ function adaptStarRig(inner,anims,{height=1.86}={}){
   }
   function setIdleClip(on){
     if(!idleAction || on===clipOn) return; clipOn=on;
-    if(on){ idleAction.reset().fadeIn(0.25).play(); }
+    if(on){
+      idleAction.enabled=true; idleAction.setEffectiveWeight(1); idleAction.paused=false;
+      if(!idleAction.isRunning()) idleAction.play();
+      // resume mid-cycle so the clip's slow lead-in never reads as a freeze
+      idleAction.time=0.4+Math.random()*Math.max(0.1, idleAction.getClip().duration-0.8);
+      idleAction.fadeIn(0.18);
+    }
     else { idleAction.fadeOut(0.12); setTimeout(()=>{ if(!clipOn) idleAction.stop(); },140); }
   }
   // neutral-stance reference (bind + arms folded down): captured once for frame0-mode retargets
@@ -1030,8 +1036,8 @@ export function createPenaltyScene(container, { onAim, onResult, theme, stars })
       }
       // keeper dive (after small reaction delay)
       if(p>0.08){ const dp=easeOut(Math.min(1,(p-0.08)/0.62)); const dir=spec.keeperDir, hi=spec.keeperHigh;
-        kp.root.position.x=dir*(kp.kickActive?2.1:2.45)*dp;
-        kp.root.position.y=(kp.kickActive?(hi?0.45:0.05):(hi?0.95:0.18))*dp;
+        kp.root.position.x=dir*(kp.kickActive?2.30:2.45)*dp;
+        kp.root.position.y=(kp.kickActive?(hi?0.85:0.05):(hi?0.95:0.18))*dp;
         if(!kp.kickActive){
         kp.root.rotation.z=-dir*1.25*dp;
         const topArm = dir<0?kp.parts.armL:kp.parts.armR, botArm=dir<0?kp.parts.armR:kp.parts.armL;
@@ -1063,7 +1069,7 @@ export function createPenaltyScene(container, { onAim, onResult, theme, stars })
           outcome = saved ? 'save' : 'goal';
         } else { outcome = onWood ? 'post' : 'miss'; }
         s.outcome=outcome; s.saved=(outcome==='save');
-        if(outcome==='save'){ ball.position.set(spec.keeperDir*1.7, spec.keeperHigh?1.95:0.95, 0.32); for(const m of trail)m.material.opacity=0; }
+        if(outcome==='save'){ ball.position.set(spec.keeperDir*1.7, spec.keeperHigh?1.85:0.85, 0.36); for(const m of trail)m.material.opacity=0; }
         else if(outcome==='goal'){ ripple={cx:spec.tx,cy:spec.ty,age:0}; } // net ripple on goal
         onResult&&onResult(outcome);
       }

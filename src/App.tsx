@@ -32,6 +32,10 @@ import { Settings } from './views/Settings';
 import { Manage } from './views/Manage';
 import { TrophyRoom } from './views/TrophyRoom';
 import { Arcade } from './views/Arcade';
+import { recordScore, createChallenge, respondChallenge, winnerOf, GAME_META } from './utils/arcade';
+import type { ArcadeGame, LaunchMode } from './utils/arcade';
+import { loadNotifs, pushNotifs, unreadCount, mine, markAllRead } from './utils/notify';
+import type { Notif } from './utils/notify';
 // Penalty Streak pulls in Three.js + the GLB/FBX loaders — lazy-load it so that
 // weight only lands when someone actually opens the game.
 const PenaltyStreak = lazy(() => import('./views/PenaltyStreak').then(m => ({ default: m.PenaltyStreak })));
@@ -86,10 +90,12 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showLeagues, setShowLeagues] = useState(false);
   const [showChat, setShowChat] = useState(false);
-  const [showSoccer, setShowSoccer] = useState(false);
-  const [showPenalty, setShowPenalty] = useState(false);
+  const [launch, setLaunch] = useState<{ game: ArcadeGame; mode: LaunchMode } | null>(null);
+  const [notifs, setNotifs] = useState<Notif[]>([]);
+  const [showNotifs, setShowNotifs] = useState(false);
   const [celebrate, setCelebrate] = useState<string | null>(null);
   const prevRank = useRef<number | null>(null);
+  const launchDone = useRef(false);   // guard: a challenge leg settles once per launch
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [chatSeen, setChatSeen] = useState(0);
   const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
@@ -287,6 +293,16 @@ export default function App() {
   useEffect(() => {
     try { setChatSeen(Number(localStorage.getItem(`wc:chat:seen:${leagueCode}`)) || 0); } catch { /* ignore */ }
   }, [leagueCode]);
+
+  // poll the in-app notification feed (challenges, chat, match events)
+  useEffect(() => {
+    if (!loaded || !me) return;
+    let alive = true;
+    const tick = async () => { const n = await loadNotifs(); if (alive) setNotifs(n); };
+    tick();
+    const iv = setInterval(tick, 5000);
+    return () => { alive = false; clearInterval(iv); };
+  }, [loaded, me, leagueCode]);
 
   const setMeBoth = useCallback(async (m: MeState | null) => {
     setMe(m);
@@ -571,7 +587,50 @@ export default function App() {
     const msg: ChatMessage = { id: uid(), from: me.id, fromName: me.name, to, text: t.slice(0, 1000), ts: Date.now() };
     const next = await sendChat(msg);
     setChat(next);
+    // notify recipients in-app (a whisper → that person; global → everyone else)
+    const body = t.slice(0, 120);
+    if (to) await pushNotifs([{ to, kind: 'chat', ts: Date.now(), title: `${me.name} messaged you`, body }]);
+    else if (chatMembers.length) await pushNotifs(chatMembers.map(m => ({ to: m.id, kind: 'chat' as const, ts: Date.now(), title: `${me.name} in league chat`, body })));
+  }, [me, chatMembers]);
+
+  const openNotifs = useCallback(async () => {
+    setShowNotifs(true);
+    if (me) { const n = await markAllRead(me.id); setNotifs(n); }
   }, [me]);
+
+  // launch a game from the Arcade (solo, a new challenge, or answering one)
+  const launchGame = useCallback((game: ArcadeGame, mode: LaunchMode) => {
+    launchDone.current = false;
+    setLaunch({ game, mode });
+  }, []);
+
+  // a game reported a score: always update the leaderboard; settle a challenge once
+  const handleArcadeScore = useCallback(async (game: ArcadeGame, score: number) => {
+    if (!me) return;
+    await recordScore(game, me.id, me.name, score);
+    const cur = launch;
+    if (!cur || launchDone.current) return;
+    const mode = cur.mode;
+    if (mode.kind === 'challenge') {
+      launchDone.current = true;
+      await createChallenge(game, me.id, me.name, mode.oppId, mode.oppName, score);
+      await pushNotifs([{ to: mode.oppId, kind: 'challenge', ts: Date.now(),
+        title: `${me.name} challenged you`, body: `${GAME_META[game].name} — they ${GAME_META[game].verb} ${score}. Play your leg!` }]);
+      toast('Challenge sent ⚔');
+    } else if (mode.kind === 'respond') {
+      launchDone.current = true;
+      const ch = await respondChallenge(mode.challengeId, score);
+      if (ch) {
+        const w = winnerOf(ch);
+        const line = (who: string) => w == null ? `Drew ${ch.fromScore}–${ch.toScore}` : w === who ? `You won ${ch.fromScore}–${ch.toScore}!` : `Lost ${ch.fromScore}–${ch.toScore}`;
+        await pushNotifs([
+          { to: ch.from, kind: 'challenge-result', ts: Date.now(), title: `${GAME_META[game].name} result`, body: `vs ${ch.toName}: ${line(ch.from)}` },
+          { to: ch.to,   kind: 'challenge-result', ts: Date.now(), title: `${GAME_META[game].name} result`, body: `vs ${ch.fromName}: ${line(ch.to)}` },
+        ]);
+        toast(w == null ? 'Challenge drawn' : w === me.id ? 'You won the challenge! 🏆' : 'Challenge lost');
+      }
+    }
+  }, [me, launch, toast]);
 
   const movers = useMemo(
     () => computeMovers(state.teams || [], scores, ko, state.scoring || DEFAULT_SCORING),
@@ -798,6 +857,9 @@ export default function App() {
     );
   }
 
+  const notifUnread = me ? unreadCount(notifs, me.id) : 0;
+  const myNotifs = me ? mine(notifs, me.id) : [];
+
   return (
     <div className="app">
       {/* desktop left rail */}
@@ -816,6 +878,7 @@ export default function App() {
         </nav>
         <div className="sb-bottom">
           <span className={`status ${HAS_REAL ? "live" : "preview"}`}><span className="dot" />{HAS_REAL ? "Live" : "Preview"}</span>
+          <button className="hdr-btn chat-btn" onClick={openNotifs} title="Notifications"><Icon name="bell" size={17} />{notifUnread > 0 && <span className="chat-badge" />}</button>
           <button className="hdr-btn chat-btn" onClick={openChat} title="Chat"><Icon name="chat" size={17} />{chatUnread && <span className="chat-badge" />}</button>
           <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
           {isCommish && <button className="hdr-btn" onClick={() => setShowSettings(true)} title="League settings"><Icon name="gear" size={18} /></button>}
@@ -827,6 +890,7 @@ export default function App() {
       <header className="hdr">
         <Mark size={36} />
         <LeagueSwitch name={leagueName} onClick={() => setShowLeagues(true)} />
+        <button className="hdr-btn chat-btn" onClick={openNotifs} title="Notifications"><Icon name="bell" size={17} />{notifUnread > 0 && <span className="chat-badge" />}</button>
         <button className="hdr-btn chat-btn" onClick={openChat} title="Chat"><Icon name="chat" size={17} />{chatUnread && <span className="chat-badge" />}</button>
         <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
         {isCommish && <button className="hdr-btn" onClick={() => setShowSettings(true)} title="League settings"><Icon name="gear" size={18} /></button>}
@@ -834,11 +898,11 @@ export default function App() {
       </header>
 
       <div className="screen">
-        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} calls={state.calls || {}} meId={me!.id} names={callerNames} onCall={api.makeCall} onPlaySoccer={() => setShowSoccer(true)} />}
+        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} calls={state.calls || {}} meId={me!.id} names={callerNames} onCall={api.makeCall} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
-        {tab === "arcade" && <Arcade calls={state.calls || {}} scores={scores} meId={me!.id} names={callerNames} onCall={api.makeCall} onPlaySoccer={() => setShowSoccer(true)} onPlayPenalty={() => setShowPenalty(true)} />}
+        {tab === "arcade" && <Arcade calls={state.calls || {}} scores={scores} meId={me!.id} names={callerNames} onCall={api.makeCall} members={chatMembers} onLaunch={launchGame} />}
         {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
         {tab === "cabinet" && <TrophyRoom teams={state.teams || []} awardsByTeam={awardsByTeam} myTeam={myTeam} isCommish={isCommish} onSetAwardHolder={api.setAwardHolder} onShare={toast} />}
       </div>
@@ -886,12 +950,33 @@ export default function App() {
       {showChat && (
         <Chat meId={me!.id} messages={chat} members={chatMembers} onSend={sendChatMsg} onClose={() => setShowChat(false)} />
       )}
-      {showSoccer && myTeam && (
-        <SoccerStars team={myTeam} onClose={() => setShowSoccer(false)} />
+      {showNotifs && (
+        <div className="modal-bg" onClick={() => setShowNotifs(false)}>
+          <div className="sheet" onClick={e => e.stopPropagation()}>
+            <div className="sheet-grab" />
+            <div className="between" style={{ padding: "4px 18px 12px" }}>
+              <h2 className="display" style={{ fontSize: 24 }}>Notifications</h2>
+              <button className="hdr-btn" onClick={() => setShowNotifs(false)} style={{ border: "1.5px solid var(--line)" }}><Icon name="x" size={18} /></button>
+            </div>
+            <div style={{ padding: "0 14px 26px", maxHeight: "70vh", overflow: "auto" }}>
+              {myNotifs.length === 0 ? (
+                <p className="muted" style={{ textAlign: "center", fontSize: 14, padding: "20px 0" }}>No notifications yet.</p>
+              ) : myNotifs.map(n => (
+                <div key={n.id} className="card flat pad" style={{ marginBottom: 8 }}>
+                  <div style={{ fontWeight: 800, fontSize: 14 }}>{n.title}</div>
+                  <div className="muted" style={{ fontSize: 12.5, marginTop: 2, lineHeight: 1.4 }}>{n.body}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
-      {showPenalty && (
+      {launch?.game === 'soccer' && myTeam && (
+        <SoccerStars team={myTeam} onClose={() => setLaunch(null)} onGameEnd={(meS, cpuS) => handleArcadeScore('soccer', meS - cpuS)} />
+      )}
+      {launch?.game === 'penalty' && (
         <Suspense fallback={<div className="pen-overlay" style={{ display: 'grid', placeItems: 'center', color: '#dfe5ea', fontWeight: 600 }}>Warming up the pitch…</div>}>
-          <PenaltyStreak onClose={() => setShowPenalty(false)} />
+          <PenaltyStreak onClose={() => setLaunch(null)} onScore={(s) => handleArcadeScore('penalty', s)} />
         </Suspense>
       )}
       {shareModal}

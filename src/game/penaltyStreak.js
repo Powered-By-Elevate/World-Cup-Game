@@ -42,7 +42,7 @@ const speedToPower = (s) => Math.max(0, Math.min(1, (s - 0.25) / 1.75));   // px
  * #stage / #draw / #cards / #hud scaffold (provided by the React wrapper).
  * Returns a teardown function that disposes the 3D scene + listeners.
  */
-export function initPenaltyStreak(root, { onClose } = {}) {
+export function initPenaltyStreak(root, { onClose, onScore } = {}) {
   const $ = (s) => root.querySelector(s);
   const stage = $('#stage'), hud = $('#hud'), cards = $('#cards'), drawC = $('#draw');
   const ctx = drawC.getContext('2d');
@@ -238,15 +238,20 @@ export function initPenaltyStreak(root, { onClose } = {}) {
     const mPerPx = GOAL_W / goalPx;
     const curl = Math.max(-1.4, Math.min(1.4, (mid.x - chordMidX) * mPerPx * 1.5));
 
-    // keeper commits at random (corners favoured)
-    const r = Math.random();
-    const keeperDir = r < 0.4 ? -1 : r < 0.8 ? 1 : 0;
-    const keeperHigh = Math.random() < 0.45;
+    // keeper commits to one of FIVE zones at random: BL, TL, BR, TR, middle.
+    // Quadrant rule: if the ball lands anywhere in his chosen zone, it's saved.
+    const KZONES = [{ dir: -1, high: false }, { dir: -1, high: true }, { dir: 1, high: false }, { dir: 1, high: true }, { dir: 0, high: false }];
+    const kz = KZONES[(Math.random() * KZONES.length) | 0];
+    const keeperDir = kz.dir, keeperHigh = kz.high;
+    const ballSide = tx < -GOAL_W / 6 ? -1 : tx > GOAL_W / 6 ? 1 : 0;
+    const ballHigh = ty > GOAL_H * 0.5;
+    const saved = keeperDir === 0 ? ballSide === 0
+      : (ballSide === keeperDir && ballHigh === keeperHigh);
 
     scene.setAiming(false);
     scene.setReticleWarn(false);
     fadeLine();
-    scene.fireShot({ id: Date.now(), tx, ty, keeperDir, keeperHigh, curl, power });   // no `saved` -> geometric reach decides
+    scene.fireShot({ id: Date.now(), tx, ty, keeperDir, keeperHigh, curl, power, saved });   // zone-match rule decides
   }
 
   /* ---------------- RESULT ---------------- */
@@ -298,6 +303,7 @@ export function initPenaltyStreak(root, { onClose } = {}) {
     state.phase = 'done';
     drawC.classList.add('off');
     hud.innerHTML = '';
+    if (onScore) onScore(state.streak);      // report the run's streak (leaderboard / challenge leg)
     const best = bestStreak();
     const beaten = state.opponents.slice(0, Math.min(state.streak, 8));
     const eyebrow = quit ? 'Run abandoned'
@@ -337,7 +343,7 @@ export function initPenaltyStreak(root, { onClose } = {}) {
              keeperClips: [
                { id: 'dive',  url: `${MODELS}/gk_dive.fbx`,    type: 'dive', window: [0, 2.0] },
                { id: 'jump',  url: `${MODELS}/gk_catch_a.fbx`, type: 'catch' },
-               { id: 'idle',  url: `${MODELS}/gk_idle_b.fbx`,  type: 'idle', loop: true },
+               // no retargeted idle — the keeper uses its own native ready-stance clip
              ] } });
   renderSetup();
 

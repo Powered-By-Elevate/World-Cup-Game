@@ -9,18 +9,23 @@
 import { useEffect, useRef } from 'react';
 import { initPenaltyStreak } from '../game/penaltyStreak.js';
 
-interface Props { onClose: () => void; }
+interface Props { onClose: () => void; onScore?: (streak: number) => void; }
 
-export function PenaltyStreak({ onClose }: Props) {
+export function PenaltyStreak({ onClose, onScore }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
-  // keep the latest onClose without re-initialising the scene each render
+  // keep the latest callbacks without re-initialising the scene each render
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const scoreRef = useRef(onScore);
+  scoreRef.current = onScore;
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    const dispose = initPenaltyStreak(root, { onClose: () => closeRef.current() });
+    const dispose = initPenaltyStreak(root, {
+      onClose: () => closeRef.current(),
+      onScore: (s) => scoreRef.current && scoreRef.current(s),
+    });
     return () => dispose();
     // mount once — the scene is heavy; onClose is read via closeRef so [] is correct
   }, []);

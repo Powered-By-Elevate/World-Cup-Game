@@ -2,5 +2,5 @@
  *  scaffold. Returns a teardown that disposes the 3D scene + listeners. */
 export function initPenaltyStreak(
   root: HTMLElement,
-  opts: { onClose?: () => void }
+  opts: { onClose?: () => void; onScore?: (streak: number) => void }
 ): () => void;

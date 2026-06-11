@@ -41,7 +41,7 @@ type Kind = 'me' | 'cpu' | 'ball';
 type Phase = 'me' | 'cpu' | 'sim' | 'goal' | 'over';
 interface Body { x: number; y: number; vx: number; vy: number; r: number; m: number; kind: Kind; keeper?: boolean; }
 
-interface Props { team: Team; onClose: () => void; }
+interface Props { team: Team; onClose: () => void; onGameEnd?: (me: number, cpu: number) => void; }
 
 const RIVALS = ['BRA', 'ARG', 'FRA', 'ENG', 'GER', 'ESP', 'NED', 'POR', 'ITA'];
 
@@ -95,7 +95,10 @@ function buildConfetti() {
   }));
 }
 
-export function SoccerStars({ team, onClose }: Props) {
+export function SoccerStars({ team, onClose, onGameEnd }: Props) {
+  // report the final result once, without churning the physics callbacks
+  const endRef = useRef(onGameEnd);
+  endRef.current = onGameEnd;
   const shooterId = POT_KEYS.map(pk => team.picks?.[pk]).find(Boolean) || 'BRA';
   const [cpuId, setCpuId] = useState(() => pickRival(shooterId));   // random opponent, re-rolled each game
   const me = NATION[shooterId], cpu = NATION[cpuId];
@@ -192,7 +195,7 @@ export function SoccerStars({ team, onClose }: Props) {
     setCelebrate(scorer);
     window.setTimeout(() => {
       setCelebrate(null);
-      if (won) { setPhase('over'); return; }
+      if (won) { endRef.current?.(s.me, s.cpu); setPhase('over'); return; }
       bodies.current = formation();
       setTurn(scorer === 'me' ? 'cpu' : 'me');         // conceding side kicks off
     }, 1250);
