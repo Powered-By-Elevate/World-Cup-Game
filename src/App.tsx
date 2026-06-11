@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { NATION, POT_KEYS } from './data/nations';
 import type { AppState, MeState, Scoring } from './data/types';
 import { defaultState, withDefaults, DEFAULT_SCORING } from './data/types';
@@ -31,7 +31,10 @@ import { Squads } from './views/Squads';
 import { Settings } from './views/Settings';
 import { Manage } from './views/Manage';
 import { TrophyRoom } from './views/TrophyRoom';
-import { CallersBoard } from './views/CallOfDay';
+import { Arcade } from './views/Arcade';
+// Penalty Streak pulls in Three.js + the GLB/FBX loaders — lazy-load it so that
+// weight only lands when someone actually opens the game.
+const PenaltyStreak = lazy(() => import('./views/PenaltyStreak').then(m => ({ default: m.PenaltyStreak })));
 import { Profile } from './views/Profile';
 import { Leagues } from './views/Leagues';
 import { SignIn } from './views/SignIn';
@@ -45,7 +48,7 @@ const NAV: { id: string; label: string; icon: IconName }[] = [
   { id: "draft", label: "Draft", icon: "draft" },
   { id: "table", label: "Table", icon: "table" },
   { id: "matches", label: "Matches", icon: "cal" },
-  { id: "calls", label: "Calls", icon: "bolt" },
+  { id: "arcade", label: "Arcade", icon: "bolt" },
   { id: "squads", label: "Squads", icon: "users" },
   { id: "cabinet", label: "Cabinet", icon: "trophy" },
 ];
@@ -84,6 +87,7 @@ export default function App() {
   const [showLeagues, setShowLeagues] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showSoccer, setShowSoccer] = useState(false);
+  const [showPenalty, setShowPenalty] = useState(false);
   const [celebrate, setCelebrate] = useState<string | null>(null);
   const prevRank = useRef<number | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
@@ -834,7 +838,7 @@ export default function App() {
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
-        {tab === "calls" && <CallersBoard calls={state.calls || {}} scores={scores} meId={me!.id} names={callerNames} onCall={api.makeCall} />}
+        {tab === "arcade" && <Arcade calls={state.calls || {}} scores={scores} meId={me!.id} names={callerNames} onCall={api.makeCall} onPlaySoccer={() => setShowSoccer(true)} onPlayPenalty={() => setShowPenalty(true)} />}
         {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
         {tab === "cabinet" && <TrophyRoom teams={state.teams || []} awardsByTeam={awardsByTeam} myTeam={myTeam} isCommish={isCommish} onSetAwardHolder={api.setAwardHolder} onShare={toast} />}
       </div>
@@ -884,6 +888,11 @@ export default function App() {
       )}
       {showSoccer && myTeam && (
         <SoccerStars team={myTeam} onClose={() => setShowSoccer(false)} />
+      )}
+      {showPenalty && (
+        <Suspense fallback={<div className="pen-overlay" style={{ display: 'grid', placeItems: 'center', color: '#dfe5ea', fontWeight: 600 }}>Warming up the pitch…</div>}>
+          <PenaltyStreak onClose={() => setShowPenalty(false)} />
+        </Suspense>
       )}
       {shareModal}
       {celebrate && <Celebration message={celebrate} onDone={() => setCelebrate(null)} />}

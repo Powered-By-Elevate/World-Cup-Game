@@ -876,3 +876,139 @@
   .ss-goalmoment .flash{ opacity:.3; } .ss-goalmoment .word{ opacity:1; }
   .ss-endcard .ec-panel{ animation:none; }
 }
+
+/* ============================================================
+   PENALTY STREAK — 3D draw-to-shoot game (ported from the Claude
+   Design hand-off penalty/styles.css + Penalty Streak.html).
+   Everything is scoped under .pen-overlay so the full-screen game
+   never leaks styles into the rest of the app. Brand vars (--ink,
+   --paper, --lime, --gold, --live, --cyan, --mut) reuse the app's.
+   ============================================================ */
+.pen-overlay{ position:fixed; inset:0; z-index:80; overflow:hidden; background:#0a0f14;
+  font-family:'Hanken Grotesk',system-ui,sans-serif; -webkit-tap-highlight-color:transparent; }
+.pen-overlay #stage{ position:fixed; inset:0; }
+.pen-overlay #stage canvas{ display:block; width:100%!important; height:100%!important; }
+/* arcade night framing: vignette + faint floodlight wash over the 3D stage */
+.pen-overlay #stage::after{ content:""; position:absolute; inset:0; pointer-events:none; z-index:2;
+  background:
+    radial-gradient(70% 30% at 50% -5%, rgba(255,246,214,.14), transparent 60%),
+    radial-gradient(130% 105% at 50% 42%, transparent 52%, rgba(12,8,26,.62)); }
+
+/* draw layer */
+.pen-overlay #draw{ position:fixed; inset:0; z-index:6; touch-action:none; cursor:crosshair; }
+.pen-overlay #draw.off{ pointer-events:none; }
+
+/* ---- HUD ---- */
+.pen-overlay .pen-hud{ position:fixed; inset:0; z-index:10; pointer-events:none; }
+.pen-overlay .pen-hud > *{ pointer-events:auto; }
+.pen-overlay .pen-top{ position:absolute; top:0; left:0; right:0; z-index:9; display:flex; align-items:center; gap:12px;
+  padding:16px 16px 26px; background:linear-gradient(#0a0f14cc, transparent); }
+.pen-overlay .pen-close{ width:38px; height:38px; flex:0 0 auto; border-radius:11px; border:1.5px solid rgba(255,255,255,.25);
+  background:rgba(10,15,20,.5); color:#fff; display:grid; place-items:center; cursor:pointer; font-size:18px; }
+.pen-overlay .pst-you,.pen-overlay .pst-keeper{ display:flex; align-items:center; gap:9px; min-width:0; }
+.pen-overlay .pst-keeper{ margin-left:auto; text-align:right; }
+.pen-overlay .pst-you .nm,.pen-overlay .pst-keeper .nm{ font-family:'Anton',sans-serif; font-size:16px; color:#fff; line-height:1; white-space:nowrap; }
+.pen-overlay .pst-you .no,.pen-overlay .pst-keeper .no{ font-family:'Archivo',sans-serif; font-weight:800; font-size:9px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--lime); margin-top:3px; white-space:nowrap; }
+.pen-overlay .pst-keeper .no{ color:#FF9DA0; }
+
+.pen-overlay .pst-streak{ position:absolute; left:50%; top:10px; transform:translateX(-50%); text-align:center; }
+.pen-overlay .pst-streak .n{ font-family:'Anton',sans-serif; font-size:44px; line-height:.9; color:var(--lime);
+  text-shadow:0 4px 0 rgba(0,0,0,.55); }
+.pen-overlay .pst-streak .lbl{ font-family:'Archivo',sans-serif; font-weight:800; font-size:8.5px; letter-spacing:.26em;
+  text-transform:uppercase; color:#cfd6dd; margin-top:2px; }
+.pen-overlay .pst-streak .best{ font-family:'Archivo',sans-serif; font-weight:800; font-size:9.5px; color:#9fb0bd; margin-top:3px; }
+
+.pen-overlay .pst-pin{ width:8px; height:8px; border-radius:50%; background:var(--lime); box-shadow:0 0 10px var(--lime);
+  animation:pstpulse 1.6s cubic-bezier(.2,.8,.2,1) infinite; }
+@keyframes pstpulse{ 0%,100%{ opacity:1; transform:scale(1);} 50%{ opacity:.4; transform:scale(.7);} }
+
+/* ---- bottom hint ---- */
+.pen-overlay .pen-bottom{ position:absolute; left:0; right:0; bottom:0; padding:22px 16px 26px;
+  background:linear-gradient(transparent, #0a0f14d9); display:flex; flex-direction:column; align-items:center; gap:12px; }
+.pen-overlay .pen-hint{ font-size:12.5px; color:#dfe5ea; font-weight:600; display:flex; align-items:center; gap:7px; }
+.pen-overlay .pen-hint b{ color:var(--lime); }
+
+/* ---- flash (GOAL / SAVED / WIDE / OFF THE POST) ---- */
+.pen-overlay .pen-flash{ position:absolute; inset:0; display:grid; place-items:center; z-index:12; pointer-events:none; }
+.pen-overlay .pen-flash .word{ font-family:'Anton',sans-serif; text-transform:uppercase; font-size:96px; line-height:.9;
+  text-align:center; transform:scale(.6); opacity:0; animation:flashpop .5s cubic-bezier(.2,1.3,.3,1) forwards; }
+.pen-overlay .pen-flash.goal .word{ color:var(--lime); text-shadow:0 6px 0 #15120c, 0 0 60px rgba(200,242,60,.6); }
+.pen-overlay .pen-flash.save .word{ color:#fff; text-shadow:0 6px 0 #15120c, 0 0 60px rgba(255,45,45,.6); }
+.pen-overlay .pen-flash.miss .word{ color:#fff; text-shadow:0 6px 0 #15120c, 0 0 60px rgba(255,45,45,.6); }
+.pen-overlay .pen-flash.post .word{ color:var(--gold); text-shadow:0 6px 0 #15120c, 0 0 60px rgba(255,176,0,.6); }
+.pen-overlay .pen-flash .sub{ font-family:'Archivo',sans-serif; font-weight:800; letter-spacing:.2em; font-size:13px; color:#fff; text-align:center; margin-top:8px; opacity:.85; }
+@keyframes flashpop{ to{ transform:scale(1); opacity:1; } }
+
+/* confetti */
+.pen-overlay .pen-confetti{ position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:11; }
+.pen-overlay .pen-confetti span{ position:absolute; top:-20px; width:10px; height:14px; will-change:transform; }
+@keyframes penfall{ to{ transform:translateY(115vh) rotate(640deg); } }
+
+/* ---- cards (setup / result) ---- */
+.pen-overlay .pen-card-wrap{ position:absolute; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+  padding:20px; background:radial-gradient(120% 90% at 50% 0%, rgba(10,15,20,.35), rgba(10,15,20,.78)); }
+.pen-overlay .pen-card{ width:100%; max-width:440px; background:var(--paper); border:2px solid var(--ink); border-radius:24px;
+  padding:22px; box-shadow:0 30px 70px -20px #000; max-height:92vh; overflow:auto; }
+.pen-overlay .pen-eyebrow{ font-family:'Archivo',sans-serif; font-weight:800; text-transform:uppercase; letter-spacing:.2em; font-size:10px; color:var(--mut); }
+.pen-overlay .pen-row{ display:flex; align-items:center; gap:10px; }
+.pen-overlay .pen-best{ display:flex; align-items:center; justify-content:center; gap:8px; font-weight:700; font-size:13px; color:var(--ink); }
+.pen-overlay .pen-result-score{ font-family:'Anton',sans-serif; font-size:84px; line-height:.86; text-align:center; color:var(--ink); }
+
+.pen-overlay .pen-flag{ width:74px; height:74px; border-radius:50%; margin:0 auto; background:#ccc; overflow:hidden;
+  box-shadow:0 0 0 3px var(--paper),0 0 0 5px var(--ink),0 8px 16px -6px rgba(0,0,0,.5); position:relative; }
+.pen-overlay .pen-flag.sm{ width:44px; height:44px; box-shadow:0 0 0 2px var(--paper),0 0 0 4px var(--ink); }
+.pen-overlay .pen-flag img{ width:100%; height:100%; object-fit:cover; }
+
+.pen-overlay .pen-btn{ width:100%; height:56px; border:0; border-radius:14px; cursor:pointer; background:var(--ink); color:var(--paper);
+  font-family:'Archivo',sans-serif; font-weight:800; font-size:15px; letter-spacing:.05em; text-transform:uppercase;
+  display:flex; align-items:center; justify-content:center; gap:9px; box-shadow:0 5px 0 #000; transition:transform .1s,box-shadow .1s; }
+.pen-overlay .pen-btn:active{ transform:translateY(4px); box-shadow:0 1px 0 #000; }
+.pen-overlay .pen-btn.lime{ background:var(--lime); color:var(--ink); box-shadow:0 5px 0 #7fa01e; }
+.pen-overlay .pen-btn.ghost{ background:transparent; color:var(--ink); border:1.5px solid var(--ink); box-shadow:none; height:48px; }
+
+/* "how to" diagram in setup */
+.pen-overlay .pst-how{ display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:14px;
+  background:rgba(21,18,12,.05); border:1.5px solid rgba(21,18,12,.12);
+  font-size:12px; color:#3A352B; line-height:1.4; }
+.pen-overlay .pst-how svg{ width:110px; flex:0 0 auto; }
+
+/* beaten-keepers strip on the end card */
+.pen-overlay .pst-beaten{ display:flex; align-items:center; justify-content:center; gap:6px; flex-wrap:wrap; margin-top:14px; }
+.pen-overlay .pst-beaten .pen-flag.sm{ width:32px; height:32px; }
+.pen-overlay .pst-beaten .more{ font-family:'Archivo',sans-serif; font-weight:800; font-size:11px; color:var(--mut); }
+
+/* star-taker picker */
+.pen-overlay .pst-stars{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.pen-overlay .pst-star{ display:flex; flex-direction:column; align-items:center; gap:5px; padding:12px 6px 10px;
+  border-radius:14px; border:1.5px solid rgba(21,18,12,.18); background:rgba(21,18,12,.04); cursor:pointer; color:var(--ink);
+  transition:.15s cubic-bezier(.2,.8,.2,1); }
+.pen-overlay .pst-star:hover{ border-color:rgba(21,18,12,.4); }
+.pen-overlay .pst-star.on{ border-color:#15120C; background:#15120C; color:#F4EEE1; box-shadow:0 8px 20px -10px rgba(21,18,12,.7); }
+.pen-overlay .pst-star .nm{ font-family:'Anton',sans-serif; font-size:16px; letter-spacing:.02em; text-transform:uppercase; }
+.pen-overlay .pst-star .kit{ font-family:'Archivo',sans-serif; font-weight:800; font-size:7.5px; letter-spacing:.12em;
+  text-transform:uppercase; opacity:.55; }
+.pen-overlay .pst-star .pen-flag{ width:30px; height:30px; }
+
+@media (prefers-reduced-motion: reduce){
+  .pen-overlay .pst-pin{ animation:none; }
+  .pen-overlay .pen-flash .word{ animation:none; opacity:1; transform:none; }
+}
+
+/* ============================================================
+   ARCADE hub — the minigames tab landing.
+   ============================================================ */
+.arcade-grid{ display:flex; flex-direction:column; gap:12px; }
+.arcade-tile{ display:flex; align-items:center; gap:14px; text-align:left; width:100%;
+  padding:16px; border-radius:18px; border:1.5px solid var(--ink); background:var(--paper-2); color:var(--ink);
+  cursor:pointer; box-shadow:0 4px 0 var(--ink); transition:transform .12s var(--ease), box-shadow .12s var(--ease); }
+.arcade-tile:active{ transform:translateY(4px); box-shadow:0 0 0 var(--ink); }
+.arcade-tile .at-art{ flex:0 0 auto; width:58px; height:58px; border-radius:15px; display:grid; place-items:center;
+  font-size:30px; background:var(--ink); color:var(--lime); }
+.arcade-tile.soc .at-art{ background:#0E3C7A; color:#fff; }
+.arcade-tile.calls .at-art{ background:var(--lime); color:var(--ink); }
+.arcade-tile .at-meta{ flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
+.arcade-tile .at-name{ font-size:22px; line-height:1; }
+.arcade-tile .at-sub{ font-size:12.5px; color:var(--mut); line-height:1.4; font-weight:500; }
+.arcade-tile .at-go{ flex:0 0 auto; align-self:center; display:inline-flex; align-items:center; gap:4px;
+  font-family:'Archivo',sans-serif; font-weight:800; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink); }
