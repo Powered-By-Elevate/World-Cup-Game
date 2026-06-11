@@ -830,8 +830,14 @@ export default function App() {
     if (!me) return;
     const r = await pushToMember(leagueCodeRef.current, me.id, "Test notification 🔔", "If you see this, push works on this device.", leagueLink(leagueCodeRef.current));
     if (!r) toast("Couldn't reach the push server");
+    else if (r.failures && r.failures.length) {
+      // delivery failed — show the push service's actual rejection so we can fix it
+      const f = r.failures[0];
+      toast(`${r.pushed || 0} sent, ${r.failures.length} failed — ${f.host || 'push service'} said ${f.code}${f.msg ? `: ${f.msg.slice(0, 80)}` : ''}`);
+    }
     else if ((r.pushed || 0) > 0) toast(`Test sent to ${r.pushed} device${r.pushed === 1 ? '' : 's'} ✓`);
     else if (r.reason === 'target_not_linked') toast("Account not linked to push yet — sign in, then turn it on");
+    else if ((r.matched || 0) === 0) toast("No devices subscribed for your account — turn notifications on, on each device");
     else toast("No subscription on this device — turn notifications on first");
   }, [me, toast]);
 

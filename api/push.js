@@ -66,14 +66,23 @@ export default async function handler(req, res) {
   const payload = JSON.stringify({ title, body: text, url: link });
   let pushed = 0;
   const live = [];
+  const failures = [];   // surfaced to the client so "test notification" can say WHY
+  let matched = 0;
   for (const entry of subs) {
     if (entry.uid !== targetUid) { live.push(entry); continue; }
+    matched++;
     const sub = entry.sub || entry;
     try { await webpush.sendNotification(sub, payload); pushed++; live.push(entry); }
-    catch (e) { if (e?.statusCode !== 404 && e?.statusCode !== 410) live.push(entry); }
+    catch (e) {
+      let host = '';
+      try { host = new URL(sub.endpoint).hostname; } catch { /* ignore */ }
+      failures.push({ host, code: e?.statusCode || 0, msg: (e?.body || e?.message || '').toString().slice(0, 160) });
+      console.error('push failed', host, e?.statusCode, e?.body || e?.message);
+      if (e?.statusCode !== 404 && e?.statusCode !== 410) live.push(entry);
+    }
   }
   if (live.length !== subs.length) {
     await sb.from('app_kv').upsert({ key: `${league}:wc:push`, value: live, updated_at: new Date().toISOString() });
   }
-  res.status(200).json({ ok: true, pushed });
+  res.status(200).json({ ok: true, pushed, matched, failures });
 }

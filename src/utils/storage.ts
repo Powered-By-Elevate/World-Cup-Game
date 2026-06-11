@@ -433,7 +433,7 @@ export async function sendAnnouncement(league: string, subject: string, message:
 /** Targeted web push to one league member's devices (Arcade challenges, chat).
  *  Returns the server's result ({ pushed, reason }) so callers can diagnose; the
  *  in-app notification feed is the source of truth regardless. */
-export async function pushToMember(league: string, toMemberId: string, title: string, body: string, link: string): Promise<{ ok?: boolean; pushed?: number; reason?: string } | null> {
+export async function pushToMember(league: string, toMemberId: string, title: string, body: string, link: string): Promise<{ ok?: boolean; pushed?: number; matched?: number; reason?: string; failures?: { host: string; code: number; msg: string }[] } | null> {
   if (!supa) return null;
   try {
     const { data } = await supa.auth.getSession();
