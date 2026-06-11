@@ -43,11 +43,12 @@ interface Body { x: number; y: number; vx: number; vy: number; r: number; m: num
 
 interface Props { team: Team; onClose: () => void; onGameEnd?: (me: number, cpu: number) => void; }
 
-const RIVALS = ['BRA', 'ARG', 'FRA', 'ENG', 'GER', 'ESP', 'NED', 'POR', 'ITA'];
-
-/** A random rival to face — never the player's own nation. Re-rolled per game. */
-const pickRival = (exclude: string) => {
-  const pool = RIVALS.filter(r => r !== exclude);
+/** A random rival to face — any World Cup nation except your own, and never the
+ *  same opponent twice in a row. Re-rolled every game. */
+const pickRival = (exclude: string, avoid?: string) => {
+  const all = Object.keys(NATION);
+  let pool = all.filter(r => r !== exclude && r !== avoid);
+  if (!pool.length) pool = all.filter(r => r !== exclude);
   return pool[Math.floor(Math.random() * pool.length)] || 'GER';
 };
 
@@ -148,38 +149,47 @@ export function SoccerStars({ team, onClose, onGameEnd }: Props) {
     if (t === 'cpu') scheduleAI();
   }, [scheduleAI]);
 
-  // ---- AI: pick the disc best placed to push the ball into the LEFT goal ----
+  // ---- AI: billiard "ghost-ball" aim — strike the spot that sends the ball at
+  //         the LEFT goal. Much sharper than before: real aim, decisive power. ----
   const aiShoot = useCallback(() => {
     const bs = bodies.current;
     const ball = bs.find(b => b.kind === 'ball')!;
     const goal = { x: -26, y: H / 2 };                    // where cpu wants to score (left)
     const dgx = goal.x - ball.x, dgy = goal.y - ball.y;
     const dg = Math.hypot(dgx, dgy) || 1;
-    const gnx = dgx / dg, gny = dgy / dg;                 // ball → goal (leftward)
+    const gnx = dgx / dg, gny = dgy / dg;                 // ball → goal (unit)
 
+    // the "ghost ball": the spot a striker's centre must reach for the ball to
+    // leave straight toward the goal (one ball+disc radius behind the ball).
+    const ghx = ball.x - gnx * (R_P + R_B);
+    const ghy = ball.y - gny * (R_P + R_B);
+
+    // choose the disc whose strike at the ghost spot best shoves the ball goalward
+    // (and that isn't stuck on the wrong side of the ball); avoid using the keeper.
     let best: Body | null = null, bestScore = -Infinity;
     for (const b of bs) {
       if (b.kind !== 'cpu') continue;
-      const dx = ball.x - b.x, dy = ball.y - b.y;
-      const d = Math.hypot(dx, dy) || 1;
-      const align = (dx / d) * gnx + (dy / d) * gny;      // is the disc behind the ball?
-      const s = align - d / 700 - (b.keeper ? 0.6 : 0);   // prefer aligned, near, non-keeper
+      const ax = ghx - b.x, ay = ghy - b.y;
+      const al = Math.hypot(ax, ay) || 1;
+      const quality = (ax / al) * gnx + (ay / al) * gny;  // does that approach send it at goal?
+      const reach = Math.hypot(ball.x - b.x, ball.y - b.y);
+      const s = quality * 1.2 - reach / 600 - (b.keeper ? 1.2 : 0);
       if (s > bestScore) { bestScore = s; best = b; }
     }
     if (!best) { setTurn('me'); return; }
 
-    // aim from the disc through the ball, biased toward the goal, with a little wobble.
-    let ax = ball.x - best.x, ay = ball.y - best.y;
-    const al = Math.hypot(ax, ay) || 1; ax /= al; ay /= al;
-    ax = ax * 0.7 + gnx * 0.3; ay = ay * 0.7 + gny * 0.3;
-    // a bit of aim wobble so the family can win; widens when the CPU is ahead.
+    // aim straight at the ghost spot, with only a small human wobble (a touch more
+    // when the CPU is well ahead, so the family still gets chances).
+    let fx = ghx - best.x, fy = ghy - best.y;
+    const fl = Math.hypot(fx, fy) || 1; fx /= fl; fy /= fl;
     const lead = Math.max(0, scoreRef.current.cpu - scoreRef.current.me);
-    const wob = (((best.x * 7 + best.y * 13 + scoreRef.current.cpu) % 10) / 10 - 0.5) * (0.30 + lead * 0.06);
+    const wob = (Math.random() - 0.5) * (0.10 + lead * 0.05);
     const ca = Math.cos(wob), sa = Math.sin(wob);
-    const fx = ax * ca - ay * sa, fy = ax * sa + ay * ca;
-    const fl = Math.hypot(fx, fy) || 1;
-    const power = MAX_SPEED * (0.70 + ((best.x % 5) / 5) * 0.16);
-    best.vx = (fx / fl) * power; best.vy = (fy / fl) * power;
+    const rx = fx * ca - fy * sa, ry = fx * sa + fy * ca;
+    // decisive strike; scale a touch with distance so close taps don't overhit.
+    const reach = Math.hypot(ball.x - best.x, ball.y - best.y);
+    const power = MAX_SPEED * Math.min(1, 0.82 + reach / 900);
+    best.vx = rx * power; best.vy = ry * power;
 
     lastMover.current = 'cpu';
     setPhase('sim');
@@ -315,7 +325,7 @@ export function SoccerStars({ team, onClose, onGameEnd }: Props) {
   const replay = () => {
     bodies.current = formation();
     scoreRef.current = { me: 0, cpu: 0 }; setScore({ me: 0, cpu: 0 });
-    setCpuId(pickRival(shooterId));          // fresh opponent each rematch
+    setCpuId(prev => pickRival(shooterId, prev));   // fresh opponent each rematch, never a repeat
     setCelebrate(null); setTurn('me');
   };
 

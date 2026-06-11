@@ -220,9 +220,12 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
     }
     state.busy = true; state.ready = false;
 
-    // flick speed -> power (fast = flat & fierce but scattered, slow = placed)
-    const dur = Math.max(1, pe.t - p0.t);
-    const power = speedToPower(len / dur);
+    // flick speed -> power: use the RELEASE velocity (last few samples), not the
+    // whole-stroke average — so a slow aim then a fast flick still fires hard, and
+    // the power matches the live colour readout the player sees while drawing.
+    const rk = Math.max(0, pts.length - 6), rel = pts.slice(rk);
+    const relLen = pathLength(rel), relT = Math.max(1, rel[rel.length - 1].t - rel[0].t);
+    const power = speedToPower(relLen / relT);
 
     // free aim: the ball goes exactly where you drew it — including wide or over
     const g = scene.projectNDC((pe.x / dw) * 2 - 1, -(pe.y / dh) * 2 + 1);
