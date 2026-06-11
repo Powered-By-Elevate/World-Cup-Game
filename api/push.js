@@ -59,30 +59,45 @@ export default async function handler(req, res) {
   if (!callerIn) { res.status(403).json({ error: 'forbidden' }); return; }
   if (!targetUid) { res.status(200).json({ ok: true, pushed: 0, reason: 'target_not_linked' }); return; }
 
-  // send to the target uid's subscriptions only; prune dead endpoints
+  // Collect the target's subscriptions from BOTH stores — the account-scoped
+  // list (user:<uid>:push, works across leagues) and the legacy per-league list
+  // (<league>:wc:push) — deduped by endpoint. The per-league list alone misses
+  // devices that enabled notifications while a different league was open.
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
   const { data: prow } = await sb.from('app_kv').select('value').eq('key', `${league}:wc:push`).maybeSingle();
   const subs = Array.isArray(prow?.value) ? prow.value : [];
+  const { data: urow } = await sb.from('app_kv').select('value').eq('key', `user:${targetUid}:push`).maybeSingle();
+  const userSubs = Array.isArray(urow?.value) ? urow.value : [];
+
+  const targets = new Map();   // endpoint -> subscription
+  for (const entry of subs) if (entry?.uid === targetUid && entry?.sub?.endpoint) targets.set(entry.sub.endpoint, entry.sub);
+  for (const s of userSubs) if (s?.endpoint) targets.set(s.endpoint, s);
+
   const payload = JSON.stringify({ title, body: text, url: link });
   let pushed = 0;
-  const live = [];
   const failures = [];   // surfaced to the client so "test notification" can say WHY
-  let matched = 0;
-  for (const entry of subs) {
-    if (entry.uid !== targetUid) { live.push(entry); continue; }
-    matched++;
-    const sub = entry.sub || entry;
-    try { await webpush.sendNotification(sub, payload); pushed++; live.push(entry); }
+  const dead = new Set();
+  for (const [endpoint, sub] of targets) {
+    try { await webpush.sendNotification(sub, payload); pushed++; }
     catch (e) {
       let host = '';
-      try { host = new URL(sub.endpoint).hostname; } catch { /* ignore */ }
+      try { host = new URL(endpoint).hostname; } catch { /* ignore */ }
       failures.push({ host, code: e?.statusCode || 0, msg: (e?.body || e?.message || '').toString().slice(0, 160) });
       console.error('push failed', host, e?.statusCode, e?.body || e?.message);
-      if (e?.statusCode !== 404 && e?.statusCode !== 410) live.push(entry);
+      if (e?.statusCode === 404 || e?.statusCode === 410) dead.add(endpoint);
     }
   }
-  if (live.length !== subs.length) {
-    await sb.from('app_kv').upsert({ key: `${league}:wc:push`, value: live, updated_at: new Date().toISOString() });
+
+  // prune dead endpoints from both stores
+  if (dead.size) {
+    const liveLeague = subs.filter(e => !dead.has(e?.sub?.endpoint));
+    if (liveLeague.length !== subs.length) {
+      await sb.from('app_kv').upsert({ key: `${league}:wc:push`, value: liveLeague, updated_at: new Date().toISOString() });
+    }
+    const liveUser = userSubs.filter(s => !dead.has(s?.endpoint));
+    if (liveUser.length !== userSubs.length) {
+      await sb.from('app_kv').upsert({ key: `user:${targetUid}:push`, value: liveUser, updated_at: new Date().toISOString() });
+    }
   }
-  res.status(200).json({ ok: true, pushed, matched, failures });
+  res.status(200).json({ ok: true, pushed, matched: targets.size, failures });
 }

@@ -321,6 +321,14 @@ export default function App() {
     } catch { /* ignore */ }
   }, [loaded, me]);
 
+  // self-heal: when permission is already granted, silently re-sync this
+  // device's subscription on every open — covers re-installed Home-Screen apps
+  // and accounts that enabled notifications while a different league was open.
+  useEffect(() => {
+    if (!loaded || !user) return;
+    if (pushState() === 'granted') void enablePush(user.id);
+  }, [loaded, user]);
+
   // Detect kickoffs / final results for the league's drafted nations and fan out
   // notifications (in-app feed + targeted push to whoever owns those nations).
   // Deduped via the shared wc:matchwatch set so it fires once per league however

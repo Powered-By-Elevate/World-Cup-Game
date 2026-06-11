@@ -396,6 +396,16 @@ export async function enablePush(uid: string): Promise<boolean> {
     const next = list.filter(e => e.sub?.endpoint !== json.endpoint);
     next.push({ uid, sub: json });
     await sset('wc:push', next, true);
+    // ALSO store account-scoped (like user:<uid>:leagues) so pushes reach this
+    // device from ANY league — the per-league list above misses you if a message
+    // is sent in a league other than the one you enabled notifications in.
+    try {
+      const r = await sharedStore.get(`user:${uid}:push`);
+      const mine: PushSubscriptionJSON[] = r ? JSON.parse(r.value) : [];
+      const dedup = (Array.isArray(mine) ? mine : []).filter(s => s?.endpoint !== json.endpoint);
+      dedup.push(json);
+      await sharedStore.set(`user:${uid}:push`, JSON.stringify(dedup));
+    } catch { /* legacy league list still works for this league */ }
     return true;
   } catch { return false; }
 }
