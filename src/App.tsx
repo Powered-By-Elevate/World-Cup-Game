@@ -36,6 +36,7 @@ import { recordScore, createChallenge, respondChallenge, winnerOf, GAME_META } f
 import type { ArcadeGame, LaunchMode } from './utils/arcade';
 import { loadNotifs, pushNotifs, unreadCount, mine, markAllRead } from './utils/notify';
 import type { Notif } from './utils/notify';
+import { detectMatchEvents } from './utils/matchNotify';
 // Penalty Streak pulls in Three.js + the GLB/FBX loaders — lazy-load it so that
 // weight only lands when someone actually opens the game.
 const PenaltyStreak = lazy(() => import('./views/PenaltyStreak').then(m => ({ default: m.PenaltyStreak })));
@@ -303,6 +304,36 @@ export default function App() {
     const iv = setInterval(tick, 5000);
     return () => { alive = false; clearInterval(iv); };
   }, [loaded, me, leagueCode]);
+
+  // Detect kickoffs / final results for the league's drafted nations and fan out
+  // notifications (in-app feed + targeted push to whoever owns those nations).
+  // Deduped via the shared wc:matchwatch set so it fires once per league however
+  // many clients are open; the first run seeds silently (no backfill on launch).
+  useEffect(() => {
+    if (!loaded || !me || !stateRef.current.draftDone) return;
+    if (!demo && !live) return;   // wait for real feed data before seeding, so the first
+                                  // real poll (not an empty pre-fetch render) is the seed
+    let alive = true;
+    (async () => {
+      const sc = demo ? ENGINE_SCORES : (live?.scores ?? {});
+      const k = demo ? ENGINE_KO : (live?.ko ?? []);
+      const teams = stateRef.current.teams || [];
+      const scoring = stateRef.current.scoring || DEFAULT_SCORING;
+      const watch = await sget<Record<string, number>>('wc:matchwatch', true);
+      const { events, watch: next } = detectMatchEvents(teams, sc, k, scoring, watch);
+      if (!alive) return;
+      if (JSON.stringify(next) !== JSON.stringify(watch)) await sset('wc:matchwatch', next, true);  // claim before sending
+      if (!events.length) return;
+      await pushNotifs(events.flatMap(ev => ev.recipients.map(r => ({
+        to: r.memberId, kind: ev.kind === 'start' ? 'match-start' as const : 'match-result' as const,
+        ts: Date.now(), title: ev.title, body: r.body,
+      }))));
+      const link = leagueLink(leagueCodeRef.current);
+      for (const ev of events) for (const r of ev.recipients) void pushToMember(leagueCodeRef.current, r.memberId, ev.title, r.body, link);
+    })();
+    return () => { alive = false; };
+    // reads teams/scoring/draftDone via stateRef so it only re-runs on new feed data
+  }, [live, demo, loaded, me]);
 
   const setMeBoth = useCallback(async (m: MeState | null) => {
     setMe(m);

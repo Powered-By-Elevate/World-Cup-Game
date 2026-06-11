@@ -31,8 +31,20 @@ In-app notifications only fire while the app is open. For real push:
 - Add a **targeted** mode to `/api/notify` (or a new `/api/push-user`) that takes `{ toUserId, title, body, url }`, looks up that user's stored push subscription(s), and sends. Member→account mapping exists (`member.uid`).
 - Call it alongside each `pushNotifs(...)` so challenges / chat / match events also reach phones with the app closed. Keep in-app feed as the source of truth + history.
 
-### 4. Match-start & match-result notifications
-"Your team's game is starting" and "final result + points gained" need a trigger that runs **without the user present**:
+### 4. Match-start & match-result notifications — DONE (client-driven), cron still optional
+**Shipped 2026-06-11** as a client-driven detector (`src/utils/matchNotify.ts`, wired in `App.tsx`):
+the app's existing 60s live-feed poll reconciles fixtures against a shared `wc:matchwatch`
+set, and on a kickoff (→ in-app + push "⚽ Kickoff") or full-time (→ "Full time — score · your
+NATION: +N pts", points computed by diffing `teamStats` with/without that match) it fans out to
+every member who drafted either nation. Deduped via `wc:matchwatch` (fires once per league across
+all open clients); first run seeds silently (no backfill). Kickoff pings are gated to ±20 min of
+the scheduled start so a late open doesn't ping stale ones.
+
+**Remaining gap (optional):** this only fires while *someone* in the league has the app open
+(usually true during live matches). For 100% coverage when *nobody* is online, add the Vercel
+cron below — it would reuse the same detection idea but needs the scoring/fixtures ported to JS:
+
+The original server-cron plan, if you want full offline coverage:
 - A Vercel **cron** (e.g. every 1–2 min) that pulls the football-data feed (same source as `src/data/liveResults.ts`), diffs against last-seen fixture states, and for each league maps fixtures → the members whose drafted nations are involved (`team.picks`), then:
   - on kickoff transition → `match-start` notif/push,
   - on full-time transition → `match-result` notif/push with points gained, computed via `utils/scoring` (`computeMovers`/`teamStats`) against the league's scoring config.
