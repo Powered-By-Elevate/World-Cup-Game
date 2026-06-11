@@ -36,6 +36,9 @@ export default async function handler(req, res) {
   const title = (body.title || '').toString().slice(0, 120);
   const text = (body.body || '').toString().slice(0, 300);
   const link = (body.url || '/').toString();
+  // optional delivery delay (seconds, capped) — iOS won't display a push while
+  // the app is foregrounded, so the in-app test waits for you to background it
+  const delay = Math.min(Math.max(Number(body.delay) || 0, 0), 6);
   if (!league || !toMemberId || !title) { res.status(400).json({ error: 'bad_request' }); return; }
 
   const sb = createClient(url, anonKey, NOAUTH);
@@ -72,6 +75,8 @@ export default async function handler(req, res) {
   const targets = new Map();   // endpoint -> subscription
   for (const entry of subs) if (entry?.uid === targetUid && entry?.sub?.endpoint) targets.set(entry.sub.endpoint, entry.sub);
   for (const s of userSubs) if (s?.endpoint) targets.set(s.endpoint, s);
+
+  if (delay) await new Promise(r => setTimeout(r, delay * 1000));
 
   const payload = JSON.stringify({ title, body: text, url: link });
   let pushed = 0;

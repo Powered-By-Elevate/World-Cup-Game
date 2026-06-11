@@ -399,9 +399,11 @@ export async function enablePush(uid: string): Promise<boolean> {
     // ALSO store account-scoped (like user:<uid>:leagues) so pushes reach this
     // device from ANY league — the per-league list above misses you if a message
     // is sent in a league other than the one you enabled notifications in.
+    // NB: sharedStore.get THROWS when the key doesn't exist yet — read it in
+    // its own try/catch or the first-ever write gets silently swallowed.
+    let mine: PushSubscriptionJSON[] = [];
+    try { const r = await sharedStore.get(`user:${uid}:push`); mine = r ? JSON.parse(r.value) : []; } catch { /* first device — no list yet */ }
     try {
-      const r = await sharedStore.get(`user:${uid}:push`);
-      const mine: PushSubscriptionJSON[] = r ? JSON.parse(r.value) : [];
       const dedup = (Array.isArray(mine) ? mine : []).filter(s => s?.endpoint !== json.endpoint);
       dedup.push(json);
       await sharedStore.set(`user:${uid}:push`, JSON.stringify(dedup));
@@ -443,7 +445,7 @@ export async function sendAnnouncement(league: string, subject: string, message:
 /** Targeted web push to one league member's devices (Arcade challenges, chat).
  *  Returns the server's result ({ pushed, reason }) so callers can diagnose; the
  *  in-app notification feed is the source of truth regardless. */
-export async function pushToMember(league: string, toMemberId: string, title: string, body: string, link: string): Promise<{ ok?: boolean; pushed?: number; matched?: number; reason?: string; failures?: { host: string; code: number; msg: string }[] } | null> {
+export async function pushToMember(league: string, toMemberId: string, title: string, body: string, link: string, delay?: number): Promise<{ ok?: boolean; pushed?: number; matched?: number; reason?: string; failures?: { host: string; code: number; msg: string }[] } | null> {
   if (!supa) return null;
   try {
     const { data } = await supa.auth.getSession();
@@ -452,7 +454,7 @@ export async function pushToMember(league: string, toMemberId: string, title: st
     const r = await fetch('/api/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ league, toMemberId, title, body, url: link }),
+      body: JSON.stringify({ league, toMemberId, title, body, url: link, delay }),
     });
     if (!r.ok) return null;
     return await r.json();

@@ -836,7 +836,10 @@ export default function App() {
   // reports back whether the server found a subscription for you.
   const sendTestNotif = useCallback(async () => {
     if (!me) return;
-    const r = await pushToMember(leagueCodeRef.current, me.id, "Test notification 🔔", "If you see this, push works on this device.", leagueLink(leagueCodeRef.current));
+    // iOS suppresses push banners while the app is on screen — the server holds
+    // the test for 5s so you have time to swipe to your Home Screen and see it.
+    toast("Test coming in 5 seconds — go to your Home Screen now 📲");
+    const r = await pushToMember(leagueCodeRef.current, me.id, "Test notification 🔔", "If you see this, push works on this device.", leagueLink(leagueCodeRef.current), 5);
     if (!r) toast("Couldn't reach the push server");
     else if (r.failures && r.failures.length) {
       // delivery failed — show the push service's actual rejection so we can fix it
