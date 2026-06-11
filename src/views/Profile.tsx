@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { MeState, Team } from '../data/types';
 import { Icon } from '../components/Icon';
 import { Avatar } from '../components/shared';
-import { pushState } from '../utils/storage';
+import { pushState, isIOS, isStandalone } from '../utils/storage';
 import { fx } from '../utils/fx';
 
 interface Props {
@@ -19,9 +19,10 @@ interface Props {
   userEmail?: string | null;
   onSignOut?: () => void;
   onEnablePush?: () => void;
+  onTestPush?: () => void;
 }
 
-export function Profile({ me, myTeam, isCommish, commishName, onClose, onRenameMe, onRenameTeam, onTeamInvite, onLeave, onClaim, userEmail, onSignOut, onEnablePush }: Props) {
+export function Profile({ me, myTeam, isCommish, commishName, onClose, onRenameMe, onRenameTeam, onTeamInvite, onLeave, onClaim, userEmail, onSignOut, onEnablePush, onTestPush }: Props) {
   const [playerName, setPlayerName] = useState(me?.name || '');
   const [teamName, setTeamName] = useState(myTeam?.name || '');
   const [push, setPush] = useState(pushState());
@@ -86,16 +87,28 @@ export function Profile({ me, myTeam, isCommish, commishName, onClose, onRenameM
             </>
           )}
 
-          {/* notifications (web push, per device) */}
-          {userEmail && onEnablePush && push !== 'unsupported' && (
+          {/* notifications (web push, per device) — in an iOS Safari tab push is
+              'unsupported' until the app is installed, so teach that instead of hiding */}
+          {userEmail && onEnablePush && (push !== 'unsupported' || (isIOS() && !isStandalone())) && (
             <>
               <div className="eyebrow" style={{ marginBottom: 4 }}>Notifications</div>
               <div className="card flat pad" style={{ marginBottom: 14 }}>
-                {push === 'granted' ? (
-                  <div className="row" style={{ gap: 8 }}>
-                    <Icon name="check" size={16} />
-                    <div className="muted" style={{ fontSize: 13 }}>On for this device — challenges, messages, the draft and your teams' match results land here.</div>
+                {push === 'unsupported' ? (
+                  <div className="muted" style={{ fontSize: 12.5 }}>
+                    To get notifications on this iPhone, first add the app to your Home Screen: tap <b>Share</b> → <b>Add to Home Screen</b>, then open it from there and turn notifications on here.
                   </div>
+                ) : push === 'granted' ? (
+                  <>
+                    <div className="row" style={{ gap: 8 }}>
+                      <Icon name="check" size={16} />
+                      <div className="muted" style={{ fontSize: 13 }}>On for this device — challenges, messages, the draft and your teams' match results land here.</div>
+                    </div>
+                    {onTestPush && (
+                      <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={onTestPush}>
+                        <Icon name="bell" size={16} /> Send test notification
+                      </button>
+                    )}
+                  </>
                 ) : push === 'denied' ? (
                   <div className="muted" style={{ fontSize: 12.5 }}>Notifications are blocked for this site. Re-enable them in your browser/phone settings to get pushes (you'll still get draft emails).</div>
                 ) : (

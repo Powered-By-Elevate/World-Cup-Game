@@ -5,8 +5,9 @@ import { parseDate, fmtTime, fmtDayLabel, dayKeyOf } from '../utils/helpers';
 import { Flag } from '../components/Flag';
 import { Icon } from '../components/Icon';
 import { Avatar, Countdown } from '../components/shared';
-import { openCall, callerStats } from '../utils/calls';
+import { todaySlate, nextSlate, isCallOpen, callVerdict, callerStats } from '../utils/calls';
 import type { CallsMap, NameInfo } from '../utils/calls';
+import type { Match } from '../data/fixtures';
 
 interface Common {
   calls: CallsMap;
@@ -23,74 +24,94 @@ function useNow(ms = 20000) {
   return now;
 }
 
-const kickoff = (d: string) => `${fmtDayLabel(dayKeyOf(d))} · ${fmtTime(d).replace(' ET', '')}`;
+/* ---------- one compact row per fixture in the day's slate ---------- */
+function CallRow({ m, now, pick, scores, onCall }: {
+  m: Match; now: number; pick?: string;
+  scores: Record<string, ScoreEntry>; onCall: (matchId: string, nationId: string) => void;
+}) {
+  const open = isCallOpen(m, now);
+  const sc = scores[m.i];
+  const verdict = pick ? callVerdict(m.i, pick, scores) : null;
 
-/* ---------- the one-tap daily call (used on Home + atop the Callers tab) ---------- */
+  const side = (nid: string, right: boolean) => {
+    const cls = 'cod-side' + (right ? ' right' : '')
+      + (pick === nid ? ' picked' : pick || !open ? ' dim' : ' open');
+    return (
+      <button className={cls} disabled={!open || !!pick} onClick={() => onCall(m.i, nid)}>
+        <Flag id={nid} size={30} ring={pick === nid ? 'pot' : 'ink'} />
+        <span className="cn">{NATION[nid].name}</span>
+      </button>
+    );
+  };
+
+  const meta = open
+    ? (pick
+      ? <>🔒<br />{fmtTime(m.d).replace(' ET', '')}</>
+      : <>{fmtTime(m.d).replace(' ET', '')}</>)
+    : verdict === 'correct' ? <span className="ok">✓ Right</span>
+    : verdict === 'wrong' ? <span className="bad">✗ Wrong</span>
+    : verdict === 'push' ? <>Push</>
+    : sc?.st === 'ft' ? <>FT {sc.h}–{sc.a}</>
+    : sc?.st === 'live' ? <span className="bad">● Live</span>
+    : pick ? <>🔒 In play</>
+    : <>Missed</>;
+
+  return (
+    <div className="cod-row">
+      {side(m.h, false)}
+      <span className="call-vs" style={{ fontSize: 12 }}>VS</span>
+      {side(m.a, true)}
+      <div className="cod-meta">{meta}</div>
+    </div>
+  );
+}
+
+/* ---------- the day's calls (used on Home + atop the Callers tab) ---------- */
 export function CallCard({ calls, scores, meId, names, onCall, onSeeBoard }: Common & { onSeeBoard?: () => void }) {
   const now = useNow();
-  const open = openCall(now);
+  const slate = todaySlate(now);
+  const upcoming = nextSlate(now);
   const stats = useMemo(() => callerStats(calls, scores, names), [calls, scores, names]);
   const mine = stats.find(s => s.memberId === meId);
   const myRank = stats.findIndex(s => s.memberId === meId) + 1;
   const leader = stats[0];
-  const myPick = open ? calls[meId]?.[open.i] : undefined;
+  const called = slate.filter(m => calls[meId]?.[m.i]).length;
 
   return (
     <div className="card pad" style={{ background: 'var(--ink)', color: 'var(--paper)', border: '2px solid var(--ink)' }}>
       <div className="between" style={{ marginBottom: 14 }}>
-        <span className="eyebrow" style={{ color: 'var(--lime)' }}>⚡ Call of the Day</span>
-        {mine && mine.streak > 1 && (
+        <span className="eyebrow" style={{ color: 'var(--lime)' }}>⚡ Calls of the Day</span>
+        {mine && mine.streak > 1 ? (
           <span className="streak-chip"><Icon name="flame" size={11} />{mine.streak} streak</span>
-        )}
+        ) : slate.length > 0 ? (
+          <span className="eyebrow" style={{ color: '#9C988C' }}>{called}/{slate.length} called</span>
+        ) : null}
       </div>
 
-      {open ? (myPick ? (
-        /* --- locked: your call is in --- */
+      {slate.length > 0 ? (
+        /* --- today's slate: call every game --- */
         <>
-          <div className="row" style={{ gap: 10 }}>
-            {[open.h, open.a].map(nid => (
-              <div key={nid} className={'call-opt ' + (nid === myPick ? 'picked' : 'dimmed')}>
-                <Flag id={nid} size={44} ring={nid === myPick ? 'pot' : 'ink'} />
-                <span className="cn">{NATION[nid].name}</span>
-                {nid === myPick && (
-                  <span className="badge" style={{ background: 'var(--ink)', color: 'var(--lime)', height: 18 }}>
-                    <Icon name="check" size={11} /> Your call
-                  </span>
-                )}
-              </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {slate.map(m => (
+              <CallRow key={m.i} m={m} now={now} pick={calls[meId]?.[m.i]} scores={scores} onCall={onCall} />
             ))}
           </div>
-          <div className="between" style={{ marginTop: 14, borderTop: '1px solid rgba(255,255,255,.12)', paddingTop: 12 }}>
-            <div>
-              <div className="eyebrow" style={{ color: '#9C988C' }}>🔒 Locked · Group {open.g}</div>
-              <div style={{ fontWeight: 700, fontSize: 13, marginTop: 5 }}>{kickoff(open.d)}</div>
-            </div>
-            <Countdown target={parseDate(open.d).getTime()} compact />
-          </div>
+          {called < slate.length && slate.some(m => isCallOpen(m, now)) && (
+            <p style={{ fontSize: 12, marginTop: 12, marginBottom: 0, color: '#9C988C', textAlign: 'center' }}>
+              Tap who wins in each game — picks lock at kickoff.
+            </p>
+          )}
         </>
-      ) : (
-        /* --- open: make the call --- */
-        <>
-          <div className="between" style={{ marginBottom: 12 }}>
-            <span style={{ fontFamily: 'Anton, sans-serif', textTransform: 'uppercase', fontSize: 20 }}>Who wins?</span>
-            <span style={{ fontSize: 11.5, color: '#9C988C' }}>{kickoff(open.d)}</span>
-          </div>
-          <div className="row" style={{ gap: 10 }}>
-            <button className="call-opt" onClick={() => onCall(open.i, open.h)}>
-              <Flag id={open.h} size={48} ring="pot" />
-              <span className="cn">{NATION[open.h].name}</span>
-            </button>
-            <span className="call-vs">VS</span>
-            <button className="call-opt" onClick={() => onCall(open.i, open.a)}>
-              <Flag id={open.a} size={48} ring="pot" />
-              <span className="cn">{NATION[open.a].name}</span>
-            </button>
-          </div>
-          <p style={{ fontSize: 12, marginTop: 12, marginBottom: 0, color: '#9C988C', textAlign: 'center' }}>
-            One tap — no soccer knowledge required. Pick a side and lock it in.
+      ) : upcoming.length > 0 ? (
+        /* --- rest day: point at the next slate --- */
+        <div style={{ textAlign: 'center', padding: '6px 0' }}>
+          <div style={{ fontFamily: 'Anton, sans-serif', textTransform: 'uppercase', fontSize: 22 }}>No games today</div>
+          <p style={{ fontSize: 13, marginTop: 6, marginBottom: 10, color: '#9C988C' }}>
+            {upcoming.length} {upcoming.length === 1 ? 'game' : 'games'} to call {fmtDayLabel(dayKeyOf(upcoming[0].d))}.
           </p>
-        </>
-      )) : (
+          <Countdown target={parseDate(upcoming[0].d).getTime()} compact />
+        </div>
+      ) : (
         /* --- group stage over --- */
         <div style={{ textAlign: 'center', padding: '6px 0' }}>
           <div style={{ fontFamily: 'Anton, sans-serif', textTransform: 'uppercase', fontSize: 22 }}>That's a wrap</div>
@@ -177,8 +198,8 @@ export function CallersBoard({ calls, scores, meId, names, onCall }: Common) {
       )}
 
       <p className="muted" style={{ fontSize: 12, textAlign: 'center', marginTop: 16, lineHeight: 1.5 }}>
-        Each day, one match. Tap who you think wins before kickoff — it locks in and scores when the
-        match ends. A draw is a push: no points, no harm.
+        Every game, every day. Tap who you think wins before kickoff — each pick locks in and scores
+        when that match ends. A draw is a push: no points, no harm.
       </p>
     </div>
   );

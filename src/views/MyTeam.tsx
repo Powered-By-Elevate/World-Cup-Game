@@ -1,6 +1,7 @@
 import { NATION, POT_KEYS } from '../data/nations';
 import { GROUP_MATCHES_OF } from '../data/fixtures';
 import type { Match, KOMatch } from '../data/fixtures';
+import type { LiveNowMatch } from '../data/liveResults';
 import type { AppState, ScoreEntry, Team } from '../data/types';
 import type { StandingEntry } from '../utils/scoring';
 import { matchStatus } from '../utils/scoring';
@@ -27,13 +28,14 @@ interface Props {
   meId: string;
   names: Record<string, NameInfo>;
   onCall: (matchId: string, nationId: string) => void;
+  liveNow?: LiveNowMatch[];
 }
 
 type MatchRow = Match & { nid: string; ko?: false };
 type KORow = KOMatch & { nid: string; ko: true };
 type Row = MatchRow | KORow;
 
-export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime, calls, meId, names, onCall }: Props) {
+export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime, calls, meId, names, onCall, liveNow }: Props) {
   const drafted = state.draftDone && !!myTeam.picks;
 
   // Before the draft runs, the home screen is a hype poster, not an empty shell.
@@ -70,6 +72,25 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
 
   return (
     <div className="content">
+      {/* playing right now — blinking LIVE banner */}
+      {liveNow && liveNow.length > 0 && (
+        <button className="live-banner" onClick={() => setTab('matches')}>
+          <span className="lb-pill"><span className="lb-dot" />Live</span>
+          <span className="lb-games">
+            {liveNow.map((g, i) => (
+              <span key={i} className="lb-game">
+                <Flag id={g.h} size={20} ring="ink" shine={false} />
+                <b>{NATION[g.h]?.name || g.h}</b>
+                <span className="lb-vs">v</span>
+                <b>{NATION[g.a]?.name || g.a}</b>
+                <Flag id={g.a} size={20} ring="ink" shine={false} />
+              </span>
+            ))}
+          </span>
+          <span className="lb-now">Playing now</span>
+        </button>
+      )}
+
       {/* hero */}
       <div className="card lux-sheen" style={{ overflow: 'hidden', border: '2px solid var(--ink)' }}>
         <div className="grad-live" style={{ background: grad, padding: '2px' }}>

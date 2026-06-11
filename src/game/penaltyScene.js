@@ -149,7 +149,10 @@ const MIXAMO_KEYS=['LeftForeArm','RightForeArm','LeftShoulder','RightShoulder','
 const VALVE_ALIASES={'Pelvis':'Hips','R_UpperArm':'RightArm','L_UpperArm':'LeftArm','R_Forearm':'RightForeArm','L_Forearm':'LeftForeArm',
   'R_Hand':'RightHand','L_Hand':'LeftHand','R_Clavicle':'RightShoulder','L_Clavicle':'LeftShoulder',
   'R_Thigh':'RightUpLeg','L_Thigh':'LeftUpLeg','R_Calf':'RightLeg','L_Calf':'LeftLeg',
-  'R_Foot':'RightFoot','L_Foot':'LeftFoot','R_Toe0':'RightToeBase','L_Toe0':'LeftToeBase'};
+  'R_Foot':'RightFoot','L_Foot':'LeftFoot','R_Toe0':'RightToeBase','L_Toe0':'LeftToeBase',
+  /* Character Creator (CC_Base_*) dialect */
+  'R_Upperarm':'RightArm','L_Upperarm':'LeftArm','R_ToeBase':'RightToeBase','L_ToeBase':'LeftToeBase',
+  'Waist':'Spine','Spine01':'Spine1','Spine02':'Spine2','NeckTwist01':'Neck'};
 function canonOf(name){
   const n=name.replace(/^mixamorig:?/i,'').replace(/_\d+$/,'');
   if(MIXAMO_KEYS.includes(n)) return n;

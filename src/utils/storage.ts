@@ -332,6 +332,20 @@ export async function touchPresence(uid: string): Promise<void> {
 
 export type PushState = 'unsupported' | 'default' | 'granted' | 'denied';
 
+/** iPhone/iPad detection (iPadOS reports as MacIntel with touch). */
+export function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+/** Whether we're running as an installed Home-Screen app (PWA). */
+export function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia?.('(display-mode: standalone)').matches ||
+    (navigator as unknown as { standalone?: boolean }).standalone === true;
+}
+
 /** Whether this device can do web push, and its current permission. iOS only
  *  supports push for apps added to the Home Screen — unsupported in a tab. */
 export function pushState(): PushState {
@@ -417,19 +431,22 @@ export async function sendAnnouncement(league: string, subject: string, message:
 }
 
 /** Targeted web push to one league member's devices (Arcade challenges, chat).
- *  Best-effort — the in-app notification feed is the source of truth either way. */
-export async function pushToMember(league: string, toMemberId: string, title: string, body: string, link: string): Promise<void> {
-  if (!supa) return;
+ *  Returns the server's result ({ pushed, reason }) so callers can diagnose; the
+ *  in-app notification feed is the source of truth regardless. */
+export async function pushToMember(league: string, toMemberId: string, title: string, body: string, link: string): Promise<{ ok?: boolean; pushed?: number; reason?: string } | null> {
+  if (!supa) return null;
   try {
     const { data } = await supa.auth.getSession();
     const token = data.session?.access_token;
-    if (!token) return;
-    await fetch('/api/push', {
+    if (!token) return null;
+    const r = await fetch('/api/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ league, toMemberId, title, body, url: link }),
     });
-  } catch { /* ignore — in-app feed still delivered it */ }
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
 }
 
 /* ---- per-account league registry (follows you across devices) ----

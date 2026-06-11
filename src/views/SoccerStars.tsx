@@ -132,6 +132,15 @@ export function SoccerStars({ team, onClose, onGameEnd }: Props) {
   const [score, setScore] = useState({ me: 0, cpu: 0 });
   const [celebrate, setCelebrate] = useState<Kind | null>(null);   // 'me' | 'cpu' goal flash
   const [howTo, setHowTo] = useState(true);                        // first-open instructions
+  // landscape-only on touch devices: portrait shows a "rotate your phone" gate
+  const [portrait, setPortrait] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(orientation: portrait) and (pointer: coarse)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: portrait) and (pointer: coarse)');
+    const fn = (e: MediaQueryListEvent) => setPortrait(e.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
 
   // decorative one-time visuals
   const [bokeh] = useState(buildBokeh);
@@ -440,8 +449,26 @@ export function SoccerStars({ team, onClose, onGameEnd }: Props) {
         </div>
       )}
 
+      {/* ===== portrait gate: rotate to landscape to play ===== */}
+      {portrait && (
+        <div className="ss-rotate">
+          <div>
+            <svg className="ph" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+              {/* phone */}
+              <rect x="22" y="10" width="20" height="38" rx="4" stroke="currentColor" strokeWidth="3" />
+              <line x1="28" y1="43" x2="36" y2="43" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+              {/* turn arrow */}
+              <path d="M50 24 A 22 22 0 0 1 50 44" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+              <path d="M46 40 L50 46 L55 41" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <div className="display" style={{ fontSize: 30, color: '#F4EEE1' }}>Rotate your phone</div>
+            <div className="eyebrow" style={{ fontSize: 9.5, color: 'rgba(244,238,225,.6)', marginTop: 10 }}>Soccer Stars plays in landscape</div>
+          </div>
+        </div>
+      )}
+
       {/* ===== first-open how-to (the pull-back mechanic isn't obvious) ===== */}
-      {howTo && phase !== 'over' && (
+      {howTo && phase !== 'over' && !portrait && (
         <div className="ss-howto" style={{ position: 'absolute', inset: 0, zIndex: 90, display: 'grid', placeItems: 'center', padding: 18, background: 'radial-gradient(120% 90% at 50% 0%, rgba(10,15,20,.5), rgba(10,15,20,.85))' }}>
           <div style={{ width: '100%', maxWidth: 360, background: '#F4EEE1', border: '2px solid #15120C', borderRadius: 22, padding: 22, textAlign: 'center', boxShadow: '0 30px 70px -20px #000' }}>
             <div className="eyebrow" style={{ color: '#9C988C', letterSpacing: '.2em' }}>How to play</div>

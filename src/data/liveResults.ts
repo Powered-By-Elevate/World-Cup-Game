@@ -1,20 +1,38 @@
 /* ============================================================
-   LIVE RESULTS — maps the /api/results feed (football-data.org) onto
+   LIVE RESULTS — maps the /api/results feed (Zafronix WC API) onto
    our fixtures + knockout bracket. No manual entry; results flow in
    automatically. Returns null on any problem so callers fall back to the
    deterministic engine.
+
+   Free-tier feed: every fixture + kickoff time, `IN_PLAY` while a match
+   is being played (no in-play score), final score once it finishes.
    ============================================================ */
 import { MATCHES } from './fixtures';
 import type { KOMatch } from './fixtures';
-import { NATION } from './nations';
+import { NATION, NATIONS } from './nations';
 import type { ScoreEntry } from './types';
 
-// feed tla → our nation id (almost all identical; only exceptions here)
-const ALIAS: Record<string, string> = { URY: 'URU' };
-function toId(tla: string | null | undefined): string | null {
-  if (!tla) return null;
-  const id = ALIAS[tla] || tla;
-  return NATION[id] ? id : null;
+/* feed team NAME → our nation id. Exact NATION names match automatically;
+   ALIAS covers every spelling the feed uses that differs from ours. */
+const NAME_TO_ID: Record<string, string> = Object.fromEntries(NATIONS.map(n => [n.name, n.id]));
+const ALIAS: Record<string, string> = {
+  'Korea Republic': 'KOR',
+  'IR Iran': 'IRN',
+  "Côte d'Ivoire": 'CIV', "Cote d'Ivoire": 'CIV',
+  'Türkiye': 'TUR', 'Turkey': 'TUR',
+  'Bosnia and Herzegovina': 'BIH',
+  'Congo DR': 'COD', 'DR Congo': 'COD', 'Congo': 'COD',
+  'Cabo Verde': 'CPV',
+  'Curaçao': 'CUW',
+  'United States': 'USA',
+  'Czech Republic': 'CZE',
+  // legacy tla aliases (harmless if the feed ever sends codes again)
+  URY: 'URU',
+};
+function toId(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const id = NAME_TO_ID[name] || ALIAS[name] || (NATION[name] ? name : null);
+  return id && NATION[id] ? id : null;
 }
 
 const STAGE_ROUND: Record<string, string> = {
@@ -32,11 +50,14 @@ function statusOf(s: string): 'ft' | 'live' | null {
   return null;
 }
 
-export interface LiveData { scores: Record<string, ScoreEntry>; ko: KOMatch[]; }
+/** A match being played right now (free tier: teams + kickoff, no in-play score). */
+export interface LiveNowMatch { mi: string | null; round: string | null; h: string; a: string; date: string; }
+
+export interface LiveData { scores: Record<string, ScoreEntry>; ko: KOMatch[]; liveNow: LiveNowMatch[]; }
 
 interface FeedMatch {
-  id: number; stage: string; status: string;
-  home: { tla: string | null }; away: { tla: string | null };
+  id: number | string; stage: string; status: string;
+  home: { tla: string | null; name?: string | null }; away: { tla: string | null; name?: string | null };
   hs: number | null; as: number | null;
   winner: string | null; pens: { home: number; away: number } | null;
   date: string | null;
@@ -53,16 +74,18 @@ export async function fetchLiveResults(): Promise<LiveData | null> {
 
   const scores: Record<string, ScoreEntry> = {};
   const ko: KOMatch[] = [];
+  const liveNow: LiveNowMatch[] = [];
 
   for (const m of json.matches) {
-    const h = toId(m.home?.tla);
-    const a = toId(m.away?.tla);
+    const h = toId(m.home?.name ?? m.home?.tla);
+    const a = toId(m.away?.name ?? m.away?.tla);
 
     if (m.stage === 'GROUP_STAGE') {
       const st = statusOf(m.status);
-      if (!st || m.hs == null || m.as == null || !h || !a) continue;
+      if (!st || !h || !a) continue;
       const f = PAIR[[h, a].sort().join('|')];
-      if (!f) continue;
+      if (st === 'live') liveNow.push({ mi: f?.mi || null, round: null, h, a, date: m.date || '' });
+      if (m.hs == null || m.as == null || !f) continue;
       scores[f.mi] = f.home === h ? { h: m.hs, a: m.as, st } : { h: m.as, a: m.hs, st };
       continue;
     }
@@ -70,6 +93,7 @@ export async function fetchLiveResults(): Promise<LiveData | null> {
     const round = STAGE_ROUND[m.stage];
     if (!round || !h || !a) continue; // skip rounds whose teams aren't set yet
     const st = statusOf(m.status);
+    if (st === 'live') liveNow.push({ mi: null, round, h, a, date: m.date || '' });
     const done = !!st && m.hs != null && m.as != null;
     let pk: string | null = null;
     if (m.pens && m.pens.home != null && m.pens.away != null) {
@@ -84,5 +108,5 @@ export async function fetchLiveResults(): Promise<LiveData | null> {
     });
   }
 
-  return { scores, ko };
+  return { scores, ko, liveNow };
 }

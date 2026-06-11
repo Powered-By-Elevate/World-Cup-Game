@@ -8,6 +8,7 @@ import {
   getMe, setMe as persistMe, resetActiveLeague, clearLocal,
   AUTH_ON, getAuthUser, onAuthChange, signOut, syncUserLeagues, addUserLeague, removeUserLeague,
   listAccounts, touchPresence, enablePush, notifyDraftRun, sendAnnouncement, pushToMember, pushState,
+  isIOS, isStandalone,
 } from './utils/storage';
 import type { League, AuthUser } from './utils/storage';
 import { groupResults, knockoutResults } from './data/results';
@@ -94,7 +95,7 @@ export default function App() {
   const [launch, setLaunch] = useState<{ game: ArcadeGame; mode: LaunchMode } | null>(null);
   const [notifs, setNotifs] = useState<Notif[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
-  const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [showPushPrompt, setShowPushPrompt] = useState<false | 'enable' | 'install'>(false);
   const [celebrate, setCelebrate] = useState<string | null>(null);
   const prevRank = useRef<number | null>(null);
   const launchDone = useRef(false);   // guard: a challenge leg settles once per launch
@@ -311,7 +312,12 @@ export default function App() {
   useEffect(() => {
     if (!loaded || !me) return;
     try {
-      if (pushState() === 'default' && localStorage.getItem('wc:pushprompt') !== 'done') setShowPushPrompt(true);
+      const st = pushState();
+      if (st === 'default' && localStorage.getItem('wc:pushprompt') !== 'done') setShowPushPrompt('enable');
+      // iOS in a Safari tab can't do push at all — surface the Home-Screen step
+      // instead of silently showing nothing (this is why some members never saw a prompt)
+      else if (st === 'unsupported' && isIOS() && !isStandalone() &&
+               localStorage.getItem('wc:installprompt') !== 'done') setShowPushPrompt('install');
     } catch { /* ignore */ }
   }, [loaded, me]);
 
@@ -818,12 +824,28 @@ export default function App() {
     toast(ok ? "Push on — sending a test to this device 🔔" : "Couldn't enable push (iPhone: open the app from your Home Screen, then try again)");
   }, [user, me, toast]);
 
-  // dismiss the one-time "turn on notifications" soft prompt (Enable fires the gesture)
+  // on-demand test: pushes to your own device via the exact whisper path and
+  // reports back whether the server found a subscription for you.
+  const sendTestNotif = useCallback(async () => {
+    if (!me) return;
+    const r = await pushToMember(leagueCodeRef.current, me.id, "Test notification 🔔", "If you see this, push works on this device.", leagueLink(leagueCodeRef.current));
+    if (!r) toast("Couldn't reach the push server");
+    else if ((r.pushed || 0) > 0) toast(`Test sent to ${r.pushed} device${r.pushed === 1 ? '' : 's'} ✓`);
+    else if (r.reason === 'target_not_linked') toast("Account not linked to push yet — sign in, then turn it on");
+    else toast("No subscription on this device — turn notifications on first");
+  }, [me, toast]);
+
+  // dismiss the one-time "turn on notifications" soft prompt (Enable fires the gesture).
+  // The 'install' variant (iOS Safari tab, push unsupported) has its own flag and
+  // never tries to subscribe — it just teaches Add to Home Screen.
   const dismissPushPrompt = useCallback((enable: boolean) => {
+    const variant = showPushPrompt;
     setShowPushPrompt(false);
-    try { localStorage.setItem('wc:pushprompt', 'done'); } catch { /* ignore */ }
-    if (enable) void enableDeviceNotifs();
-  }, [enableDeviceNotifs]);
+    try {
+      localStorage.setItem(variant === 'install' ? 'wc:installprompt' : 'wc:pushprompt', 'done');
+    } catch { /* ignore */ }
+    if (enable && variant !== 'install') void enableDeviceNotifs();
+  }, [showPushPrompt, enableDeviceNotifs]);
 
   const announce = useCallback(async (message: string) => {
     const subject = `📣 ${realLeagueName || 'World Cup pool'}`;
@@ -967,7 +989,7 @@ export default function App() {
       </header>
 
       <div className="screen">
-        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} calls={state.calls || {}} meId={me!.id} names={callerNames} onCall={api.makeCall} />}
+        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} calls={state.calls || {}} meId={me!.id} names={callerNames} onCall={api.makeCall} liveNow={demo ? [] : (live?.liveNow ?? [])} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
@@ -1014,7 +1036,7 @@ export default function App() {
           onClose={() => setShowProfile(false)}
           onRenameMe={api.renameMe} onRenameTeam={api.rename} onTeamInvite={copyTeamLink}
           onLeave={api.leave} onClaim={api.claimCommish}
-          userEmail={user?.email ?? null} onSignOut={signOutNow} onEnablePush={enableDeviceNotifs} />
+          userEmail={user?.email ?? null} onSignOut={signOutNow} onEnablePush={enableDeviceNotifs} onTestPush={sendTestNotif} />
       )}
       {showChat && (
         <Chat meId={me!.id} messages={chat} members={chatMembers} onSend={sendChatMsg} onClose={() => setShowChat(false)} />
@@ -1049,7 +1071,7 @@ export default function App() {
         </Suspense>
       )}
       {shareModal}
-      {showPushPrompt && (
+      {showPushPrompt === 'enable' && (
         <div className="push-prompt">
           <span className="pp-ico" aria-hidden="true">🔔</span>
           <div className="pp-txt">
@@ -1057,6 +1079,17 @@ export default function App() {
             <div className="pp-s">Challenges, messages &amp; your teams' match results — on this device.</div>
           </div>
           <button className="btn btn-ink btn-sm" onClick={() => dismissPushPrompt(true)}>Enable</button>
+          <button className="hdr-btn" onClick={() => dismissPushPrompt(false)} aria-label="Not now"><Icon name="x" size={16} /></button>
+        </div>
+      )}
+      {showPushPrompt === 'install' && (
+        <div className="push-prompt">
+          <span className="pp-ico" aria-hidden="true">📲</span>
+          <div className="pp-txt">
+            <div className="pp-h">Get notifications on this iPhone</div>
+            <div className="pp-s">First add the app to your Home Screen: tap <b>Share</b> → <b>Add to Home Screen</b>, then open it from there and turn notifications on.</div>
+          </div>
+          <button className="btn btn-ink btn-sm" onClick={() => dismissPushPrompt(false)}>Got it</button>
           <button className="hdr-btn" onClick={() => dismissPushPrompt(false)} aria-label="Not now"><Icon name="x" size={16} /></button>
         </div>
       )}

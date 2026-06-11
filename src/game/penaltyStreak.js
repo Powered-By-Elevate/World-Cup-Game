@@ -334,7 +334,7 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
     stars: { takers: { messi:   { url: `${MODELS}/taker_messi.glb` },
                        ronaldo: { url: `${MODELS}/taker_ronaldo.glb` },
                        neymar:  { url: `${MODELS}/taker_neymar.glb` } },
-             keeper: `${MODELS}/keeper_stylized.glb`,
+             keeper: `${MODELS}/keeper_elshenawy.glb`,
              ball: `${MODELS}/ball.glb`,
              kicks: [
                { id: 'mx',      url: `${MODELS}/kick_mixamo.fbx`,  contact: 0.60, rT: 1.1 },

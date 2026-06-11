@@ -1,8 +1,9 @@
 /* ============================================================
-   CALL OF THE DAY — a one-tap daily prediction mini-game.
+   CALLS OF THE DAY — a one-tap daily prediction mini-game.
 
-   Once a day, one fixture: "Who wins?" Anyone can play (it's a coin-flip,
-   no soccer knowledge needed). Picks lock at kickoff and resolve from the
+   Every day, the full slate: each of today's fixtures asks "Who wins?"
+   Anyone can play (it's a coin-flip, no soccer knowledge needed).
+   Each pick locks at that match's kickoff and resolves from the
    SAME results the rest of the app already derives (live feed or the demo
    engine) — there is no manual entry here either. A separate "Best Caller"
    leaderboard tracks who calls it right most often.
@@ -23,14 +24,31 @@ const MATCH_BY_ID: Record<string, Match> = Object.fromEntries(MATCHES.map(m => [
 /** Group fixtures in kickoff order — the pool the daily Call draws from. */
 const SORTED: Match[] = [...MATCHES].sort((a, b) => a.d.localeCompare(b.d));
 
-/** The open "Call of the Day": the earliest group fixture that hasn't kicked
- *  off yet. Exactly one is callable at a time, so nobody can run ahead and call
- *  the whole tournament in one sitting. null once every group match has started. */
-export function openCall(now: number): Match | null {
-  for (const m of SORTED) {
-    if (parseDate(m.d).getTime() > now) return m;
-  }
-  return null;
+/** Local calendar-day key for a timestamp (matches dayKeyOf on fixture strings). */
+function dayKeyOfNow(now: number): string {
+  const d = new Date(now);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Today's slate: EVERY group fixture kicking off on today's calendar day.
+ *  Each one is callable until its own kickoff — you call the whole day's games,
+ *  but you can't run ahead and call tomorrow's. */
+export function todaySlate(now: number): Match[] {
+  const key = dayKeyOfNow(now);
+  return SORTED.filter(m => m.d.slice(0, 10) === key);
+}
+
+/** The next day that has group fixtures after today — for the "come back" footer.
+ *  Returns the fixtures of that day (empty once the group stage is over). */
+export function nextSlate(now: number): Match[] {
+  const key = dayKeyOfNow(now);
+  const next = SORTED.find(m => m.d.slice(0, 10) > key);
+  return next ? SORTED.filter(m => m.d.slice(0, 10) === next.d.slice(0, 10)) : [];
+}
+
+/** A fixture is still open for calls until its own kickoff. */
+export function isCallOpen(m: Match, now: number): boolean {
+  return parseDate(m.d).getTime() > now;
 }
 
 export type Verdict = 'correct' | 'wrong' | 'push' | 'pending';

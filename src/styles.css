@@ -606,6 +606,42 @@
   border-radius:999px; background:rgba(255,106,61,.16); color:#FF6A3D;
   font-family:'Archivo',sans-serif; font-weight:800; font-size:10px; letter-spacing:.04em; }
 
+/* ---- "playing now" home banner: blinking red LIVE dot ---- */
+.live-banner{ display:flex; align-items:center; gap:10px; width:100%; margin-bottom:14px; padding:10px 12px;
+  border-radius:14px; border:2px solid var(--ink); background:var(--ink); color:var(--paper);
+  cursor:pointer; text-align:left; font-family:inherit; }
+.live-banner .lb-pill{ flex:0 0 auto; display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px;
+  border-radius:999px; background:#FF2D2D; color:#fff;
+  font-family:'Archivo',sans-serif; font-weight:800; font-size:10px; letter-spacing:.14em; text-transform:uppercase; }
+.live-banner .lb-dot{ width:8px; height:8px; border-radius:50%; background:#fff;
+  animation:lbblink 1.1s cubic-bezier(.2,.8,.2,1) infinite; }
+@keyframes lbblink{ 0%,100%{ opacity:1; box-shadow:0 0 8px rgba(255,255,255,.9);} 50%{ opacity:.25; box-shadow:none;} }
+@media (prefers-reduced-motion: reduce){ .live-banner .lb-dot{ animation:none; } }
+.live-banner .lb-games{ flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
+.live-banner .lb-game{ display:flex; align-items:center; gap:6px; min-width:0; font-size:12.5px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.live-banner .lb-vs{ color:#9C988C; font-size:11px; }
+.live-banner .lb-now{ flex:0 0 auto; font-family:'Archivo',sans-serif; font-weight:800; font-size:9px;
+  letter-spacing:.12em; text-transform:uppercase; color:#9C988C; }
+
+/* ---- the day slate: one compact row per fixture ---- */
+.cod-row{ display:flex; align-items:center; gap:8px; padding:9px 10px; border-radius:13px;
+  border:1.5px solid rgba(255,255,255,.12); background:rgba(255,255,255,.03); }
+.cod-side{ flex:1; min-width:0; display:flex; align-items:center; gap:8px; padding:5px 8px; border-radius:10px;
+  border:1.5px solid transparent; background:transparent; color:var(--paper); cursor:pointer; text-align:left;
+  transition:background .15s var(--ease), border-color .15s var(--ease), transform .12s var(--ease); }
+.cod-side.right{ flex-direction:row-reverse; text-align:right; }
+.cod-side .cn{ font-family:'Archivo',sans-serif; font-weight:800; font-size:12px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cod-side.open:hover{ background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.25); }
+.cod-side.open:active{ transform:translateY(1px); }
+.cod-side.picked{ background:var(--lime); border-color:var(--lime); color:var(--ink); cursor:default; }
+.cod-side.dim{ opacity:.42; cursor:default; }
+.cod-side:disabled{ cursor:default; }
+.cod-meta{ flex:0 0 auto; min-width:54px; text-align:center; font-family:'Archivo',sans-serif; font-weight:800;
+  font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:#9C988C; line-height:1.3; }
+.cod-meta .ok{ color:var(--lime); } .cod-meta .bad{ color:#FF6A6A; }
+
 .caller-row{ display:flex; align-items:center; gap:11px; padding:12px 14px; border-bottom:1px solid var(--line-2); }
 .caller-row:last-child{ border-bottom:0; }
 
@@ -755,7 +791,7 @@
 @keyframes ssdrift{ to{ transform:translate(8%,6%); } }
 
 /* ---- close ---- */
-.ss-close{ position:absolute; top:calc(env(safe-area-inset-top) + 14px); left:14px; z-index:61;
+.ss-close{ position:absolute; top:calc(env(safe-area-inset-top) + 14px); left:14px; z-index:96; /* above the portrait gate */
   width:34px; height:34px; border-radius:11px; display:grid; place-items:center;
   background:rgba(244,238,225,.08); border:1.5px solid rgba(244,238,225,.22); color:#F4EEE1; cursor:pointer;
   transition:transform .12s var(--ease); }
@@ -801,16 +837,24 @@
 .ss-canvas{ display:block; width:100%; border-radius:14px;
   box-shadow:0 26px 60px -22px rgba(0,0,0,.85), 0 0 0 3px rgba(255,255,255,.10), inset 0 0 0 1px rgba(0,0,0,.25); }
 
-/* ---- turn hint ---- */
-.ss-turnhint{ position:absolute; left:50%; bottom:calc(env(safe-area-inset-bottom) + 26px); transform:translateX(-50%);
-  z-index:55; white-space:nowrap; display:flex; align-items:center; gap:9px; padding:9px 16px; border-radius:999px;
-  background:rgba(11,14,8,.6); border:1px solid rgba(57,224,255,.4); backdrop-filter:blur(8px);
+/* ---- turn hint — pure overlay text: transparent, never blocks or shifts the pitch ---- */
+.ss-turnhint{ position:absolute; left:50%; bottom:calc(env(safe-area-inset-bottom) + 12px); transform:translateX(-50%);
+  z-index:55; white-space:nowrap; display:flex; align-items:center; gap:9px; padding:0;
+  background:transparent; border:0; pointer-events:none;
   font-family:'Archivo',sans-serif; font-weight:800; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase;
-  color:#39E0FF; box-shadow:0 14px 30px -16px #000; }
-.ss-turnhint[data-on="false"]{ border-color:rgba(244,238,225,.22); color:rgba(244,238,225,.75); }
+  color:#39E0FF; text-shadow:0 1px 2px rgba(0,0,0,.85), 0 0 14px rgba(0,0,0,.7); }
+.ss-turnhint[data-on="false"]{ color:rgba(244,238,225,.75); }
 .ss-turnhint .pin{ width:8px; height:8px; border-radius:50%; background:#39E0FF; box-shadow:0 0 10px #39E0FF;
   animation:sstok 1.6s var(--ease) infinite; }
 .ss-turnhint[data-on="false"] .pin{ background:rgba(244,238,225,.6); box-shadow:none; }
+
+/* ---- portrait gate: Soccer Stars is landscape-only on phones ---- */
+.ss-rotate{ position:absolute; inset:0; z-index:95; display:grid; place-items:center; text-align:center;
+  background:radial-gradient(120% 90% at 50% 0%, rgba(7,10,14,.92), rgba(5,8,11,.98)); }
+.ss-rotate .ph{ width:74px; height:74px; margin:0 auto 18px; color:#C8F23C;
+  animation:ssrot 2.4s cubic-bezier(.4,0,.2,1) infinite; transform-origin:50% 50%; }
+@keyframes ssrot{ 0%,16%{ transform:rotate(0deg); } 46%,76%{ transform:rotate(90deg); } 96%,100%{ transform:rotate(0deg); } }
+@media (prefers-reduced-motion: reduce){ .ss-rotate .ph{ animation:none; transform:rotate(90deg); } }
 
 /* ---- goal celebration ---- */
 .ss-goalmoment{ position:absolute; inset:0; z-index:70; display:none; pointer-events:none; }
