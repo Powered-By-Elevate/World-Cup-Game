@@ -1017,3 +1017,23 @@
 .chal-row{ display:flex; align-items:center; gap:11px; margin-bottom:8px; }
 .at-art.sm{ width:40px; height:40px; border-radius:11px; font-size:20px; display:grid; place-items:center;
   background:var(--ink); color:var(--lime); flex:0 0 auto; }
+
+/* penalty cards: let an overflowing card scroll (margin:auto keeps it centered but
+   reachable), and shrink the result card on short landscape phones so the
+   Go-again / Change-star / Done buttons are never clipped off-screen. */
+.pen-overlay .pen-card-wrap{ overflow:auto; -webkit-overflow-scrolling:touch; }
+.pen-overlay .pen-card{ margin:auto; }
+@media (max-height: 560px){
+  .pen-overlay .pen-result-score{ font-size:54px; }
+  .pen-overlay .pen-card{ padding:16px; }
+  .pen-overlay .pen-btn{ height:46px; }
+  .pen-overlay .pen-btn.ghost{ height:42px; }
+  .pen-overlay .display{ line-height:1; }
+}
+
+/* Soccer Stars portrait: shrink the pitch a touch so there's margin to the sides.
+   The pull-back can then extend into that margin (pointer capture keeps tracking),
+   so a disc on the edge of the pitch can still reach full power. */
+@media (orientation: portrait){
+  .ss-pitchwrap{ max-width: 440px; padding: 0 32px; }
+}

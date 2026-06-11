@@ -10,9 +10,9 @@ import { uid } from './helpers';
 
 export type ArcadeGame = 'penalty' | 'soccer';
 
-export const GAME_META: Record<ArcadeGame, { name: string; emoji: string; cls: string; metric: string; verb: string }> = {
-  penalty: { name: 'Penalty Streak', emoji: '🥅', cls: 'pen',   metric: 'streak',     verb: 'scored' },
-  soccer:  { name: 'Soccer Stars',   emoji: '⚽', cls: 'soc',   metric: 'win margin', verb: 'won by' },
+export const GAME_META: Record<ArcadeGame, { name: string; emoji: string; cls: string; board: string; verb: string }> = {
+  penalty: { name: 'Penalty Streak', emoji: '🥅', cls: 'pen', board: 'best streak', verb: 'scored' },
+  soccer:  { name: 'Soccer Stars',   emoji: '⚽', cls: 'soc', board: 'total wins',  verb: 'beat the CPU by' },
 };
 export const GAMES: ArcadeGame[] = ['penalty', 'soccer'];
 
@@ -44,14 +44,14 @@ export async function loadScores(): Promise<Record<string, ScoreEntry[]>> {
   return r && typeof r === 'object' ? r : {};
 }
 
-/** Record a result, keeping only each person's best (higher = better for both games). */
-export async function recordScore(game: ArcadeGame, memberId: string, name: string, score: number): Promise<void> {
+/** Record a result. mode 'best' keeps each person's highest (Penalty streak);
+ *  mode 'add' accumulates (Soccer total wins — pass value 1 per win). */
+export async function recordScore(game: ArcadeGame, memberId: string, name: string, value: number, mode: 'best' | 'add' = 'best'): Promise<void> {
   const all = await loadScores();
   const list = (all[game] = all[game] || []);
   const cur = list.find(e => e.memberId === memberId);
-  if (!cur) list.push({ memberId, name, score, ts: Date.now() });
-  else if (score > cur.score) { cur.score = score; cur.name = name; cur.ts = Date.now(); }
-  else cur.name = name;                                   // keep the display name fresh
+  if (!cur) list.push({ memberId, name, score: value, ts: Date.now() });
+  else { cur.score = mode === 'add' ? cur.score + value : Math.max(cur.score, value); cur.name = name; cur.ts = Date.now(); }
   await sset(SCORES_KEY, all, true);
 }
 

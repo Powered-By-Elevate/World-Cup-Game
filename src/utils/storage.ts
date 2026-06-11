@@ -404,6 +404,22 @@ export async function sendAnnouncement(league: string, subject: string, message:
   return postNotify({ league, mode: 'announce', subject, message, url: link });
 }
 
+/** Targeted web push to one league member's devices (Arcade challenges, chat).
+ *  Best-effort — the in-app notification feed is the source of truth either way. */
+export async function pushToMember(league: string, toMemberId: string, title: string, body: string, link: string): Promise<void> {
+  if (!supa) return;
+  try {
+    const { data } = await supa.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    await fetch('/api/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ league, toMemberId, title, body, url: link }),
+    });
+  } catch { /* ignore — in-app feed still delivered it */ }
+}
+
 /* ---- per-account league registry (follows you across devices) ----
    Stored in the SHARED backend under a per-user key (not league-namespaced),
    so the leagues you belong to appear on every device you sign into. */

@@ -1097,15 +1097,24 @@ export function createPenaltyScene(container, { onAim, onResult, theme, stars })
       pos.needsUpdate=true; if(ripple.age>1.0){ ripple=null; for(let i=0;i<pos.count;i++)pos.array[i*3+2]=0; pos.needsUpdate=true; } }
   }
 
-  function resize(){ const w=container.clientWidth,h=container.clientHeight;
-    renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); }
-  resize(); window.addEventListener('resize',resize);
+  const BASE_FOV=camera.fov, REF_ASPECT=1.7;
+  function resize(){ const w=container.clientWidth,h=container.clientHeight; if(!w||!h) return;
+    renderer.setSize(w,h); const aspect=w/h; camera.aspect=aspect;
+    // Portrait phones are tall + narrow: a fixed vertical FOV lets the goal overflow
+    // the sides ('too zoomed in'). Widen the vertical FOV as the viewport narrows so
+    // the goal width stays framed; clamp so it never goes fish-eye.
+    if(aspect>=REF_ASPECT) camera.fov=BASE_FOV;
+    else { const hHalf=Math.atan(Math.tan(BASE_FOV*Math.PI/360)*REF_ASPECT);
+      camera.fov=Math.min(72, 2*Math.atan(Math.tan(hHalf)/Math.max(aspect,0.3))*180/Math.PI); }
+    camera.updateProjectionMatrix(); }
+  function onOrient(){ resize(); setTimeout(resize,250); }   // iOS settles the new size late after a rotate
+  resize(); window.addEventListener('resize',resize); window.addEventListener('orientationchange',onOrient);
   let raf; (function loop(){ raf=requestAnimationFrame(loop); update(); })();
 
   return { setMatch, setAimNDC, setAimPoint, projectGoal, projectNDC, setAiming, fireShot, resize, setStarTaker, _scene:scene, _camera:camera, _rigs:()=>({taker:takerRig,keeper:keeperRig}), _kicks:()=>kickLib,
     setReticleWarn:(w)=>{ ring.material.color.set(w?'#FF2D2D':'#C8F23C'); dot.material.color.set(w?'#FF2D2D':'#C8F23C'); },
     _dbg:()=>({phase:sh.phase, t:+sh.t.toFixed(2), saved:sh.saved, resolved:sh.resolved, pw:sh.pw, fT:sh.fT, ball:ball.position.toArray().map(n=>+n.toFixed(2)), aiming}),
-    dispose(){ cancelAnimationFrame(raf); window.removeEventListener('resize',resize); renderer.dispose(); container.removeChild(renderer.domElement); } };
+    dispose(){ cancelAnimationFrame(raf); window.removeEventListener('resize',resize); window.removeEventListener('orientationchange',onOrient); renderer.dispose(); container.removeChild(renderer.domElement); } };
 }
 
 /* ---------------- stadium ---------------- */

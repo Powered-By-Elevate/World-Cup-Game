@@ -7,7 +7,7 @@ import {
   listLeagues, activeLeague, setActiveLeague, upsertLeague, removeLeague, pruneLeagues, newLeagueCode,
   getMe, setMe as persistMe, resetActiveLeague, clearLocal,
   AUTH_ON, getAuthUser, onAuthChange, signOut, syncUserLeagues, addUserLeague, removeUserLeague,
-  listAccounts, touchPresence, enablePush, notifyDraftRun, sendAnnouncement,
+  listAccounts, touchPresence, enablePush, notifyDraftRun, sendAnnouncement, pushToMember,
 } from './utils/storage';
 import type { League, AuthUser } from './utils/storage';
 import { groupResults, knockoutResults } from './data/results';
@@ -589,8 +589,11 @@ export default function App() {
     setChat(next);
     // notify recipients in-app (a whisper → that person; global → everyone else)
     const body = t.slice(0, 120);
-    if (to) await pushNotifs([{ to, kind: 'chat', ts: Date.now(), title: `${me.name} messaged you`, body }]);
-    else if (chatMembers.length) await pushNotifs(chatMembers.map(m => ({ to: m.id, kind: 'chat' as const, ts: Date.now(), title: `${me.name} in league chat`, body })));
+    if (to) {
+      const cTitle = `${me.name} messaged you`;
+      await pushNotifs([{ to, kind: 'chat', ts: Date.now(), title: cTitle, body }]);
+      void pushToMember(leagueCodeRef.current, to, cTitle, body, leagueLink(leagueCodeRef.current));
+    } else if (chatMembers.length) await pushNotifs(chatMembers.map(m => ({ to: m.id, kind: 'chat' as const, ts: Date.now(), title: `${me.name} in league chat`, body })));
   }, [me, chatMembers]);
 
   const openNotifs = useCallback(async () => {
@@ -607,15 +610,19 @@ export default function App() {
   // a game reported a score: always update the leaderboard; settle a challenge once
   const handleArcadeScore = useCallback(async (game: ArcadeGame, score: number) => {
     if (!me) return;
-    await recordScore(game, me.id, me.name, score);
+    // leaderboard: Soccer counts total wins (one per win), Penalty keeps best streak
+    if (game === 'soccer') { if (score > 0) await recordScore('soccer', me.id, me.name, 1, 'add'); }
+    else await recordScore('penalty', me.id, me.name, score, 'best');
     const cur = launch;
     if (!cur || launchDone.current) return;
     const mode = cur.mode;
     if (mode.kind === 'challenge') {
       launchDone.current = true;
       await createChallenge(game, me.id, me.name, mode.oppId, mode.oppName, score);
-      await pushNotifs([{ to: mode.oppId, kind: 'challenge', ts: Date.now(),
-        title: `${me.name} challenged you`, body: `${GAME_META[game].name} — they ${GAME_META[game].verb} ${score}. Play your leg!` }]);
+      const cTitle = `${me.name} challenged you`;
+      const cBody = `${GAME_META[game].name} — they ${GAME_META[game].verb} ${score}. Play your leg!`;
+      await pushNotifs([{ to: mode.oppId, kind: 'challenge', ts: Date.now(), title: cTitle, body: cBody }]);
+      void pushToMember(leagueCodeRef.current, mode.oppId, cTitle, cBody, leagueLink(leagueCodeRef.current));
       toast('Challenge sent ⚔');
     } else if (mode.kind === 'respond') {
       launchDone.current = true;
@@ -623,10 +630,12 @@ export default function App() {
       if (ch) {
         const w = winnerOf(ch);
         const line = (who: string) => w == null ? `Drew ${ch.fromScore}–${ch.toScore}` : w === who ? `You won ${ch.fromScore}–${ch.toScore}!` : `Lost ${ch.fromScore}–${ch.toScore}`;
+        const rTitle = `${GAME_META[game].name} result`;
         await pushNotifs([
-          { to: ch.from, kind: 'challenge-result', ts: Date.now(), title: `${GAME_META[game].name} result`, body: `vs ${ch.toName}: ${line(ch.from)}` },
-          { to: ch.to,   kind: 'challenge-result', ts: Date.now(), title: `${GAME_META[game].name} result`, body: `vs ${ch.fromName}: ${line(ch.to)}` },
+          { to: ch.from, kind: 'challenge-result', ts: Date.now(), title: rTitle, body: `vs ${ch.toName}: ${line(ch.from)}` },
+          { to: ch.to,   kind: 'challenge-result', ts: Date.now(), title: rTitle, body: `vs ${ch.fromName}: ${line(ch.to)}` },
         ]);
+        void pushToMember(leagueCodeRef.current, ch.from, rTitle, `vs ${ch.toName}: ${line(ch.from)}`, leagueLink(leagueCodeRef.current));
         toast(w == null ? 'Challenge drawn' : w === me.id ? 'You won the challenge! 🏆' : 'Challenge lost');
       }
     }
@@ -755,6 +764,14 @@ export default function App() {
     if (!user) return;
     const ok = await enablePush(user.id);
     toast(ok ? "Draft alerts on for this device" : "Couldn't enable alerts here");
+  }, [user, toast]);
+
+  // opt this device into web push (covers challenges, chat, match alerts).
+  // On iOS this only works once the site is added to the Home Screen.
+  const enableDeviceNotifs = useCallback(async () => {
+    if (!user) return;
+    const ok = await enablePush(user.id);
+    toast(ok ? "Push on for this device 🔔" : "Couldn't enable push here (on iPhone, add the app to your Home Screen first)");
   }, [user, toast]);
 
   const announce = useCallback(async (message: string) => {
@@ -959,6 +976,9 @@ export default function App() {
               <button className="hdr-btn" onClick={() => setShowNotifs(false)} style={{ border: "1.5px solid var(--line)" }}><Icon name="x" size={18} /></button>
             </div>
             <div style={{ padding: "0 14px 26px", maxHeight: "70vh", overflow: "auto" }}>
+              <button className="btn btn-sm btn-block" style={{ marginBottom: 12 }} onClick={enableDeviceNotifs}>
+                <Icon name="bell" size={14} /> Turn on push for this device
+              </button>
               {myNotifs.length === 0 ? (
                 <p className="muted" style={{ textAlign: "center", fontSize: 14, padding: "20px 0" }}>No notifications yet.</p>
               ) : myNotifs.map(n => (

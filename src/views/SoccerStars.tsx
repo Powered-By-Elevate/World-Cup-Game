@@ -130,6 +130,7 @@ export function SoccerStars({ team, onClose, onGameEnd }: Props) {
   const [phase, setPhaseS] = useState<Phase>('me');
   const [score, setScore] = useState({ me: 0, cpu: 0 });
   const [celebrate, setCelebrate] = useState<Kind | null>(null);   // 'me' | 'cpu' goal flash
+  const [howTo, setHowTo] = useState(true);                        // first-open instructions
 
   // decorative one-time visuals
   const [bokeh] = useState(buildBokeh);
@@ -425,6 +426,32 @@ export function SoccerStars({ team, onClose, onGameEnd }: Props) {
               <button className="ec-btn ghost" onClick={onClose}>Done</button>
               <button className="ec-btn primary" onClick={replay}>Play again</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== first-open how-to (the pull-back mechanic isn't obvious) ===== */}
+      {howTo && phase !== 'over' && (
+        <div className="ss-howto" style={{ position: 'absolute', inset: 0, zIndex: 90, display: 'grid', placeItems: 'center', padding: 18, background: 'radial-gradient(120% 90% at 50% 0%, rgba(10,15,20,.5), rgba(10,15,20,.85))' }}>
+          <div style={{ width: '100%', maxWidth: 360, background: '#F4EEE1', border: '2px solid #15120C', borderRadius: 22, padding: 22, textAlign: 'center', boxShadow: '0 30px 70px -20px #000' }}>
+            <div className="eyebrow" style={{ color: '#9C988C', letterSpacing: '.2em' }}>How to play</div>
+            <div className="display" style={{ fontSize: 30, margin: '6px 0 12px', color: '#15120C' }}>Soccer Stars</div>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', textAlign: 'left', background: 'rgba(21,18,12,.05)', border: '1.5px solid rgba(21,18,12,.12)', borderRadius: 14, padding: '12px 14px', marginBottom: 14 }}>
+              <svg viewBox="0 0 64 40" width="64" height="40" style={{ flex: '0 0 auto' }} aria-hidden="true">
+                <circle cx="44" cy="20" r="9" fill="#0E3C7A" stroke="#15120C" strokeWidth="2" />
+                <line x1="44" y1="20" x2="16" y2="20" stroke="#C8F23C" strokeWidth="3" strokeDasharray="4 4" strokeLinecap="round" />
+                <path d="M22 14 L14 20 L22 26" fill="none" stroke="#C8F23C" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <div style={{ fontSize: 13.5, color: '#3A352B', lineHeight: 1.45 }}>
+                <b>Pull back</b> on one of <b>your</b> flag discs and <b>release</b> — like a slingshot. Longer pull = harder shot.
+              </div>
+            </div>
+            <p style={{ fontSize: 13.5, color: '#3A352B', lineHeight: 1.5, margin: '0 0 18px' }}>
+              Knock the ball into the goal on the right. You take a turn, then your opponent. <b>First to 3</b> wins.
+            </p>
+            <button onClick={() => setHowTo(false)} style={{ width: '100%', height: 50, borderRadius: 13, border: 0, cursor: 'pointer', background: '#C8F23C', color: '#15120C', fontFamily: 'Archivo, sans-serif', fontWeight: 800, fontSize: 14, letterSpacing: '.06em', textTransform: 'uppercase' }}>
+              Got it — let's play
+            </button>
           </div>
         </div>
       )}

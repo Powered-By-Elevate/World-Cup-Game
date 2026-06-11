@@ -153,7 +153,7 @@ export function Arcade({ meId, members, onLaunch, ...calls }: Props) {
               <div key={g} style={{ marginBottom: 18 }}>
                 <div className="sec-head">
                   <span className="eyebrow">{GAME_META[g].emoji} {GAME_META[g].name}</span>
-                  <span className="muted" style={{ fontSize: 12 }}>best {GAME_META[g].metric} · top 5</span>
+                  <span className="muted" style={{ fontSize: 12 }}>{GAME_META[g].board} · top 5</span>
                 </div>
                 {board.length === 0 ? (
                   <div className="card pad" style={{ textAlign: 'center' }}>
