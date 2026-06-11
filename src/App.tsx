@@ -6,7 +6,7 @@ import {
   sget, sset, HAS_REAL, leagueLink, teamLink, parseLeagueCode,
   listLeagues, activeLeague, setActiveLeague, upsertLeague, removeLeague, pruneLeagues, newLeagueCode,
   getMe, setMe as persistMe, resetActiveLeague, clearLocal,
-  AUTH_ON, getAuthUser, onAuthChange, signOut, syncUserLeagues, addUserLeague, removeUserLeague,
+  AUTH_ON, getAuthUser, onAuthChange, signOut, syncUserLeagues, discoverMyLeagues, addUserLeague, removeUserLeague,
   listAccounts, touchPresence, enablePush, notifyDraftRun, sendAnnouncement, pushToMember, pushState,
   isIOS, isStandalone,
 } from './utils/storage';
@@ -258,7 +258,10 @@ export default function App() {
       leagueCodeRef.current = code;
       setLeagueCode(code);
       pruneLeagues();               // clear out any nameless/duplicate legacy entries
-      if (user) await syncUserLeagues(user.id);   // merge the account's leagues with this device's
+      if (user) {
+        await syncUserLeagues(user.id);     // merge the account's leagues with this device's
+        await discoverMyLeagues(user.id);   // find leagues whose roster has you, wherever you joined
+      }
       setLeagues(listLeagues());
       try { setInviteTeamId(new URL(window.location.href).searchParams.get("team")); } catch { /* ignore */ }
       if (alive) await reload(code);

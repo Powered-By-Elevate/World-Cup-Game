@@ -493,6 +493,40 @@ export async function syncUserLeagues(uid: string): Promise<League[]> {
   return merged;
 }
 
+/** Discover every league whose ROSTER contains this account (uid on any team)
+ *  and merge them into the registry — device-local and account-scoped. Without
+ *  this, a member only ever sees leagues their signed-in device happened to
+ *  open, so everyone but the commissioner was missing the league switcher. */
+export async function discoverMyLeagues(uid: string): Promise<League[]> {
+  if (!supa) return getUserLeagues(uid);
+  try {
+    type StateRow = { leagueName?: string; teams?: { members?: { uid?: string }[] }[] } | null;
+    const { data, error } = await supa.from('app_kv').select('key,value').like('key', '%:wc:state');
+    if (error) throw error;
+    const found: League[] = [];
+    for (const row of data || []) {
+      const st = row.value as StateRow;
+      if (!st || !Array.isArray(st.teams)) continue;
+      if (!st.teams.some(t => (t?.members || []).some(m => m?.uid === uid))) continue;
+      found.push({ code: (row.key as string).replace(/:wc:state$/, ''), name: st.leagueName || '' });
+    }
+    if (found.length) {
+      const byCode = new Map<string, League>();
+      for (const l of [...await getUserLeagues(uid), ...listLeagues(), ...found]) {
+        if (!l?.code) continue;
+        const cur = byCode.get(l.code);
+        if (!cur) byCode.set(l.code, { code: l.code, name: l.name || '' });
+        else if (l.name) cur.name = l.name;   // roster state carries the freshest name
+      }
+      const merged = [...byCode.values()];
+      await setUserLeagues(uid, merged);
+      lsSet('wc:leagues', merged);   // reflect on this device too
+      return merged;
+    }
+  } catch (e) { console.error('discoverMyLeagues failed', e); }
+  return getUserLeagues(uid);
+}
+
 /** Add (or rename) one league in the account's registry. */
 export async function addUserLeague(uid: string, code: string, name: string): Promise<void> {
   if (!code || !name) return;
