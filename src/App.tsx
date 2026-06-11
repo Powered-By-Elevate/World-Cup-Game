@@ -1087,7 +1087,7 @@ export default function App() {
           <span className="pp-ico" aria-hidden="true">📲</span>
           <div className="pp-txt">
             <div className="pp-h">Get notifications on this iPhone</div>
-            <div className="pp-s">First add the app to your Home Screen: tap <b>Share</b> → <b>Add to Home Screen</b>, then open it from there and turn notifications on.</div>
+            <div className="pp-s">Re-add the app to your Home Screen: <b>delete the old icon</b> if you have one, then in Safari tap <b>Share</b> → <b>Add to Home Screen</b>. Open it from there and turn notifications on.</div>
           </div>
           <button className="btn btn-ink btn-sm" onClick={() => dismissPushPrompt(false)}>Got it</button>
           <button className="hdr-btn" onClick={() => dismissPushPrompt(false)} aria-label="Not now"><Icon name="x" size={16} /></button>

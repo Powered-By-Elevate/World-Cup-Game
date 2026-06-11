@@ -95,7 +95,7 @@ export function Profile({ me, myTeam, isCommish, commishName, onClose, onRenameM
               <div className="card flat pad" style={{ marginBottom: 14 }}>
                 {push === 'unsupported' ? (
                   <div className="muted" style={{ fontSize: 12.5 }}>
-                    To get notifications on this iPhone, first add the app to your Home Screen: tap <b>Share</b> → <b>Add to Home Screen</b>, then open it from there and turn notifications on here.
+                    To get notifications on this iPhone, re-add the app to your Home Screen: <b>delete the old icon</b> if you have one (icons added before today open in Safari, which can't push), then in Safari tap <b>Share</b> → <b>Add to Home Screen</b>. Open it from there and turn notifications on here.
                   </div>
                 ) : push === 'granted' ? (
                   <>

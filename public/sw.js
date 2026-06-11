@@ -6,7 +6,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.body || '',
     icon: '/apple-touch-icon.png',
-    badge: '/favicon-32.png',
+    badge: '/favicon-96x96.png',
     data: { url: data.url || '/' },
   };
   event.waitUntil(self.registration.showNotification(title, options));
