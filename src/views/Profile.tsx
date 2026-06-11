@@ -86,23 +86,23 @@ export function Profile({ me, myTeam, isCommish, commishName, onClose, onRenameM
             </>
           )}
 
-          {/* draft alerts (web push, per device) */}
+          {/* notifications (web push, per device) */}
           {userEmail && onEnablePush && push !== 'unsupported' && (
             <>
-              <div className="eyebrow" style={{ marginBottom: 4 }}>Draft alerts</div>
+              <div className="eyebrow" style={{ marginBottom: 4 }}>Notifications</div>
               <div className="card flat pad" style={{ marginBottom: 14 }}>
                 {push === 'granted' ? (
                   <div className="row" style={{ gap: 8 }}>
                     <Icon name="check" size={16} />
-                    <div className="muted" style={{ fontSize: 13 }}>On for this device — you'll get a notification the moment the draft runs.</div>
+                    <div className="muted" style={{ fontSize: 13 }}>On for this device — challenges, messages, the draft and your teams' match results land here.</div>
                   </div>
                 ) : push === 'denied' ? (
-                  <div className="muted" style={{ fontSize: 12.5 }}>Notifications are blocked for this site. Re-enable them in your browser settings to get the draft alert (you'll still get the email).</div>
+                  <div className="muted" style={{ fontSize: 12.5 }}>Notifications are blocked for this site. Re-enable them in your browser/phone settings to get pushes (you'll still get draft emails).</div>
                 ) : (
                   <>
-                    <div className="muted" style={{ fontSize: 12.5, marginBottom: 10 }}>Get a notification on this device the instant the draft runs. (On iPhone, add the app to your Home Screen first.)</div>
+                    <div className="muted" style={{ fontSize: 12.5, marginBottom: 10 }}>Get pushed for challenges, messages, the draft and your teams' match results. (On iPhone, add the app to your Home Screen first.)</div>
                     <button className="btn btn-ink btn-block" onClick={() => { onEnablePush(); setTimeout(() => setPush(pushState()), 600); }}>
-                      <Icon name="bolt" size={16} /> Enable draft alerts
+                      <Icon name="bell" size={16} /> Turn on notifications
                     </button>
                   </>
                 )}

@@ -7,7 +7,7 @@ import {
   listLeagues, activeLeague, setActiveLeague, upsertLeague, removeLeague, pruneLeagues, newLeagueCode,
   getMe, setMe as persistMe, resetActiveLeague, clearLocal,
   AUTH_ON, getAuthUser, onAuthChange, signOut, syncUserLeagues, addUserLeague, removeUserLeague,
-  listAccounts, touchPresence, enablePush, notifyDraftRun, sendAnnouncement, pushToMember,
+  listAccounts, touchPresence, enablePush, notifyDraftRun, sendAnnouncement, pushToMember, pushState,
 } from './utils/storage';
 import type { League, AuthUser } from './utils/storage';
 import { groupResults, knockoutResults } from './data/results';
@@ -94,6 +94,7 @@ export default function App() {
   const [launch, setLaunch] = useState<{ game: ArcadeGame; mode: LaunchMode } | null>(null);
   const [notifs, setNotifs] = useState<Notif[]>([]);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [celebrate, setCelebrate] = useState<string | null>(null);
   const prevRank = useRef<number | null>(null);
   const launchDone = useRef(false);   // guard: a challenge leg settles once per launch
@@ -304,6 +305,15 @@ export default function App() {
     const iv = setInterval(tick, 5000);
     return () => { alive = false; clearInterval(iv); };
   }, [loaded, me, leagueCode]);
+
+  // one-time soft prompt to turn on notifications (the Enable tap is the gesture
+  // iOS requires — a bare on-load requestPermission() is ignored on iPhone)
+  useEffect(() => {
+    if (!loaded || !me) return;
+    try {
+      if (pushState() === 'default' && localStorage.getItem('wc:pushprompt') !== 'done') setShowPushPrompt(true);
+    } catch { /* ignore */ }
+  }, [loaded, me]);
 
   // Detect kickoffs / final results for the league's drafted nations and fan out
   // notifications (in-app feed + targeted push to whoever owns those nations).
@@ -796,19 +806,24 @@ export default function App() {
     try { window.location.href = window.location.origin + window.location.pathname; } catch { window.location.reload(); }
   }, []);
 
-  const enableDraftAlerts = useCallback(async () => {
-    if (!user) return;
-    const ok = await enablePush(user.id);
-    toast(ok ? "Draft alerts on for this device" : "Couldn't enable alerts here");
-  }, [user, toast]);
-
   // opt this device into web push (covers challenges, chat, match alerts).
   // On iOS this only works once the site is added to the Home Screen.
   const enableDeviceNotifs = useCallback(async () => {
     if (!user) return;
     const ok = await enablePush(user.id);
-    toast(ok ? "Push on for this device 🔔" : "Couldn't enable push here (on iPhone, add the app to your Home Screen first)");
-  }, [user, toast]);
+    if (ok && me) {
+      // immediate self-test: pushes to your own device so you can confirm delivery
+      void pushToMember(leagueCodeRef.current, me.id, "Notifications are on ✅", "You'll get challenges, messages and match alerts right here.", leagueLink(leagueCodeRef.current));
+    }
+    toast(ok ? "Push on — sending a test to this device 🔔" : "Couldn't enable push (iPhone: open the app from your Home Screen, then try again)");
+  }, [user, me, toast]);
+
+  // dismiss the one-time "turn on notifications" soft prompt (Enable fires the gesture)
+  const dismissPushPrompt = useCallback((enable: boolean) => {
+    setShowPushPrompt(false);
+    try { localStorage.setItem('wc:pushprompt', 'done'); } catch { /* ignore */ }
+    if (enable) void enableDeviceNotifs();
+  }, [enableDeviceNotifs]);
 
   const announce = useCallback(async (message: string) => {
     const subject = `📣 ${realLeagueName || 'World Cup pool'}`;
@@ -912,6 +927,9 @@ export default function App() {
 
   const notifUnread = me ? unreadCount(notifs, me.id) : 0;
   const myNotifs = me ? mine(notifs, me.id) : [];
+  // Once the draft has run, the Draft tab is dead weight — drop it from the nav.
+  // (The reveal still shows right after running via setTab('draft').)
+  const navItems = state.draftDone ? NAV.filter(n => n.id !== "draft") : NAV;
 
   return (
     <div className="app">
@@ -923,7 +941,7 @@ export default function App() {
         </div>
         <LeagueSwitch name={leagueName} onClick={() => setShowLeagues(true)} />
         <nav className="sb-nav">
-          {NAV.map(n => (
+          {navItems.map(n => (
             <button key={n.id} className={"sb-navb " + (tab === n.id ? "on" : "")} onClick={() => setTab(n.id)}>
               <Icon name={n.icon} size={20} /><span>{n.label}</span>
             </button>
@@ -939,11 +957,9 @@ export default function App() {
         </div>
       </aside>
 
-      {/* mobile top header */}
+      {/* mobile top header — logo + bell removed so the league switcher can breathe */}
       <header className="hdr">
-        <Mark size={36} />
         <LeagueSwitch name={leagueName} onClick={() => setShowLeagues(true)} />
-        <button className="hdr-btn chat-btn" onClick={openNotifs} title="Notifications"><Icon name="bell" size={17} />{notifUnread > 0 && <span className="chat-badge" />}</button>
         <button className="hdr-btn chat-btn" onClick={openChat} title="Chat"><Icon name="chat" size={17} />{chatUnread && <span className="chat-badge" />}</button>
         <button className="hdr-btn" onClick={copyLeagueLink} title="Copy league invite"><Icon name="share" size={16} /></button>
         {isCommish && <button className="hdr-btn" onClick={() => setShowSettings(true)} title="League settings"><Icon name="gear" size={18} /></button>}
@@ -962,7 +978,7 @@ export default function App() {
 
       <nav className="nav">
         <div className="nav-inner">
-          {NAV.map(n => (
+          {navItems.map(n => (
             <button key={n.id} className={"navb " + (tab === n.id ? "on" : "")} onClick={() => setTab(n.id)}>
               <Icon name={n.icon} size={20} />
               <span className="lbl">{n.label}</span>
@@ -998,7 +1014,7 @@ export default function App() {
           onClose={() => setShowProfile(false)}
           onRenameMe={api.renameMe} onRenameTeam={api.rename} onTeamInvite={copyTeamLink}
           onLeave={api.leave} onClaim={api.claimCommish}
-          userEmail={user?.email ?? null} onSignOut={signOutNow} onEnablePush={enableDraftAlerts} />
+          userEmail={user?.email ?? null} onSignOut={signOutNow} onEnablePush={enableDeviceNotifs} />
       )}
       {showChat && (
         <Chat meId={me!.id} messages={chat} members={chatMembers} onSend={sendChatMsg} onClose={() => setShowChat(false)} />
@@ -1012,9 +1028,6 @@ export default function App() {
               <button className="hdr-btn" onClick={() => setShowNotifs(false)} style={{ border: "1.5px solid var(--line)" }}><Icon name="x" size={18} /></button>
             </div>
             <div style={{ padding: "0 14px 26px", maxHeight: "70vh", overflow: "auto" }}>
-              <button className="btn btn-sm btn-block" style={{ marginBottom: 12 }} onClick={enableDeviceNotifs}>
-                <Icon name="bell" size={14} /> Turn on push for this device
-              </button>
               {myNotifs.length === 0 ? (
                 <p className="muted" style={{ textAlign: "center", fontSize: 14, padding: "20px 0" }}>No notifications yet.</p>
               ) : myNotifs.map(n => (
@@ -1036,6 +1049,17 @@ export default function App() {
         </Suspense>
       )}
       {shareModal}
+      {showPushPrompt && (
+        <div className="push-prompt">
+          <span className="pp-ico" aria-hidden="true">🔔</span>
+          <div className="pp-txt">
+            <div className="pp-h">Turn on notifications</div>
+            <div className="pp-s">Challenges, messages &amp; your teams' match results — on this device.</div>
+          </div>
+          <button className="btn btn-ink btn-sm" onClick={() => dismissPushPrompt(true)}>Enable</button>
+          <button className="hdr-btn" onClick={() => dismissPushPrompt(false)} aria-label="Not now"><Icon name="x" size={16} /></button>
+        </div>
+      )}
       {celebrate && <Celebration message={celebrate} onDone={() => setCelebrate(null)} />}
       {toastMsg && <div className="toast"><Icon name="check" size={16} />{toastMsg}</div>}
     </div>

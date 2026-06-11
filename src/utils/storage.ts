@@ -349,6 +349,18 @@ async function getVapidPublicKey(): Promise<string | null> {
   } catch { return null; }
 }
 
+/** The VAPID key must be passed to pushManager.subscribe() as a BufferSource.
+ *  iOS Safari (unlike desktop Chrome) REJECTS a base64url string, so on iPhone
+ *  the subscription silently never registers. Convert it to a Uint8Array. */
+function urlB64ToUint8(base64: string): Uint8Array {
+  const pad = '='.repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
 /** Ask permission, subscribe to push, and store the subscription (keyed by uid)
  *  in the league's shared push list. Returns true on success. */
 export async function enablePush(uid: string): Promise<boolean> {
@@ -363,7 +375,7 @@ export async function enablePush(uid: string): Promise<boolean> {
     const existing = await reg.pushManager.getSubscription();
     const sub = existing || await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: key,   // base64url string is accepted by the Push API
+      applicationServerKey: urlB64ToUint8(key) as BufferSource,   // BufferSource — required on iOS, not a string
     });
     const json = sub.toJSON();
     const list = (await sget<{ uid: string; sub: PushSubscriptionJSON }[]>('wc:push', true)) || [];
