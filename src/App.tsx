@@ -27,7 +27,7 @@ import { Onboarding } from './views/Onboarding';
 import { MyTeam } from './views/MyTeam';
 import { SoccerStars } from './views/SoccerStars';
 import { SoccerStarsMP } from './views/SoccerStarsMP';
-import { createInvite, joinMatch } from './utils/soccerMatch';
+import { createInvite, joinMatch, loadMatch, sideOf } from './utils/soccerMatch';
 import { formation, toWire } from './game/soccerSim';
 import { DraftView } from './views/DraftView';
 import { TableView } from './views/Leaderboard';
@@ -80,6 +80,14 @@ function LeagueSwitch({ name, onClick }: { name: string; onClick: () => void }) 
 // Fallback engine: deterministic results so the app works offline / pre-feed.
 const ENGINE_SCORES = groupResults();
 const ENGINE_KO = knockoutResults(ENGINE_SCORES);
+
+// The nation a player brings to a LIVE Soccer Stars match: their first drafted
+// pick (draft order, same as single player), skipping `avoid` so two players
+// from the SAME team never bring identical flag discs to one board.
+const liveNationOf = (picks: Record<string, string> | null | undefined, avoid?: string): string => {
+  const mine = POT_KEYS.map(pk => picks?.[pk]).filter((n): n is string => !!n);
+  return mine.find(n => n !== avoid) || mine[0] || 'BRA';
+};
 
 export default function App() {
   const [state, setState] = useState<AppState>(defaultState());
@@ -710,26 +718,52 @@ export default function App() {
     if (me) { const n = await markAllRead(me.id); setNotifs(n); }
   }, [me]);
 
-  // Host a live Soccer Stars match: create the invite, notify the opponent, drop
-  // into the match as side 'a' (left). They join from the Arcade / notification.
+  // Host a live Soccer Stars match: create the invite, notify the opponent
+  // (push deep-links straight into the match via ?join=<id>), and wait in the
+  // lobby as side 'a' (left) until they drop in.
   const startLiveSoccer = useCallback(async (oppId: string, oppName: string) => {
     if (!me || !myTeam) return;
-    const nation = Object.values(myTeam.picks || {})[0] || 'BRA';
+    const nation = liveNationOf(myTeam.picks);
     const match = await createInvite({ id: me.id, name: me.name, nation }, { id: oppId, name: oppName });
-    const link = leagueLink(leagueCodeRef.current);
+    const link = `${leagueLink(leagueCodeRef.current)}&join=${match.id}`;
     await pushNotifs([{ to: oppId, kind: 'challenge', ts: Date.now(), title: '⚽ Live match!', body: `${me.name} challenged you to a live Soccer Stars match — open the Arcade to join.` }]);
-    void pushToMember(leagueCodeRef.current, oppId, '⚽ Live Soccer Stars', `${me.name} wants to play — tap to join.`, link);
-    setLaunch({ game: 'soccer', mode: { kind: 'live', matchId: match.id, side: 'a' } });
+    void pushToMember(leagueCodeRef.current, oppId, '⚽ Live Soccer Stars', `${me.name} wants to play — tap to jump in.`, link);
+    setLaunch({ game: 'soccer', mode: { kind: 'live', matchId: match.id, side: 'a', oppName } });
   }, [me, myTeam]);
 
   // Accept a live invite: seat as side 'b' (right) with the opening formation.
+  // Reads the match first so (1) re-opening a match you're already in just
+  // re-enters it, and (2) your puck nation can dodge the challenger's if you
+  // both drafted the same team.
   const joinLiveSoccer = useCallback(async (matchId: string) => {
     if (!me || !myTeam) return;
-    const nation = Object.values(myTeam.picks || {})[0] || 'BRA';
+    const existing = await loadMatch(matchId);
+    if (!existing) { toast('That match is no longer available.'); return; }
+    const seat = sideOf(existing, me.id);
+    if (seat) {   // already in this match (re-tapped the notification / reopened)
+      const opp = seat === 'a' ? (existing.b?.name ?? existing.invitee?.name) : existing.a.name;
+      setLaunch({ game: 'soccer', mode: { kind: 'live', matchId, side: seat, oppName: opp } });
+      return;
+    }
+    if (existing.status !== 'waiting') { toast('That match is no longer available.'); return; }
+    const nation = liveNationOf(myTeam.picks, existing.a.nation);
     const m = await joinMatch(matchId, { id: me.id, name: me.name, nation }, toWire(formation()));
-    if (m) setLaunch({ game: 'soccer', mode: { kind: 'live', matchId, side: 'b' } });
+    if (m) setLaunch({ game: 'soccer', mode: { kind: 'live', matchId, side: 'b', oppName: m.a.name } });
     else toast('That match is no longer available.');
-  }, [me, myTeam]);
+  }, [me, myTeam, toast]);
+
+  // A push notification deep-links into a live match (?join=<matchId>): once we
+  // know who you are, drop you straight into that lobby and clean the URL.
+  const joinedFromUrl = useRef(false);
+  useEffect(() => {
+    if (!loaded || !me || !myTeam || joinedFromUrl.current) return;
+    let mid = '';
+    try { mid = new URL(window.location.href).searchParams.get('join') || ''; } catch { /* ignore */ }
+    joinedFromUrl.current = true;
+    if (!mid) return;
+    try { window.history.replaceState(null, '', leagueLink(leagueCodeRef.current)); } catch { /* ignore */ }
+    void joinLiveSoccer(mid);
+  }, [loaded, me, myTeam, joinLiveSoccer]);
 
   // launch a game from the Arcade (solo, async challenge, or a live match)
   const launchGame = useCallback((game: ArcadeGame, mode: LaunchMode) => {
@@ -1154,7 +1188,7 @@ export default function App() {
         </div>
       )}
       {launch?.game === 'soccer' && launch.mode.kind === 'live' && (
-        <SoccerStarsMP matchId={launch.mode.matchId} side={launch.mode.side} onClose={() => setLaunch(null)} />
+        <SoccerStarsMP matchId={launch.mode.matchId} side={launch.mode.side} oppName={launch.mode.oppName} onClose={() => setLaunch(null)} />
       )}
       {launch?.game === 'soccer' && launch.mode.kind !== 'live' && myTeam && (
         <SoccerStars team={myTeam} onClose={() => setLaunch(null)} onGameEnd={(meS, cpuS) => handleArcadeScore('soccer', meS - cpuS)} />
