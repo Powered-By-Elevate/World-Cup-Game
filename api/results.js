@@ -35,10 +35,11 @@ import { createClient } from '@supabase/supabase-js';
 const NOAUTH = { auth: { persistSession: false, autoRefreshToken: false } };
 const CACHE_KEY = 'wc:results:cache';
 
-// How long a good payload is served before we ask upstream again. At 10 min a
-// continuously-polled endpoint makes ~144 upstream calls/day — safely under the
-// 250/day free tier with headroom for the rest of the app.
-const SHARED_TTL_MS = Number(process.env.ZAFRONIX_TTL_MS) || 10 * 60_000;
+// How long a good payload is served before we ask upstream again. At 15 min a
+// continuously-polled endpoint makes ~96 upstream calls/day — comfortably under
+// the 250/day free tier even in a pathological 24/7 case. The free tier has no
+// in-play scores anyway, so a final score appearing up to 15 min late is fine.
+const SHARED_TTL_MS = Number(process.env.ZAFRONIX_TTL_MS) || 15 * 60_000;
 // After a 429 (quota exhausted) wait this long before retrying upstream; keep
 // serving the last-good payload meanwhile so the app stays on live data.
 const BACKOFF_429_MS = 30 * 60_000;
