@@ -742,9 +742,11 @@ export default function App() {
   // a game reported a score: always update the leaderboard; settle a challenge once
   const handleArcadeScore = useCallback(async (game: ArcadeGame, score: number) => {
     if (!me) return;
-    // leaderboard: Soccer counts total wins (one per win), Penalty keeps best streak
+    // leaderboard: Soccer counts total wins (one per win); Penalty keeps best
+    // streak — but only SOLO runs (a timed challenge leg is a head-to-head goal
+    // count, not a streak, so it doesn't belong on the streak board).
     if (game === 'soccer') { if (score > 0) await recordScore('soccer', me.id, me.name, 1, 'add'); }
-    else await recordScore('penalty', me.id, me.name, score, 'best');
+    else if (launch?.mode.kind === 'solo') await recordScore('penalty', me.id, me.name, score, 'best');
     const cur = launch;
     if (!cur || launchDone.current) return;
     const mode = cur.mode;
@@ -1159,7 +1161,7 @@ export default function App() {
       )}
       {launch?.game === 'penalty' && (
         <Suspense fallback={<div className="pen-overlay" style={{ display: 'grid', placeItems: 'center', color: '#dfe5ea', fontWeight: 600 }}>Warming up the pitch…</div>}>
-          <PenaltyStreak onClose={() => setLaunch(null)} onScore={(s) => handleArcadeScore('penalty', s)} />
+          <PenaltyStreak onClose={() => setLaunch(null)} onScore={(s) => handleArcadeScore('penalty', s)} mode={launch.mode.kind === 'solo' ? 'streak' : 'timed'} />
         </Suspense>
       )}
       {shareModal}

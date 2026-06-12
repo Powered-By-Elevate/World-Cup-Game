@@ -9,9 +9,9 @@
 import { useEffect, useRef } from 'react';
 import { initPenaltyStreak } from '../game/penaltyStreak.js';
 
-interface Props { onClose: () => void; onScore?: (streak: number) => void; }
+interface Props { onClose: () => void; onScore?: (streak: number) => void; mode?: 'streak' | 'timed'; seconds?: number; }
 
-export function PenaltyStreak({ onClose, onScore }: Props) {
+export function PenaltyStreak({ onClose, onScore, mode = 'streak', seconds = 30 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   // keep the latest callbacks without re-initialising the scene each render
   const closeRef = useRef(onClose);
@@ -25,10 +25,12 @@ export function PenaltyStreak({ onClose, onScore }: Props) {
     const dispose = initPenaltyStreak(root, {
       onClose: () => closeRef.current(),
       onScore: (s) => scoreRef.current && scoreRef.current(s),
+      mode, seconds,
     });
     return () => dispose();
-    // mount once — the scene is heavy; onClose is read via closeRef so [] is correct
-  }, []);
+    // mode/seconds are fixed for a given launch; callbacks are read via refs so
+    // the heavy scene mounts once per launch and never re-inits mid-game.
+  }, [mode, seconds]);
 
   return (
     <div className="pen-overlay" ref={rootRef}>
