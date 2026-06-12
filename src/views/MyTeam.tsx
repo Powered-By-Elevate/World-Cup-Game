@@ -1,5 +1,5 @@
 import { NATION, POT_KEYS } from '../data/nations';
-import { GROUP_MATCHES_OF } from '../data/fixtures';
+import { GROUP_MATCHES_OF, MATCHES } from '../data/fixtures';
 import type { Match, KOMatch } from '../data/fixtures';
 import type { LiveNowMatch } from '../data/liveResults';
 import type { AppState, ScoreEntry, Team } from '../data/types';
@@ -66,9 +66,12 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
   });
   rows.sort((a, b) => (a.ko ? 'Z' + a.id : a.d).localeCompare(b.ko ? 'Z' + b.id : b.d));
 
-  const next = rows.find((r): r is MatchRow =>
-    !r.ko && matchStatus(r.d, scores[r.i]) !== 'ft' && parseDate(r.d).getTime() > Date.now()
-  );
+  // "Next up" = the next match KICKING OFF anywhere in the tournament (not just
+  // this team's) — the team's own upcoming games live in "Your fixtures" below.
+  const nowMs = Date.now();
+  const next = MATCHES
+    .filter(m => matchStatus(m.d, scores[m.i]) !== 'ft' && parseDate(m.d).getTime() > nowMs)
+    .sort((a, b) => parseDate(a.d).getTime() - parseDate(b.d).getTime())[0];
 
   return (
     <div className="content">
