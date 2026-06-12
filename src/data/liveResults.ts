@@ -71,12 +71,17 @@ export async function fetchLiveResults(): Promise<LiveData | null> {
     json = await r.json();
   } catch { return null; }
   if (json.source !== 'live' || !Array.isArray(json.matches)) return null;
+  return mapLive(json.matches);
+}
 
+/** Pure: map the normalized /api/results feed onto our fixtures + bracket.
+ *  Shared by the client poll and the server-side notification tick. */
+export function mapLive(matches: FeedMatch[]): LiveData {
   const scores: Record<string, ScoreEntry> = {};
   const ko: KOMatch[] = [];
   const liveNow: LiveNowMatch[] = [];
 
-  for (const m of json.matches) {
+  for (const m of matches) {
     const h = toId(m.home?.name ?? m.home?.tla);
     const a = toId(m.away?.name ?? m.away?.tla);
 
@@ -109,4 +114,27 @@ export async function fetchLiveResults(): Promise<LiveData | null> {
   }
 
   return { scores, ko, liveNow };
+}
+
+/** A fixture that hasn't kicked off yet, resolved to our nation ids. */
+export interface UpcomingMatch { key: string; h: string; a: string; kickoff: string; knockout: boolean; }
+
+/** Pure: the not-yet-started matches (feed status TIMED) whose BOTH teams are
+ *  known, resolved to nation ids + kickoff time. Drives the advance reminder.
+ *  Group keys mirror the fixtures (g:<mi>); knockouts key off the feed id. */
+export function upcomingFromFeed(matches: FeedMatch[]): UpcomingMatch[] {
+  const out: UpcomingMatch[] = [];
+  for (const m of matches) {
+    if (m.status !== 'TIMED' || !m.date) continue;
+    const h = toId(m.home?.name ?? m.home?.tla);
+    const a = toId(m.away?.name ?? m.away?.tla);
+    if (!h || !a) continue;
+    if (m.stage === 'GROUP_STAGE') {
+      const f = PAIR[[h, a].sort().join('|')];
+      out.push({ key: `g:${f?.mi || m.id}`, h, a, kickoff: m.date, knockout: false });
+    } else if (STAGE_ROUND[m.stage]) {
+      out.push({ key: `k:api_${m.id}`, h, a, kickoff: m.date, knockout: true });
+    }
+  }
+  return out;
 }

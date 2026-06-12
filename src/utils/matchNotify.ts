@@ -19,7 +19,7 @@ import { parseDate } from './helpers';
 import type { Team, Scoring, ScoreEntry } from '../data/types';
 
 export interface MatchEventRecipient { memberId: string; name: string; body: string; }
-export interface MatchEvent { key: string; kind: 'start' | 'result'; title: string; recipients: MatchEventRecipient[]; }
+export interface MatchEvent { key: string; kind: 'start' | 'result' | 'soon'; title: string; recipients: MatchEventRecipient[]; }
 
 const nm = (id: string) => NATION[id]?.name || id;
 const START_WINDOW = 20 * 60 * 1000;          // only ping "kickoff" within 20 min of the scheduled start
@@ -114,6 +114,51 @@ export function detectMatchEvents(
         });
       }
     }
+  }
+
+  return { events, watch: w };
+}
+
+const REMIND_LEAD = 30 * 60 * 1000;   // remind ~30 min before kickoff
+const REMIND_FLOOR = 5 * 60 * 1000;   // ...but not once we're inside 5 min (the kickoff ping covers it)
+
+/** A not-yet-started match resolved to nation ids + ISO kickoff (from the feed). */
+export interface UpcomingMatch { key: string; h: string; a: string; kickoff: string; knockout: boolean; }
+
+/** Advance "your match is coming up" reminders. Fires once per match, only
+ *  inside the [FLOOR, LEAD] window before kickoff, to whoever drafted either
+ *  nation. Like detectMatchEvents it claims keys in the shared watch set so it
+ *  fires once per league across all clients + the server tick; first run seeds
+ *  silently. kickoff is the feed's ISO-UTC time, parsed directly (NOT via the
+ *  ET-only parseDate used for the static fixtures). */
+export function detectUpcoming(
+  teams: Team[],
+  upcoming: UpcomingMatch[],
+  watch: Record<string, number> | null,
+  now = Date.now(),
+  leadMs = REMIND_LEAD,
+): { events: MatchEvent[]; watch: Record<string, number> } {
+  const fresh = watch == null;
+  const w: Record<string, number> = { ...(watch || {}) };
+  const events: MatchEvent[] = [];
+
+  for (const u of upcoming) {
+    const key = `${u.key}:soon`;
+    if (w[key]) continue;
+    const remain = new Date(u.kickoff).getTime() - now;
+    if (!Number.isFinite(remain) || remain <= 0 || remain > leadMs) continue;  // outside the window → re-check later
+    w[key] = now;                                  // claim now so a later tick can't double-fire it
+    if (fresh || remain < REMIND_FLOOR) continue;  // seed silently; too-close is the kickoff ping's job
+    const rec = holders(teams, u.h, u.a);
+    if (!rec.length) continue;
+    const mins = Math.max(5, Math.round(remain / 60000 / 5) * 5);   // rounded to 5 min for a natural-sounding ETA
+    events.push({
+      key, kind: 'soon', title: `⏰ ${nm(u.h)} vs ${nm(u.a)} soon`,
+      recipients: rec.map(r => ({
+        memberId: r.memberId, name: r.name,
+        body: `Your ${nm(r.nid)} plays${u.knockout ? ' a knockout' : ''} in about ${mins} minutes. ${nm(u.h)} vs ${nm(u.a)}.`,
+      })),
+    });
   }
 
   return { events, watch: w };
