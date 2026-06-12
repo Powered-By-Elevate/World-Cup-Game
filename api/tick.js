@@ -607,6 +607,18 @@ var NOAUTH = { auth: { persistSession: false, autoRefreshToken: false } };
 var CAP = 200;
 var kindOf = (k) => k === "start" ? "match-start" : k === "result" ? "match-result" : "match-soon";
 async function handler(req, res) {
+  if (req.query?.ping) {
+    res.status(200).json({
+      ok: true,
+      fn: "tick",
+      env: {
+        TICK_SECRET: !!process.env.TICK_SECRET,
+        supabase: !!(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL),
+        vapid: !!process.env.VAPID_PUBLIC_KEY
+      }
+    });
+    return;
+  }
   const secret = process.env.TICK_SECRET;
   if (!secret) {
     res.status(200).json({ ok: false, error: "not_configured" });

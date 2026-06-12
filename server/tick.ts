@@ -35,6 +35,21 @@ const CAP = 200;
 const kindOf = (k: string) => (k === 'start' ? 'match-start' : k === 'result' ? 'match-result' : 'match-soon');
 
 export default async function handler(req: Req, res: Res) {
+  // Public health check (no secret) — like the GET probes on push.js / notify-draft.js.
+  // Reports which env vars are present (booleans only, never values) so a missing
+  // or mis-scoped TICK_SECRET is visible without guessing.
+  if (req.query?.ping) {
+    res.status(200).json({
+      ok: true, fn: 'tick',
+      env: {
+        TICK_SECRET: !!process.env.TICK_SECRET,
+        supabase: !!(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL),
+        vapid: !!process.env.VAPID_PUBLIC_KEY,
+      },
+    });
+    return;
+  }
+
   const secret = process.env.TICK_SECRET;
   if (!secret) { res.status(200).json({ ok: false, error: 'not_configured' }); return; }
   const authh = req.headers.authorization || '';
