@@ -43,6 +43,12 @@ const SHARED_TTL_MS = Number(process.env.ZAFRONIX_TTL_MS) || 15 * 60_000;
 // After a 429 (quota exhausted) wait this long before retrying upstream; keep
 // serving the last-good payload meanwhile so the app stays on live data.
 const BACKOFF_429_MS = 30 * 60_000;
+// 429 with NO snapshot cached yet (e.g. the fix shipped after the quota was
+// already blown): retry sooner so we grab the FIRST opening as the rolling 24h
+// window drains and seed the cache. 10 min = ≤144 upstream attempts/day, still
+// under the 250/day cap even if rejected requests count — so it can't perpetuate
+// the exhaustion. Once seeded we fall back to the longer BACKOFF_429_MS.
+const BACKOFF_SEED_MS = 10 * 60_000;
 // After any other upstream failure, retry sooner.
 const BACKOFF_ERR_MS = 2 * 60_000;
 // L1: warm-instance cache in front of the shared store, to avoid a Supabase
@@ -158,7 +164,7 @@ export default async function handler(req, res) {
     });
     if (!r.ok) {
       const body = await r.text().catch(() => "");
-      const backoff = r.status === 429 ? BACKOFF_429_MS : BACKOFF_ERR_MS;
+      const backoff = r.status === 429 ? (shared?.good ? BACKOFF_429_MS : BACKOFF_SEED_MS) : BACKOFF_ERR_MS;
       // Preserve last-good payload; just set the backoff window.
       await writeShared(sb, {
         good: shared?.good || null,
