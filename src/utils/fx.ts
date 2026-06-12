@@ -72,6 +72,19 @@ export const fx = {
     vibe([15, 30, 70]);
   },
   save(): void { tone(190, 0.2, 'sawtooth', 0.2, 90); noise(0.12, 0.18, 320); vibe([10, 45]); },
+  /* incoming chat — ref's whistle: short blast, then a longer rising one */
+  whistle(): void {
+    tone(2350, 0.09, 'square', 0.05); noise(0.09, 0.1, 2100);
+    tone(2350, 0.18, 'square', 0.06, 2550, 0.15); noise(0.18, 0.12, 2100, 0.15);
+    vibe([10, 50, 18]);
+  },
+  /* incoming challenge / match alert — stadium air horn (stacked saws, slow bend) */
+  horn(): void {
+    tone(233, 0.5, 'sawtooth', 0.15, 218);
+    tone(466, 0.5, 'sawtooth', 0.09, 436);
+    tone(699, 0.45, 'sawtooth', 0.045, 654);
+    vibe([20, 30, 60]);
+  },
   riser(): void { tone(220, 0.55, 'sawtooth', 0.1, 680); vibe(12); },   // draft drumroll-ish riser
   reveal(): void {
     tone(523, 0.1, 'sine', 0.18);

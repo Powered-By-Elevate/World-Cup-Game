@@ -320,6 +320,26 @@ export default function App() {
     return () => { alive = false; clearInterval(iv); };
   }, [loaded, me, leagueCode]);
 
+  // soundtrack the arrivals (in-app only — OS push sounds can't be customized):
+  // ref's whistle for a new chat message, air horn for challenges/match alerts.
+  // The refs start at -1 so the first poll after load/league-switch is silent.
+  const chatSndRef = useRef(-1);
+  const notifSndRef = useRef(-1);
+  useEffect(() => { chatSndRef.current = -1; notifSndRef.current = -1; }, [leagueCode]);
+  useEffect(() => {
+    if (!me) return;
+    const maxTs = chat.reduce((a, m) => (m.from !== me.id && visibleTo(me.id, m) && m.ts > a ? m.ts : a), 0);
+    if (chatSndRef.current === -1) { chatSndRef.current = maxTs; return; }
+    if (maxTs > chatSndRef.current) { chatSndRef.current = maxTs; fx.whistle(); }
+  }, [chat, me]);
+  useEffect(() => {
+    if (!me) return;
+    // chat notifs excluded — the whistle above already covers them
+    const maxTs = notifs.reduce((a, n) => (n.to === me.id && n.kind !== 'chat' && n.ts > a ? n.ts : a), 0);
+    if (notifSndRef.current === -1) { notifSndRef.current = maxTs; return; }
+    if (maxTs > notifSndRef.current) { notifSndRef.current = maxTs; fx.horn(); }
+  }, [notifs, me]);
+
   // one-time soft prompt to turn on notifications (the Enable tap is the gesture
   // iOS requires — a bare on-load requestPermission() is ignored on iPhone)
   useEffect(() => {

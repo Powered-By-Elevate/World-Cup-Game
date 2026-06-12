@@ -72,22 +72,30 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
 
   return (
     <div className="content">
-      {/* playing right now — blinking LIVE banner */}
+      {/* playing right now — blinking LIVE pill + scrolling ticker. The run of
+          games is rendered twice and the track slides -50%, so long names and
+          flags loop past instead of getting clipped; the copy is aria-hidden. */}
       {liveNow && liveNow.length > 0 && (
         <button className="live-banner" onClick={() => setTab('matches')}>
           <span className="lb-pill"><span className="lb-dot" />Live</span>
-          <span className="lb-games">
-            {liveNow.map((g, i) => (
-              <span key={i} className="lb-game">
-                <Flag id={g.h} size={20} ring="ink" shine={false} />
-                <b>{NATION[g.h]?.name || g.h}</b>
-                <span className="lb-vs">v</span>
-                <b>{NATION[g.a]?.name || g.a}</b>
-                <Flag id={g.a} size={20} ring="ink" shine={false} />
-              </span>
-            ))}
+          <span className="lb-marquee">
+            <span className="lb-track" style={{ animationDuration: `${Math.max(11, liveNow.length * 8)}s` }}>
+              {[0, 1].map(dup => (
+                <span key={dup} className="lb-run" aria-hidden={dup === 1}>
+                  {liveNow.map((g, i) => (
+                    <span key={i} className="lb-game">
+                      <Flag id={g.h} size={20} ring="ink" shine={false} />
+                      <b>{NATION[g.h]?.name || g.h}</b>
+                      <span className="lb-vs">v</span>
+                      <b>{NATION[g.a]?.name || g.a}</b>
+                      <Flag id={g.a} size={20} ring="ink" shine={false} />
+                      <span className="lb-now">Playing now</span>
+                    </span>
+                  ))}
+                </span>
+              ))}
+            </span>
           </span>
-          <span className="lb-now">Playing now</span>
         </button>
       )}
 
