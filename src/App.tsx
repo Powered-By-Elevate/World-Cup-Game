@@ -233,6 +233,16 @@ export default function App() {
       upsertLeague(code, ns.leagueName);
       if (u) await addUserLeague(u.id, code, ns.leagueName);
       setLeagues(listLeagues());
+    } else {
+      // Older leagues never wrote their name into SHARED state — it lived only
+      // in the creator's device registry, so everyone else discovered the
+      // league nameless. Backfill it from this device's registry; once any
+      // device that knows the name loads the league, the name is shared.
+      const known = listLeagues().find(l => l.code === code)?.name;
+      if (known) {
+        await commitState(s => { s.leagueName = known; return s; });
+        if (u) await addUserLeague(u.id, code, known);
+      }
     }
     setLoaded(true);
   }, [commitState]);

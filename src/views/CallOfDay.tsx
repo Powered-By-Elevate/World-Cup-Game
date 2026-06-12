@@ -9,7 +9,7 @@ import { todaySlate, nextSlate, isCallOpen, callVerdict, callerStats } from '../
 import type { CallsMap, NameInfo } from '../utils/calls';
 import type { Match } from '../data/fixtures';
 
-interface Common {
+export interface Common {
   calls: CallsMap;
   scores: Record<string, ScoreEntry>;
   meId: string;
@@ -146,14 +146,12 @@ export function CallCard({ calls, scores, meId, names, onCall, onSeeBoard }: Com
   );
 }
 
-/* ---------- the Calls tab: call card + Best Caller standings ---------- */
-export function CallersBoard({ calls, scores, meId, names, onCall }: Common) {
+/* ---------- Best Caller standings (lives on the Arcade Leaderboards tab) ---------- */
+export function BestCallers({ calls, scores, meId, names }: Omit<Common, 'onCall'>) {
   const stats = useMemo(() => callerStats(calls, scores, names), [calls, scores, names]);
 
   return (
-    <div className="content">
-      <CallCard calls={calls} scores={scores} meId={meId} names={names} onCall={onCall} />
-
+    <div>
       <div className="sec-head">
         <span className="eyebrow">🏅 Best Caller</span>
         <span className="muted" style={{ fontSize: 12 }}>1 pt / correct · draws don't count</span>
@@ -163,7 +161,7 @@ export function CallersBoard({ calls, scores, meId, names, onCall }: Common) {
         <div className="card pad" style={{ textAlign: 'center' }}>
           <div className="h2">No calls yet</div>
           <p className="muted" style={{ fontSize: 14, marginTop: 8 }}>
-            Make the Call of the Day above — every right pick climbs you up this board.
+            Make the Calls of the Day in the Arcade — every right pick climbs you up this board.
           </p>
         </div>
       ) : (

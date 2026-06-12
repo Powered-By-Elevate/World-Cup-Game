@@ -2,23 +2,22 @@
    ARCADE — the minigames hub. Two sub-tabs:
      • Games  — launch each game (single-player or challenge a league
                 member), plus your incoming/outgoing/settled challenges
-                and the Daily Calls board.
-     • Boards — per-game leaderboards: top 5, one best score per person.
+                and the Daily Calls slate.
+     • Boards — per-game leaderboards (top 5, one best score per person)
+                plus the Best Caller standings.
    Action games open as full-screen overlays (App owns the launch);
    Daily Calls renders inline.
    ============================================================ */
 import { useEffect, useState } from 'react';
-import type { ComponentProps } from 'react';
 import { Icon } from '../components/Icon';
 import { Avatar } from '../components/shared';
-import { CallersBoard } from './CallOfDay';
+import { CallCard, BestCallers } from './CallOfDay';
+import type { Common as CallsProps } from './CallOfDay';
 import {
   GAMES, GAME_META, loadScores, leaderboard, loadChallenges,
   incoming, outgoing, settled, winnerOf,
 } from '../utils/arcade';
 import type { ArcadeGame, LaunchMode, ScoreEntry, Challenge } from '../utils/arcade';
-
-type CallsProps = ComponentProps<typeof CallersBoard>;
 
 interface Member { id: string; name: string; team: string; }
 
@@ -53,7 +52,7 @@ export function Arcade({ meId, members, onLaunch, ...calls }: Props) {
         <button className="btn btn-sm" style={{ marginBottom: 14 }} onClick={() => setView('hub')}>
           <span style={{ display: 'inline-flex', transform: 'rotate(180deg)' }}><Icon name="chevron" size={14} /></span> Arcade
         </button>
-        <CallersBoard {...calls} meId={meId} />
+        <CallCard {...calls} meId={meId} onSeeBoard={() => { setView('hub'); setSub('boards'); }} />
       </div>
     );
   }
@@ -177,6 +176,8 @@ export function Arcade({ meId, members, onLaunch, ...calls }: Props) {
               </div>
             );
           })}
+          {/* Daily Calls standings — lives here with the rest of the boards */}
+          <BestCallers {...calls} meId={meId} />
         </>
       )}
 

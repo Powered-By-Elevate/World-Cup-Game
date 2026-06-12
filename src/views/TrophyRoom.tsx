@@ -3,6 +3,7 @@
    League honours grid + inspect overlay. Ported from the MATCHDAY design.
    ============================================================ */
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Team } from '../data/types';
 import type { Award } from '../utils/awards';
 import { holdersByTrophy } from '../utils/awards';
@@ -113,14 +114,17 @@ export function TrophyRoom({ teams, awardsByTeam, myTeam, isCommish, onSetAwardH
         </>
       )}
 
-      {inspectIdx >= 0 && (
+      {/* Portal to <body>: the screen container is its own stacking context
+          (motion pass), which trapped the overlay BELOW the desktop sidebar. */}
+      {inspectIdx >= 0 && createPortal(
         <TrophyInspect
           list={inspectList} index={inspectIdx} myTeam={myTeam} view={view}
           holders={holders} teamById={teamById} teams={teams} isCommish={isCommish}
           onSetAwardHolder={onSetAwardHolder} onShare={onShare}
           onNav={(i) => setInspectId(inspectList[(i + inspectList.length) % inspectList.length].id)}
           onClose={() => setInspectId(null)}
-        />
+        />,
+        document.body,
       )}
     </div>
   );
