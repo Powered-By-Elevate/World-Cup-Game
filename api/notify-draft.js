@@ -18,6 +18,7 @@
 import webpush from 'web-push';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
+import { vapidConfig } from './_vapid.js';
 
 const NOAUTH = { auth: { persistSession: false, autoRefreshToken: false } };
 const POT_LABEL = { FAV: 'Favorite', UND: 'Underdog', LNG: 'Longshot' };
@@ -78,9 +79,8 @@ export function announceHtml(message, link) {
 export default async function handler(req, res) {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-  const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
-  const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-  const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:noreply@worldcupdraft.app';
+  // sanitized — Apple 403s the whole JWT over a messy subject/key (see _vapid.js)
+  const { publicKey: VAPID_PUBLIC, privateKey: VAPID_PRIVATE, subject: VAPID_SUBJECT } = vapidConfig();
 
   if (req.method === 'GET') {
     res.status(200).json({

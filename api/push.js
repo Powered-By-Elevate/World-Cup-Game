@@ -13,15 +13,18 @@
  */
 import webpush from 'web-push';
 import { createClient } from '@supabase/supabase-js';
+import { vapidConfig } from './_vapid.js';
 
 const NOAUTH = { auth: { persistSession: false, autoRefreshToken: false } };
 
 export default async function handler(req, res) {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-  const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
-  const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
-  const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:noreply@worldcupdraft.app';
+  // sanitized — Apple 403s the whole JWT over a messy subject/key (see _vapid.js)
+  const vapid = vapidConfig();
+  const VAPID_PUBLIC = vapid.publicKey;
+  const VAPID_PRIVATE = vapid.privateKey;
+  const VAPID_SUBJECT = vapid.subject;
 
   if (req.method !== 'POST' && req.method !== 'GET') { res.status(405).json({ error: 'method_not_allowed' }); return; }
   if (!url || !anonKey) { res.status(200).json({ ok: false, error: 'not_configured' }); return; }
@@ -32,7 +35,19 @@ export default async function handler(req, res) {
   // the notify-draft health check. Also surfaces each member's recent send log.
   if (req.method === 'GET') {
     const league = (req.query?.league || '').toString().trim();
-    if (!league) { res.status(200).json({ ok: true, ping: true }); return; }
+    if (!league) {
+      // no league → VAPID health: shows the subject Apple will see and flags
+      // env vars that carried quotes/whitespace (keys themselves never returned)
+      res.status(200).json({
+        ok: true, ping: true,
+        vapid: {
+          subject: VAPID_SUBJECT, subjectEnvSet: vapid.subjectEnvSet,
+          publicKeyLen: VAPID_PUBLIC.length, privateKeyLen: VAPID_PRIVATE.length,
+          envNeededCleaning: vapid.messy,
+        },
+      });
+      return;
+    }
     const sb = createClient(url, anonKey, NOAUTH);
     const { data: row } = await sb.from('app_kv').select('value').eq('key', `${league}:wc:state`).maybeSingle();
     const state = row?.value || null;
