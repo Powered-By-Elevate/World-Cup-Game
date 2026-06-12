@@ -38,8 +38,22 @@ const CAP = 200;
 const kindOf = (k: string) => (k === 'start' ? 'match-start' : k === 'result' ? 'match-result' : 'match-soon');
 
 export default async function handler(req: Req, res: Res) {
-  // Liveness marker — confirms the new build is deployed without needing the secret.
-  if (req.query?.ping) { res.status(200).json({ ok: true, marker: 'dyn-import-diag' }); return; }
+  // Liveness + diagnostics (no secret needed): confirms the build is live, whether
+  // the ../src bundle imports on Vercel, and which env vars are visible.
+  if (req.query?.ping) {
+    let importsOk = false, importErr = null;
+    try { await Promise.all([import('../src/data/liveResults'), import('../src/utils/matchNotify'), import('../src/data/types'), import('../src/utils/helpers')]); importsOk = true; }
+    catch (e) { importErr = String((e as Error)?.stack || (e as Error)?.message || e).slice(0, 400); }
+    res.status(200).json({
+      ok: true, marker: 'diag2', importsOk, importErr,
+      env: {
+        TICK_SECRET: !!process.env.TICK_SECRET,
+        SUPABASE_URL: !!(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL),
+        VAPID_PUBLIC_KEY: !!process.env.VAPID_PUBLIC_KEY,
+      },
+    });
+    return;
+  }
 
   const secret = process.env.TICK_SECRET;
   if (!secret) { res.status(200).json({ ok: false, error: 'not_configured' }); return; }
