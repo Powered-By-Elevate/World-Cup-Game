@@ -11,11 +11,16 @@ import type { Match } from '../data/fixtures';
 
 export interface Common {
   calls: CallsMap;
+  /** memberId → matchId → number of changes already used (max 2). */
+  callChanges?: Record<string, Record<string, number>>;
   scores: Record<string, ScoreEntry>;
   meId: string;
   names: Record<string, NameInfo>;
   onCall: (matchId: string, nationId: string) => void;
 }
+
+/** A pick can be adjusted this many times after the initial choice. */
+const MAX_CALL_CHANGES = 2;
 
 /** Re-render on a slow clock so the open call advances + the countdown ticks. */
 function useNow(ms = 20000) {
@@ -25,19 +30,22 @@ function useNow(ms = 20000) {
 }
 
 /* ---------- one compact row per fixture in the day's slate ---------- */
-function CallRow({ m, now, pick, scores, onCall }: {
-  m: Match; now: number; pick?: string;
+function CallRow({ m, now, pick, changesUsed = 0, scores, onCall }: {
+  m: Match; now: number; pick?: string; changesUsed?: number;
   scores: Record<string, ScoreEntry>; onCall: (matchId: string, nationId: string) => void;
 }) {
   const open = isCallOpen(m, now);
   const sc = scores[m.i];
   const verdict = pick ? callVerdict(m.i, pick, scores) : null;
+  const left = MAX_CALL_CHANGES - changesUsed;
+  // Tappable while open and you still have an initial pick or a change to spend.
+  const canPick = open && (!pick || left > 0);
 
   const side = (nid: string, right: boolean) => {
     const cls = 'cod-side' + (right ? ' right' : '')
-      + (pick === nid ? ' picked' : pick || !open ? ' dim' : ' open');
+      + (pick === nid ? ' picked' : canPick ? ' open' : ' dim');
     return (
-      <button className={cls} disabled={!open || !!pick} onClick={() => onCall(m.i, nid)}>
+      <button className={cls} disabled={!canPick} onClick={() => onCall(m.i, nid)}>
         <Flag id={nid} size={30} ring={pick === nid ? 'pot' : 'ink'} />
         <span className="cn">{NATION[nid].name}</span>
       </button>
@@ -46,7 +54,9 @@ function CallRow({ m, now, pick, scores, onCall }: {
 
   const meta = open
     ? (pick
-      ? <>🔒<br />{fmtTime(m.d).replace(' ET', '')}</>
+      ? (left > 0
+        ? <>↺ {left} left<br />{fmtTime(m.d).replace(' ET', '')}</>
+        : <>🔒<br />{fmtTime(m.d).replace(' ET', '')}</>)
       : <>{fmtTime(m.d).replace(' ET', '')}</>)
     : verdict === 'correct' ? <span className="ok">✓ Right</span>
     : verdict === 'wrong' ? <span className="bad">✗ Wrong</span>
@@ -67,7 +77,7 @@ function CallRow({ m, now, pick, scores, onCall }: {
 }
 
 /* ---------- the day's calls (used on Home + atop the Callers tab) ---------- */
-export function CallCard({ calls, scores, meId, names, onCall, onSeeBoard }: Common & { onSeeBoard?: () => void }) {
+export function CallCard({ calls, callChanges, scores, meId, names, onCall, onSeeBoard }: Common & { onSeeBoard?: () => void }) {
   const now = useNow();
   const slate = todaySlate(now);
   const upcoming = nextSlate(now);
@@ -93,12 +103,12 @@ export function CallCard({ calls, scores, meId, names, onCall, onSeeBoard }: Com
         <>
           <div style={{ display: 'grid', gap: 8 }}>
             {slate.map(m => (
-              <CallRow key={m.i} m={m} now={now} pick={calls[meId]?.[m.i]} scores={scores} onCall={onCall} />
+              <CallRow key={m.i} m={m} now={now} pick={calls[meId]?.[m.i]} changesUsed={callChanges?.[meId]?.[m.i] || 0} scores={scores} onCall={onCall} />
             ))}
           </div>
-          {called < slate.length && slate.some(m => isCallOpen(m, now)) && (
+          {slate.some(m => isCallOpen(m, now)) && (
             <p style={{ fontSize: 12, marginTop: 12, marginBottom: 0, color: '#9C988C', textAlign: 'center' }}>
-              Tap who wins in each game — picks lock at kickoff.
+              Tap who wins in each game — change a pick up to twice before kickoff.
             </p>
           )}
         </>

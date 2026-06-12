@@ -43,6 +43,9 @@ export interface AppState {
   awards?: AssignedAward[];
   /** "Call of the Day" predictions: memberId → matchId → picked nation id. */
   calls?: Record<string, Record<string, string>>;
+  /** Times each member has CHANGED a call: memberId → matchId → count. A pick
+   *  can be adjusted up to 2 times before kickoff (initial + 2 changes). */
+  callChanges?: Record<string, Record<string, number>>;
   v: number;
 }
 

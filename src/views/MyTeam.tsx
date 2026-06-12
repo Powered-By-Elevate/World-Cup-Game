@@ -25,6 +25,7 @@ interface Props {
   commishName: string | null;
   onSetDraftTime: (ts: number | null) => void;
   calls: CallsMap;
+  callChanges?: Record<string, Record<string, number>>;
   meId: string;
   names: Record<string, NameInfo>;
   onCall: (matchId: string, nationId: string) => void;
@@ -35,7 +36,7 @@ type MatchRow = Match & { nid: string; ko?: false };
 type KORow = KOMatch & { nid: string; ko: true };
 type Row = MatchRow | KORow;
 
-export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime, calls, meId, names, onCall, liveNow }: Props) {
+export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInvite, isCommish, commishName, onSetDraftTime, calls, callChanges, meId, names, onCall, liveNow }: Props) {
   const drafted = state.draftDone && !!myTeam.picks;
 
   // Before the draft runs, the home screen is a hype poster, not an empty shell.
@@ -138,7 +139,7 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
 
       {/* Call of the Day — the one-tap daily habit, front and center */}
       <div style={{ marginTop: 14 }}>
-        <CallCard calls={calls} scores={scores} meId={meId} names={names} onCall={onCall} onSeeBoard={() => setTab('arcade')} />
+        <CallCard calls={calls} callChanges={callChanges} scores={scores} meId={meId} names={names} onCall={onCall} onSeeBoard={() => setTab('arcade')} />
       </div>
 
       <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={onTeamInvite}>
