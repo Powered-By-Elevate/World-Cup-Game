@@ -26,6 +26,9 @@ import { fx } from './utils/fx';
 import { Onboarding } from './views/Onboarding';
 import { MyTeam } from './views/MyTeam';
 import { SoccerStars } from './views/SoccerStars';
+import { SoccerStarsMP } from './views/SoccerStarsMP';
+import { createInvite, joinMatch } from './utils/soccerMatch';
+import { formation, toWire } from './game/soccerSim';
 import { DraftView } from './views/DraftView';
 import { TableView } from './views/Leaderboard';
 import { MatchesView } from './views/MatchesView';
@@ -707,11 +710,34 @@ export default function App() {
     if (me) { const n = await markAllRead(me.id); setNotifs(n); }
   }, [me]);
 
-  // launch a game from the Arcade (solo, a new challenge, or answering one)
+  // Host a live Soccer Stars match: create the invite, notify the opponent, drop
+  // into the match as side 'a' (left). They join from the Arcade / notification.
+  const startLiveSoccer = useCallback(async (oppId: string, oppName: string) => {
+    if (!me || !myTeam) return;
+    const nation = Object.values(myTeam.picks || {})[0] || 'BRA';
+    const match = await createInvite({ id: me.id, name: me.name, nation }, { id: oppId, name: oppName });
+    const link = leagueLink(leagueCodeRef.current);
+    await pushNotifs([{ to: oppId, kind: 'challenge', ts: Date.now(), title: '⚽ Live match!', body: `${me.name} challenged you to a live Soccer Stars match — open the Arcade to join.` }]);
+    void pushToMember(leagueCodeRef.current, oppId, '⚽ Live Soccer Stars', `${me.name} wants to play — tap to join.`, link);
+    setLaunch({ game: 'soccer', mode: { kind: 'live', matchId: match.id, side: 'a' } });
+  }, [me, myTeam]);
+
+  // Accept a live invite: seat as side 'b' (right) with the opening formation.
+  const joinLiveSoccer = useCallback(async (matchId: string) => {
+    if (!me || !myTeam) return;
+    const nation = Object.values(myTeam.picks || {})[0] || 'BRA';
+    const m = await joinMatch(matchId, { id: me.id, name: me.name, nation }, toWire(formation()));
+    if (m) setLaunch({ game: 'soccer', mode: { kind: 'live', matchId, side: 'b' } });
+    else toast('That match is no longer available.');
+  }, [me, myTeam]);
+
+  // launch a game from the Arcade (solo, async challenge, or a live match)
   const launchGame = useCallback((game: ArcadeGame, mode: LaunchMode) => {
     launchDone.current = false;
+    if (mode.kind === 'live-new') { void startLiveSoccer(mode.oppId, mode.oppName); return; }
+    if (mode.kind === 'live-join') { void joinLiveSoccer(mode.matchId); return; }
     setLaunch({ game, mode });
-  }, []);
+  }, [startLiveSoccer, joinLiveSoccer]);
 
   // a game reported a score: always update the leaderboard; settle a challenge once
   const handleArcadeScore = useCallback(async (game: ArcadeGame, score: number) => {
@@ -1125,7 +1151,10 @@ export default function App() {
           </div>
         </div>
       )}
-      {launch?.game === 'soccer' && myTeam && (
+      {launch?.game === 'soccer' && launch.mode.kind === 'live' && (
+        <SoccerStarsMP matchId={launch.mode.matchId} side={launch.mode.side} onClose={() => setLaunch(null)} />
+      )}
+      {launch?.game === 'soccer' && launch.mode.kind !== 'live' && myTeam && (
         <SoccerStars team={myTeam} onClose={() => setLaunch(null)} onGameEnd={(meS, cpuS) => handleArcadeScore('soccer', meS - cpuS)} />
       )}
       {launch?.game === 'penalty' && (
