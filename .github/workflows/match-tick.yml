@@ -1,0 +1,43 @@
+name: Match notification tick
+
+# Pings /api/tick so kickoff / full-time / "match coming up" notifications fire
+# on time even when nobody has the app open. The endpoint does all the work
+# (and is secret-gated); this job is just a heartbeat — no secrets beyond the
+# shared TICK_SECRET, no Node, ~2s per run. Public repo → Actions minutes free.
+#
+# Setup (one-time):
+#   1. Repo → Settings → Secrets and variables → Actions → New repository secret
+#      name: TICK_SECRET   value: <a long random string>
+#   2. Set the SAME value as the TICK_SECRET env var in the Vercel project.
+# Until both exist the endpoint safely no-ops.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # every 5 min (GitHub's minimum; runs may be delayed under load)
+  workflow_dispatch: {}      # manual "Run workflow" button for testing
+
+# If a tick is still running when the next is due, skip rather than pile up.
+concurrency:
+  group: match-tick
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /api/tick
+        env:
+          TICK_SECRET: ${{ secrets.TICK_SECRET }}
+        run: |
+          if [ -z "$TICK_SECRET" ]; then
+            echo "TICK_SECRET not set — skipping (add the repo secret to enable)."
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/tick.out -w '%{http_code}' \
+            -X POST "https://world-cup-game-zeta.vercel.app/api/tick" \
+            -H "Authorization: Bearer $TICK_SECRET" \
+            -H "content-type: application/json") || true
+          echo "HTTP $code"
+          cat /tmp/tick.out || true
+          # Don't fail the scheduled job on a transient blip; the next tick retries.
+          if [ "$code" = "401" ]; then echo "::error::tick rejected the secret (TICK_SECRET mismatch)"; exit 1; fi

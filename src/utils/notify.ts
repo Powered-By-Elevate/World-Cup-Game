@@ -8,7 +8,7 @@
 import { sget, sset } from './storage';
 import { uid } from './helpers';
 
-export type NotifKind = 'challenge' | 'challenge-result' | 'chat' | 'match-start' | 'match-result';
+export type NotifKind = 'challenge' | 'challenge-result' | 'chat' | 'match-start' | 'match-result' | 'match-soon';
 
 export interface Notif {
   id: string;

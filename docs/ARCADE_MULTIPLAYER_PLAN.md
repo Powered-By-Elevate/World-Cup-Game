@@ -40,16 +40,29 @@ every member who drafted either nation. Deduped via `wc:matchwatch` (fires once 
 all open clients); first run seeds silently (no backfill). Kickoff pings are gated to ±20 min of
 the scheduled start so a late open doesn't ping stale ones.
 
-**Remaining gap (optional):** this only fires while *someone* in the league has the app open
-(usually true during live matches). For 100% coverage when *nobody* is online, add the Vercel
-cron below — it would reuse the same detection idea but needs the scoring/fixtures ported to JS:
+### 4b. Server-side tick (offline coverage + advance reminder) — DONE 2026-06-12
+The "nobody's online" gap is now closed by `api/tick.ts`, pinged every 5 min by a free
+GitHub Actions cron (`.github/workflows/match-tick.yml`, public repo → free minutes). It is the
+authoritative server counterpart to the client detector and **reuses the exact same pure logic** —
+no port to JS. `src/data/liveResults.ts` was split into pure mappers (`mapLive`, `upcomingFromFeed`)
+and `src/utils/matchNotify.ts` gained `detectUpcoming` for the "⏰ your match in ~30 min" reminder.
 
-The original server-cron plan, if you want full offline coverage:
-- A Vercel **cron** (e.g. every 1–2 min) that pulls the football-data feed (same source as `src/data/liveResults.ts`), diffs against last-seen fixture states, and for each league maps fixtures → the members whose drafted nations are involved (`team.picks`), then:
-  - on kickoff transition → `match-start` notif/push,
-  - on full-time transition → `match-result` notif/push with points gained, computed via `utils/scoring` (`computeMovers`/`teamStats`) against the league's scoring config.
-- Store `lastSeenFixtureState` per league in KV so the cron is idempotent.
-- For users with the app open, a lighter client-side version could fire the in-app notif directly from the existing 60s live-results poll in `App.tsx`; the cron is what covers everyone else.
+For every league the tick: reads `<league>:wc:state` + `<league>:wc:matchwatch`, fetches the feed via
+our own `/api/results` (rides the shared cache — no extra Zafronix quota), runs
+`detectMatchEvents` + `detectUpcoming`, **claims the events into `wc:matchwatch` before sending** so
+a racing client/tick can't double-fire, writes the in-app feed (`<league>:wc:notifs`, canonical
+history) and sends web push via the shared `api/_push.js` sender. Secret-gated by `TICK_SECRET`
+(absent env → safe no-op). Client and server share the same watch/notifs keys so they run side by
+side; first run per league seeds silently.
+
+- **Advance reminder:** group/KO matches with feed status `TIMED` whose both teams are known, fired
+  once in the [5 min, 30 min] window before kickoff (`REMIND_LEAD`/`REMIND_FLOOR` in matchNotify.ts).
+  Parsed from the feed's ISO `kickoffUtc` via `new Date()` — NOT the ET-only `parseDate` used for the
+  static fixtures.
+- **One-time setup:** add a `TICK_SECRET` GitHub Actions secret AND the same value as a Vercel env
+  var. Until both exist the endpoint no-ops and the cron prints a skip notice.
+- **Known limitation (accepted):** the shared `wc:matchwatch` is read-modify-write; under a rare
+  client/tick interleave a notification can duplicate (never silently drop). Fine at family scale.
 
 ## Notes
 - All shared data uses the existing league-namespaced KV (`sget/sset(key, true)`) — same store as chat. Read-modify-write is fine at family-pool volume; if write contention ever matters, move challenges/matches to dedicated Supabase tables with row-level realtime.
