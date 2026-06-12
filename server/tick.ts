@@ -1,34 +1,31 @@
 /**
- * Server-side match-notification tick — the offline-coverage counterpart to the
- * in-app detector in App.tsx. A free GitHub Actions cron (.github/workflows/
- * match-tick.yml) pings this every few minutes so kickoff / full-time / "your
- * match is coming up" notifications fire ON TIME even when nobody has the app
- * open — the one gap of the client-driven version.
+ * SOURCE for the match-notification cron function. Bundled by esbuild into the
+ * deployed serverless function `api/tick.js` (`npm run build:tick`) so the
+ * shared ../src detection logic is INLINED — Vercel compiles only /api/*.ts and
+ * will NOT compile .ts imported from outside /api, so a plain `api/tick.ts`
+ * importing ../src crashes at runtime with ERR_MODULE_NOT_FOUND. Bundling makes
+ * the function self-contained (only web-push + @supabase external from
+ * node_modules). EDIT THIS FILE, then run `npm run build:tick` and commit the
+ * regenerated api/tick.js.
  *
- * It reuses the EXACT same pure detection logic as the client (detectMatchEvents
- * + detectUpcoming from src/utils/matchNotify, fed by mapLive/upcomingFromFeed
- * from src/data/liveResults) and the same shared per-league state, so the two
- * can run side by side: whichever fires first claims the event in the shared
- * `<league>:wc:matchwatch` set, and the other sees it already done. The first
- * run for a league seeds silently (no backfill spam).
+ * Server-side counterpart to the in-app detector in App.tsx: a free GitHub
+ * Actions cron pings /api/tick every few minutes so kickoff / full-time / "your
+ * match is coming up" notifications fire on time even when nobody has the app
+ * open. Reuses the EXACT client detection logic (detectMatchEvents +
+ * detectUpcoming) and the shared per-league state, deduped via wc:matchwatch.
  *
- * For each league it writes the in-app feed (`<league>:wc:notifs`, canonical
- * history) and sends web push to whoever drafted the nations involved.
- *
- * Auth: a shared secret in the TICK_SECRET env var (Vercel), sent by the cron as
- * `Authorization: Bearer <secret>` or `?key=<secret>`. Absent env → no-op (safe
- * to deploy before the secret exists). Reads the live feed via our own
- * /api/results, so it rides the shared cache and adds no upstream Zafronix quota.
- *
- * Env (Vercel): TICK_SECRET, SUPABASE_URL / SUPABASE_ANON_KEY (fall back to
- *   VITE_*), VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_SUBJECT.
+ * Auth: shared secret TICK_SECRET (Vercel env), sent as `Authorization: Bearer
+ * <secret>` or `?key=<secret>`. Absent env → no-op. Reads the live feed via our
+ * own /api/results so it rides the shared cache (no extra Zafronix quota).
  */
 import { createClient } from '@supabase/supabase-js';
-import { vapidConfig } from './_vapid.js';
-import { configurePush, leaguePushList, sendToUser } from './_push.js';
+import { vapidConfig } from '../api/_vapid.js';
+import { configurePush, leaguePushList, sendToUser } from '../api/_push.js';
+import { mapLive, upcomingFromFeed } from '../src/data/liveResults';
+import { detectMatchEvents, detectUpcoming } from '../src/utils/matchNotify';
+import { DEFAULT_SCORING } from '../src/data/types';
 import type { Team, Scoring } from '../src/data/types';
-// NOTE: the ../src/* logic is imported DYNAMICALLY inside the handler (below) so
-// a bundling/inclusion failure surfaces as a JSON error instead of a 500 crash.
+import { uid } from '../src/utils/helpers';
 
 interface Req { headers: Record<string, string | undefined>; query?: Record<string, string | string[] | undefined>; }
 interface Res { status(code: number): { json(body: unknown): void } }
@@ -38,50 +35,12 @@ const CAP = 200;
 const kindOf = (k: string) => (k === 'start' ? 'match-start' : k === 'result' ? 'match-result' : 'match-soon');
 
 export default async function handler(req: Req, res: Res) {
-  // Liveness + diagnostics (no secret needed): confirms the build is live, whether
-  // the ../src bundle imports on Vercel, and which env vars are visible.
-  if (req.query?.ping) {
-    let importsOk = false, importErr = null;
-    try { await Promise.all([import('../src/data/liveResults'), import('../src/utils/matchNotify'), import('../src/data/types'), import('../src/utils/helpers')]); importsOk = true; }
-    catch (e) { importErr = String((e as Error)?.stack || (e as Error)?.message || e).slice(0, 400); }
-    res.status(200).json({
-      ok: true, marker: 'diag2', importsOk, importErr,
-      env: {
-        TICK_SECRET: !!process.env.TICK_SECRET,
-        SUPABASE_URL: !!(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL),
-        VAPID_PUBLIC_KEY: !!process.env.VAPID_PUBLIC_KEY,
-      },
-    });
-    return;
-  }
-
   const secret = process.env.TICK_SECRET;
   if (!secret) { res.status(200).json({ ok: false, error: 'not_configured' }); return; }
   const authh = req.headers.authorization || '';
   const qk = req.query?.key;
   const provided = (authh.startsWith('Bearer ') ? authh.slice(7).trim() : '') || (Array.isArray(qk) ? qk[0] : qk) || '';
   if (provided !== secret) { res.status(401).json({ ok: false, error: 'unauthorized' }); return; }
-
-  // Dynamic import of the shared detection logic — if Vercel didn't bundle the
-  // ../src/* files this throws here and we report it instead of a blind 500.
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  let mapLive: any, upcomingFromFeed: any, detectMatchEvents: any, detectUpcoming: any, DEFAULT_SCORING: any, uid: any;
-  /* eslint-enable @typescript-eslint/no-explicit-any */
-  try {
-    const [lr, mn, ty, hp] = await Promise.all([
-      import('../src/data/liveResults'),
-      import('../src/utils/matchNotify'),
-      import('../src/data/types'),
-      import('../src/utils/helpers'),
-    ]);
-    ({ mapLive, upcomingFromFeed } = lr);
-    ({ detectMatchEvents, detectUpcoming } = mn);
-    ({ DEFAULT_SCORING } = ty);
-    ({ uid } = hp);
-  } catch (e) {
-    res.status(200).json({ ok: false, error: 'import_failed', detail: String((e as Error)?.stack || (e as Error)?.message || e).slice(0, 600) });
-    return;
-  }
 
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
@@ -134,7 +93,7 @@ export default async function handler(req: Req, res: Res) {
     const link = `${base}/?league=${league}`;
 
     // In-app feed (canonical history) — one entry per recipient, capped like notify.ts.
-    const adds = events.flatMap((ev: any) => ev.recipients.map((rcp: any) => ({
+    const adds = events.flatMap(ev => ev.recipients.map(rcp => ({
       id: uid(), to: rcp.memberId, kind: kindOf(ev.kind), title: ev.title, body: rcp.body, ts: now, read: false,
     })));
     if (adds.length) {
