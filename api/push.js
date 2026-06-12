@@ -2,6 +2,7 @@
  * Targeted web push — notify ONE league member's devices (out-of-app).
  *
  * POST { league, toMemberId, title, body, url }  (Authorization: Bearer <supabase access token>)
+ * GET  ?league=<code> — subscription diagnostics (counts/hosts + recent send log).
  * Any authenticated member of the league may call it (peer-to-peer: Arcade
  * challenges, chat). The caller is verified against the league's shared state,
  * the target member is mapped to their account uid, and only that uid's stored
@@ -22,9 +23,41 @@ export default async function handler(req, res) {
   const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
   const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:noreply@worldcupdraft.app';
 
-  if (req.method !== 'POST') { res.status(405).json({ error: 'method_not_allowed' }); return; }
+  if (req.method !== 'POST' && req.method !== 'GET') { res.status(405).json({ error: 'method_not_allowed' }); return; }
   if (!url || !anonKey) { res.status(200).json({ ok: false, error: 'not_configured' }); return; }
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) { res.status(200).json({ ok: false, error: 'push_not_configured' }); return; }
+
+  // ---- GET ?league=<code>: subscription diagnostics (counts + push hosts only,
+  // never endpoints/keys). League codes are share-codes, same trust level as
+  // the notify-draft health check. Also surfaces each member's recent send log.
+  if (req.method === 'GET') {
+    const league = (req.query?.league || '').toString().trim();
+    if (!league) { res.status(200).json({ ok: true, ping: true }); return; }
+    const sb = createClient(url, anonKey, NOAUTH);
+    const { data: row } = await sb.from('app_kv').select('value').eq('key', `${league}:wc:state`).maybeSingle();
+    const state = row?.value || null;
+    if (!state) { res.status(200).json({ ok: false, error: 'no_state' }); return; }
+    const { data: prow } = await sb.from('app_kv').select('value').eq('key', `${league}:wc:push`).maybeSingle();
+    const legacy = Array.isArray(prow?.value) ? prow.value : [];
+    const host = (ep) => { try { return new URL(ep).hostname; } catch { return '?'; } };
+    const members = [];
+    for (const t of (state.teams || [])) {
+      for (const m of (t.members || [])) {
+        if (!m?.uid) { members.push({ id: m?.id, name: m?.name, linked: false }); continue; }
+        const { data: urow } = await sb.from('app_kv').select('value').eq('key', `user:${m.uid}:push`).maybeSingle();
+        const userSubs = Array.isArray(urow?.value) ? urow.value : [];
+        const { data: lrow } = await sb.from('app_kv').select('value').eq('key', `user:${m.uid}:pushlog`).maybeSingle();
+        members.push({
+          id: m.id, name: m.name, linked: true,
+          legacySubs: legacy.filter(e => e?.uid === m.uid && e?.sub?.endpoint).map(e => host(e.sub.endpoint)),
+          accountSubs: userSubs.filter(s => s?.endpoint).map(s => host(s.endpoint)),
+          lastSends: Array.isArray(lrow?.value) ? lrow.value : [],
+        });
+      }
+    }
+    res.status(200).json({ ok: true, members });
+    return;
+  }
 
   const authh = req.headers.authorization || '';
   const token = authh.startsWith('Bearer ') ? authh.slice(7).trim() : '';
@@ -104,5 +137,16 @@ export default async function handler(req, res) {
       await sb.from('app_kv').upsert({ key: `user:${targetUid}:push`, value: liveUser, updated_at: new Date().toISOString() });
     }
   }
+  // append to the target's send log (last 5) so GET diagnostics can show what
+  // actually happened server-side — no more relying on the client toast
+  try {
+    const entry = { ts: new Date().toISOString(), league, matched: targets.size, pushed, failures };
+    const { data: lrow } = await sb.from('app_kv').select('value').eq('key', `user:${targetUid}:pushlog`).maybeSingle();
+    const log = Array.isArray(lrow?.value) ? lrow.value : [];
+    log.unshift(entry);
+    const { error: lerr } = await sb.from('app_kv').upsert({ key: `user:${targetUid}:pushlog`, value: log.slice(0, 5), updated_at: new Date().toISOString() });
+    if (lerr) console.error('pushlog write failed', lerr.message);
+  } catch (e) { console.error('pushlog write failed', e?.message); }
+
   res.status(200).json({ ok: true, pushed, matched: targets.size, failures });
 }
