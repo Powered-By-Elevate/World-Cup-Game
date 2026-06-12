@@ -20,7 +20,13 @@ export const GAMES: ArcadeGame[] = ['penalty', 'soccer'];
 export type LaunchMode =
   | { kind: 'solo' }
   | { kind: 'challenge'; oppId: string; oppName: string }
-  | { kind: 'respond'; challengeId: string; oppName: string };
+  | { kind: 'respond'; challengeId: string; oppName: string }
+  // live turn-based head-to-head (Soccer Stars): 'live-new' creates+hosts and
+  // notifies the opponent, 'live-join' accepts an invite, 'live' is the resolved
+  // in-match mode the App renders once a match id + side are known.
+  | { kind: 'live-new'; oppId: string; oppName: string }
+  | { kind: 'live-join'; matchId: string }
+  | { kind: 'live'; matchId: string; side: 'a' | 'b' };
 
 export interface ScoreEntry { memberId: string; name: string; score: number; ts: number; }
 

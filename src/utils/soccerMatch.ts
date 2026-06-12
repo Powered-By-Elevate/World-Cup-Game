@@ -152,10 +152,10 @@ export async function submitTurn(
   m.lastShot = patch.lastShot;
   m.score = patch.score;
   m.seq = fromSeq + 1;
-  // A scorer shoots again (table-soccer rule); otherwise the turn passes.
+  // Turn always passes to the other side — on a goal the board resets and the
+  // conceding side kicks off, matching the single-player game the family knows.
   const shooter = patch.lastShot.by;
-  if (!patch.scored) m.turn = shooter === 'a' ? 'b' : 'a';
-  else m.turn = shooter;
+  m.turn = shooter === 'a' ? 'b' : 'a';
   if (m.score.a >= WIN_GOALS) { m.status = 'over'; m.winner = 'a'; }
   else if (m.score.b >= WIN_GOALS) { m.status = 'over'; m.winner = 'b'; }
   await saveMatch(m);

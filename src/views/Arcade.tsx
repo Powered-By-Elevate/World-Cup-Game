@@ -18,6 +18,8 @@ import {
   incoming, outgoing, settled, winnerOf,
 } from '../utils/arcade';
 import type { ArcadeGame, LaunchMode, ScoreEntry, Challenge } from '../utils/arcade';
+import { loadOpenInvites, invitesForMe, invitesFromMe } from '../utils/soccerMatch';
+import type { OpenInvite } from '../utils/soccerMatch';
 
 interface Member { id: string; name: string; team: string; }
 
@@ -33,13 +35,14 @@ export function Arcade({ meId, members, onLaunch, ...calls }: Props) {
   const [picker, setPicker] = useState<ArcadeGame | null>(null);   // Single/Multiplayer + member chooser
   const [scores, setScores] = useState<Record<string, ScoreEntry[]>>({});
   const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [invites, setInvites] = useState<OpenInvite[]>([]);
 
-  // poll the shared score + challenge stores (same cadence as the rest of the app)
+  // poll the shared score + challenge + live-invite stores (app-wide cadence)
   useEffect(() => {
     let alive = true;
     const tick = async () => {
-      const [s, c] = await Promise.all([loadScores(), loadChallenges()]);
-      if (alive) { setScores(s); setChallenges(c); }
+      const [s, c, inv] = await Promise.all([loadScores(), loadChallenges(), loadOpenInvites()]);
+      if (alive) { setScores(s); setChallenges(c); setInvites(inv); }
     };
     tick();
     const iv = setInterval(tick, 5000);
@@ -98,6 +101,37 @@ export function Arcade({ meId, members, onLaunch, ...calls }: Props) {
               <span className="at-go">Open <Icon name="chevron" size={14} /></span>
             </button>
           </div>
+
+          {(() => {
+            const liveIn = invitesForMe(invites, meId);
+            const liveOut = invitesFromMe(invites, meId);
+            if (!liveIn.length && !liveOut.length) return null;
+            return (
+              <>
+                <div className="sec-head" style={{ marginTop: 22 }}><span className="eyebrow">⚡ Live matches</span></div>
+                {liveIn.map(i => (
+                  <div key={i.id} className="card pad chal-row">
+                    <span className="at-art sm" aria-hidden="true">⚽</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, fontSize: 14 }}>{i.fromName} wants to play live</div>
+                      <div className="muted" style={{ fontSize: 12 }}>Soccer Stars · turn-based, first to 3</div>
+                    </div>
+                    <button className="btn btn-lime btn-sm" onClick={() => onLaunch('soccer', { kind: 'live-join', matchId: i.id })}>Join</button>
+                  </div>
+                ))}
+                {liveOut.map(i => (
+                  <div key={i.id} className="card pad chal-row">
+                    <span className="at-art sm" aria-hidden="true">⚽</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, fontSize: 14 }}>Waiting for {i.toName}…</div>
+                      <div className="muted" style={{ fontSize: 12 }}>Live invite sent</div>
+                    </div>
+                    <button className="btn btn-sm" onClick={() => onLaunch('soccer', { kind: 'live', matchId: i.id, side: 'a' })}>Open</button>
+                  </div>
+                ))}
+              </>
+            );
+          })()}
 
           {(inc.length > 0 || out.length > 0 || done.length > 0) && (
             <>
@@ -189,6 +223,7 @@ export function Arcade({ meId, members, onLaunch, ...calls }: Props) {
           onClose={() => setPicker(null)}
           onSolo={() => { const g = picker; setPicker(null); onLaunch(g, { kind: 'solo' }); }}
           onChallenge={(m) => { const g = picker; setPicker(null); onLaunch(g, { kind: 'challenge', oppId: m.id, oppName: m.name }); }}
+          onLive={picker === 'soccer' ? (m) => { setPicker(null); onLaunch('soccer', { kind: 'live-new', oppId: m.id, oppName: m.name }); } : undefined}
         />
       )}
     </div>
@@ -196,9 +231,9 @@ export function Arcade({ meId, members, onLaunch, ...calls }: Props) {
 }
 
 /* ---- bottom-sheet chooser: Single Player vs Multiplayer (pick a member) ---- */
-function GameChooser({ game, members, onClose, onSolo, onChallenge }: {
+function GameChooser({ game, members, onClose, onSolo, onChallenge, onLive }: {
   game: ArcadeGame; members: Member[]; onClose: () => void;
-  onSolo: () => void; onChallenge: (m: Member) => void;
+  onSolo: () => void; onChallenge: (m: Member) => void; onLive?: (m: Member) => void;
 }) {
   const [mp, setMp] = useState(false);
   const meta = GAME_META[game];
@@ -213,9 +248,11 @@ function GameChooser({ game, members, onClose, onSolo, onChallenge }: {
         {!mp ? (
           <div style={{ padding: '0 18px 26px' }}>
             <button className="btn btn-ink btn-block" onClick={onSolo}>🎮 Single player</button>
-            <button className="btn btn-block" style={{ marginTop: 10 }} onClick={() => setMp(true)}>⚔ Challenge a league member</button>
+            <button className="btn btn-block" style={{ marginTop: 10 }} onClick={() => setMp(true)}>⚔ Play a league member</button>
             <p className="muted" style={{ fontSize: 12, marginTop: 12, lineHeight: 1.5, textAlign: 'center' }}>
-              In a challenge you each play your own leg — high score wins. They get a notification to play theirs.
+              {onLive
+                ? '⚡ Live: a turn-based match right now, first to 3. ⚔ Challenge: you each play a solo leg and the high score wins.'
+                : 'In a challenge you each play your own leg — high score wins. They get a notification to play theirs.'}
             </p>
           </div>
         ) : (
@@ -228,14 +265,15 @@ function GameChooser({ game, members, onClose, onSolo, onChallenge }: {
             ) : (
               <div className="card flat" style={{ overflow: 'hidden' }}>
                 {members.map(m => (
-                  <button key={m.id} className="caller-row" style={{ width: '100%', background: 'transparent', cursor: 'pointer', textAlign: 'left' }} onClick={() => onChallenge(m)}>
+                  <div key={m.id} className="caller-row" style={{ width: '100%' }}>
                     <Avatar name={m.name} size={32} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 800, fontSize: 14 }}>{m.name}</div>
                       <div className="muted" style={{ fontSize: 11.5 }}>{m.team}</div>
                     </div>
-                    <Icon name="chevron" size={16} />
-                  </button>
+                    {onLive && <button className="btn btn-lime btn-sm" onClick={() => onLive(m)}>⚡ Live</button>}
+                    <button className="btn btn-sm" style={{ marginLeft: 8 }} onClick={() => onChallenge(m)}>Challenge</button>
+                  </div>
                 ))}
               </div>
             )}
