@@ -42,7 +42,13 @@ const speedToPower = (s) => Math.max(0, Math.min(1, (s - 0.25) / 1.75));   // px
  * #stage / #draw / #cards / #hud scaffold (provided by the React wrapper).
  * Returns a teardown function that disposes the 3D scene + listeners.
  */
-export function initPenaltyStreak(root, { onClose, onScore } = {}) {
+export function initPenaltyStreak(root, { onClose, onScore, mode = 'streak', seconds = 30 } = {}) {
+  // 'streak' = single-player sudden death (a save/miss ends the run).
+  // 'timed'  = head-to-head leg: keep shooting for `seconds`, score as many as
+  //            you can; a save/miss does NOT end it. Both report the goal count.
+  const timed = mode === 'timed';
+  const DURATION_MS = seconds * 1000;
+  let timerInt = null;
   const $ = (s) => root.querySelector(s);
   const stage = $('#stage'), hud = $('#hud'), cards = $('#cards'), drawC = $('#draw');
   const ctx = drawC.getContext('2d');
@@ -58,14 +64,14 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
     cards.innerHTML = `
       <div class="pen-card-wrap"><div class="pen-card">
         <div class="pen-row" style="justify-content:space-between">
-          <span class="pen-eyebrow">Sudden death</span>
+          <span class="pen-eyebrow">${timed ? `${seconds}-second shootout` : 'Sudden death'}</span>
           <button class="pen-close" id="setup-close" style="border-color:rgba(21,18,12,.3);color:var(--ink);background:transparent">✕</button>
         </div>
         <div class="display" style="font-size:30px;margin:8px 0 2px">Penalty<br>Streak</div>
         <p style="font-size:13.5px;color:#5b564a;margin:6px 0 12px;line-height:1.45">
           <b>Draw a line</b> from the ball to a spot in the goal — bend the line to curl the shot,
           and <b>flick fast for power</b> (a placed shot is accurate; a thunderbolt scatters —
-          and yes, <b>you can miss</b>). A save, the woodwork, or off target ends your run.</p>
+          and yes, <b>you can miss</b>). ${timed ? `<b>You have ${seconds} seconds</b> — score as many as you can; misses don't stop the clock.` : 'A save, the woodwork, or off target ends your run.'}</p>
         <div class="pst-how">
           <svg viewBox="0 0 120 64">
             <rect x="14" y="8" width="92" height="34" rx="2" fill="none" stroke="rgba(21,18,12,.45)" stroke-width="2.5"></rect>
@@ -78,8 +84,8 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
         <div class="pen-eyebrow" style="margin:14px 0 6px">Take as</div>
         <div class="pst-stars">${STARS.map(s => `<button class="pst-star ${s.id === state.star ? 'on' : ''}" data-star="${s.id}">
           ${flagEl(s.nid)}<span class="nm">${s.name}</span><span class="kit">#${s.no} · ${s.kit}</span></button>`).join('')}</div>
-        <div class="pen-best" style="margin:12px 0 4px">🏆 Best streak: <b>${bestStreak()}</b></div>
-        <button class="pen-btn lime" id="start-btn" style="margin-top:10px">⚡ Start your streak</button>
+        ${timed ? '' : `<div class="pen-best" style="margin:12px 0 4px">🏆 Best streak: <b>${bestStreak()}</b></div>`}
+        <button class="pen-btn lime" id="start-btn" style="margin-top:10px">${timed ? `⚡ Start ${seconds}s shootout` : '⚡ Start your streak'}</button>
       </div></div>`;
     $('#setup-close').onclick = () => { onClose && onClose(); };
     $('#start-btn').onclick = startRun;
@@ -92,9 +98,31 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
     state.streak = 0; state.busy = false; state.ready = false;
     state.opponents = shuffled(Object.keys(NATIONS).filter(id => id !== state.nid));
     state.oppIdx = 0;
+    state.timeUp = false;
     scene.setStarTaker(state.star);
     cards.innerHTML = '';
+    if (timed) startTimer();
     nextRound(true);
+  }
+
+  /* ---- 30s clock (timed head-to-head leg only) ---- */
+  function timeLeftMs() { return Math.max(0, (state.endsAt || 0) - performance.now()); }
+  function stopTimer() { if (timerInt) { clearInterval(timerInt); timerInt = null; } }
+  function updateTimerHud() { const el = $('.pst-timer .n'); if (el) el.textContent = Math.ceil(timeLeftMs() / 1000); }
+  function startTimer() {
+    stopTimer();
+    state.endsAt = performance.now() + DURATION_MS;
+    updateTimerHud();
+    timerInt = setInterval(() => {
+      updateTimerHud();
+      if (performance.now() >= state.endsAt) {
+        state.timeUp = true;
+        stopTimer();
+        // ran out while idle (no shot in flight) → end now; otherwise the current
+        // shot's result will end it once it resolves.
+        if (!state.busy && state.phase === 'play') endRun(false, 'time');
+      }
+    }, 200);
   }
 
   function currentOpp() { return state.opponents[state.oppIdx % state.opponents.length]; }
@@ -117,8 +145,11 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
       <div class="pen-top">
         <button class="pen-close" id="play-close">✕</button>
         <div class="pst-you">${flagEl(state.nid, 'sm')}<div><div class="nm">${st.name}</div><div class="no">#${st.no} · ${st.nid}</div></div></div>
-        <div class="pst-streak"><div class="n">${state.streak}</div><div class="lbl">streak</div><div class="best">🏆 ${Math.max(bestStreak(), state.streak)}</div></div>
-        <div class="pst-keeper"><div><div class="nm">${NATIONS[oid].name}</div><div class="no">keeper · round ${state.streak + 1}</div></div>${flagEl(oid, 'sm')}</div>
+        ${timed
+          ? `<div class="pst-streak"><div class="n">${state.streak}</div><div class="lbl">goals</div></div>
+             <div class="pst-streak pst-timer"><div class="n">${Math.ceil(timeLeftMs() / 1000)}</div><div class="lbl">seconds</div></div>`
+          : `<div class="pst-streak"><div class="n">${state.streak}</div><div class="lbl">streak</div><div class="best">🏆 ${Math.max(bestStreak(), state.streak)}</div></div>`}
+        <div class="pst-keeper"><div><div class="nm">${NATIONS[oid].name}</div><div class="no">keeper · ${timed ? 'shootout' : 'round ' + (state.streak + 1)}</div></div>${flagEl(oid, 'sm')}</div>
       </div>
       <div class="pen-bottom" style="pointer-events:none">
         <div class="pen-hint"><span class="pst-pin"></span> <span><b>Draw your shot</b> — bend it to curl, flick fast for power</span></div>
@@ -257,7 +288,7 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
   /* ---------------- RESULT ---------------- */
   function onResult(r) {
     const goal = r === 'goal';
-    if (goal) { state.streak++; if (state.streak > bestStreak()) saveBest(state.streak);
+    if (goal) { state.streak++; if (!timed && state.streak > bestStreak()) saveBest(state.streak);
       const n = $('.pst-streak .n'), b = $('.pst-streak .best');
       if (n) n.textContent = state.streak;
       if (b) b.textContent = '🏆 ' + Math.max(bestStreak(), state.streak);
@@ -265,14 +296,22 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
     flash(r);
     setTimeout(() => {
       clearFlash();
-      if (goal) { state.oppIdx++; nextRound(false); }
-      else endRun(false, r);
+      // timed: keep shooting until the clock runs out (a miss never ends it).
+      // streak: only a goal continues the run.
+      const carryOn = timed ? !state.timeUp : goal;
+      if (carryOn) { state.oppIdx++; nextRound(false); }
+      else endRun(false, timed ? 'time' : r);
     }, goal ? 1350 : 1150);
   }
 
   function flash(r) {
     const s = state.lastShot || { tx: 0, ty: 1.2 };
-    const WORDS = {
+    const WORDS = timed ? {
+      goal: ['GOAL!', `${state.streak} IN — KEEP GOING`],
+      save: ['SAVED!', 'KEEP GOING — CLOCK IS RUNNING'],
+      post: [s.ty > GOAL_H - 0.2 ? 'OFF THE BAR!' : 'OFF THE POST!', 'KEEP GOING'],
+      miss: [s.ty > GOAL_H ? 'OVER!' : 'WIDE!', 'KEEP GOING'],
+    } : {
       goal: ['GOAL!', `STREAK ${state.streak} — NEXT KEEPER STEPS UP`],
       save: ['SAVED!', 'THE KEEPER GUESSED RIGHT'],
       post: [s.ty > GOAL_H - 0.2 ? 'OFF THE BAR!' : 'OFF THE POST!', 'INCHES AWAY — RUN OVER'],
@@ -301,22 +340,27 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
   /* ---------------- END ---------------- */
   function endRun(quit, reason) {
     state.phase = 'done';
+    stopTimer();
     drawC.classList.add('off');
     hud.innerHTML = '';
-    if (onScore) onScore(state.streak);      // report the run's streak (leaderboard / challenge leg)
+    if (onScore) onScore(state.streak);      // report goals (leaderboard / challenge leg)
     const best = bestStreak();
     const beaten = state.opponents.slice(0, Math.min(state.streak, 8));
-    const eyebrow = quit ? 'Run abandoned'
+    const eyebrow = timed ? `Time! · ${seconds}-second shootout`
+      : quit ? 'Run abandoned'
       : reason === 'miss' ? 'Off target — run over'
       : reason === 'post' ? 'Denied by the woodwork'
       : 'Saved — run over';
+    const sub = timed
+      ? `${state.streak} ${state.streak === 1 ? 'goal' : 'goals'} in ${seconds} seconds`
+      : (state.streak === 0 ? 'The keeper owned you' : state.streak >= best && state.streak > 0 ? 'New personal best!' : 'In a row from the spot');
     cards.innerHTML = `
       <div class="pen-card-wrap"><div class="pen-card" style="text-align:center">
         <div class="pen-eyebrow">${eyebrow}</div>
         <div class="pen-result-score">${state.streak}</div>
-        <div class="display" style="font-size:22px;margin-top:2px">${state.streak === 0 ? 'The keeper owned you' : state.streak >= best && state.streak > 0 ? 'New personal best!' : 'In a row from the spot'}</div>
+        <div class="display" style="font-size:22px;margin-top:2px">${sub}</div>
         ${beaten.length ? `<div class="pst-beaten">${beaten.map(id => flagEl(id, 'sm')).join('')}${state.streak > 8 ? `<span class="more">+${state.streak - 8}</span>` : ''}</div>` : ''}
-        <div class="pen-best" style="margin:14px 0 16px">🏆 Best streak: <b>${best}</b></div>
+        ${timed ? '' : `<div class="pen-best" style="margin:14px 0 16px">🏆 Best streak: <b>${best}</b></div>`}
         <button class="pen-btn lime" id="again">↻ Go again</button>
         <button class="pen-btn ghost" id="back" style="margin-top:10px">Change star</button>
         <button class="pen-btn ghost" id="done" style="margin-top:10px;border:0;box-shadow:none">Done</button>
@@ -351,6 +395,7 @@ export function initPenaltyStreak(root, { onClose, onScore } = {}) {
   return function dispose() {
     removeEventListener('resize', sizeDraw);
     if (fade) cancelAnimationFrame(fade.raf);
+    stopTimer();
     try { scene && scene.dispose && scene.dispose(); } catch (e) { /* ignore */ }
   };
 }
