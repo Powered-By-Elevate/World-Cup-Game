@@ -113,7 +113,9 @@ export default function App() {
     let alive = true;
     const pull = async () => { const d = await fetchLiveResults(); if (alive && d) setLiveData(d); };
     pull();
-    const iv = setInterval(pull, 60000);
+    // Feed only changes at full-time and the server caches it for minutes, so
+    // a 3-min client poll is plenty and keeps shared-cache read load low.
+    const iv = setInterval(pull, 180000);
     return () => { alive = false; clearInterval(iv); };
   }, []);
 
