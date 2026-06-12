@@ -14,7 +14,8 @@ import type { League, AuthUser } from './utils/storage';
 import { groupResults, knockoutResults } from './data/results';
 import { fetchLiveResults } from './data/liveResults';
 import type { LiveData } from './data/liveResults';
-import { uid, shuffle } from './utils/helpers';
+import { uid, shuffle, parseDate } from './utils/helpers';
+import { MATCH_DATE } from './data/fixtures';
 import { teamStats, computeMovers, stageWinners, stageComplete } from './utils/scoring';
 import type { StandingEntry, StageWinner } from './utils/scoring';
 import { computeAwards, aliveCount } from './utils/awards';
@@ -611,14 +612,24 @@ export default function App() {
         return s;
       });
     },
-    // Lock in a "Call of the Day" pick. First call for a match wins — never
-    // overwrite an existing one (UI only offers the un-kicked-off fixture).
+    // Make / adjust a "Call of the Day" pick. A pick can be set once and then
+    // changed up to 2 more times, all before kickoff (initial + 2 adjustments).
+    // The kickoff guard is enforced here too, not just in the UI.
     makeCall: async (matchId: string, nationId: string) => {
       if (!me) return;
       await commitState(s => {
+        const d = MATCH_DATE[matchId];
+        if (!d || parseDate(d).getTime() <= Date.now()) return s;   // locked at kickoff
         const all = (s.calls = s.calls || {});
         const mine = (all[me.id] = all[me.id] || {});
-        if (mine[matchId]) return s;   // already locked
+        const prev = mine[matchId];
+        if (prev === nationId) return s;   // same pick — no-op, doesn't burn a change
+        if (prev !== undefined) {
+          const chAll = (s.callChanges = s.callChanges || {});
+          const chMine = (chAll[me.id] = chAll[me.id] || {});
+          if ((chMine[matchId] || 0) >= 2) return s;   // out of changes
+          chMine[matchId] = (chMine[matchId] || 0) + 1;
+        }
         mine[matchId] = nationId;
         return s;
       });
@@ -1041,11 +1052,11 @@ export default function App() {
       </header>
 
       <div className="screen">
-        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} calls={state.calls || {}} meId={me!.id} names={callerNames} onCall={api.makeCall} liveNow={demo ? [] : (live?.liveNow ?? [])} />}
+        {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} calls={state.calls || {}} callChanges={state.callChanges || {}} meId={me!.id} names={callerNames} onCall={api.makeCall} liveNow={demo ? [] : (live?.liveNow ?? [])} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
-        {tab === "arcade" && <Arcade calls={state.calls || {}} scores={scores} meId={me!.id} names={callerNames} onCall={api.makeCall} members={chatMembers} onLaunch={launchGame} />}
+        {tab === "arcade" && <Arcade calls={state.calls || {}} callChanges={state.callChanges || {}} scores={scores} meId={me!.id} names={callerNames} onCall={api.makeCall} members={chatMembers} onLaunch={launchGame} />}
         {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
         {tab === "cabinet" && <TrophyRoom teams={state.teams || []} awardsByTeam={awardsByTeam} myTeam={myTeam} isCommish={isCommish} onSetAwardHolder={api.setAwardHolder} onShare={toast} />}
       </div>
