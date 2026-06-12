@@ -26,11 +26,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { vapidConfig } from './_vapid.js';
 import { configurePush, leaguePushList, sendToUser } from './_push.js';
-import { mapLive, upcomingFromFeed } from '../src/data/liveResults';
-import { detectMatchEvents, detectUpcoming } from '../src/utils/matchNotify';
-import { DEFAULT_SCORING } from '../src/data/types';
-import type { Team } from '../src/data/types';
-import { uid } from '../src/utils/helpers';
+import type { Team, Scoring } from '../src/data/types';
+// NOTE: the ../src/* logic is imported DYNAMICALLY inside the handler (below) so
+// a bundling/inclusion failure surfaces as a JSON error instead of a 500 crash.
 
 interface Req { headers: Record<string, string | undefined>; query?: Record<string, string | string[] | undefined>; }
 interface Res { status(code: number): { json(body: unknown): void } }
@@ -40,12 +38,36 @@ const CAP = 200;
 const kindOf = (k: string) => (k === 'start' ? 'match-start' : k === 'result' ? 'match-result' : 'match-soon');
 
 export default async function handler(req: Req, res: Res) {
+  // Liveness marker — confirms the new build is deployed without needing the secret.
+  if (req.query?.ping) { res.status(200).json({ ok: true, marker: 'dyn-import-diag' }); return; }
+
   const secret = process.env.TICK_SECRET;
   if (!secret) { res.status(200).json({ ok: false, error: 'not_configured' }); return; }
   const authh = req.headers.authorization || '';
   const qk = req.query?.key;
   const provided = (authh.startsWith('Bearer ') ? authh.slice(7).trim() : '') || (Array.isArray(qk) ? qk[0] : qk) || '';
   if (provided !== secret) { res.status(401).json({ ok: false, error: 'unauthorized' }); return; }
+
+  // Dynamic import of the shared detection logic — if Vercel didn't bundle the
+  // ../src/* files this throws here and we report it instead of a blind 500.
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  let mapLive: any, upcomingFromFeed: any, detectMatchEvents: any, detectUpcoming: any, DEFAULT_SCORING: any, uid: any;
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  try {
+    const [lr, mn, ty, hp] = await Promise.all([
+      import('../src/data/liveResults'),
+      import('../src/utils/matchNotify'),
+      import('../src/data/types'),
+      import('../src/utils/helpers'),
+    ]);
+    ({ mapLive, upcomingFromFeed } = lr);
+    ({ detectMatchEvents, detectUpcoming } = mn);
+    ({ DEFAULT_SCORING } = ty);
+    ({ uid } = hp);
+  } catch (e) {
+    res.status(200).json({ ok: false, error: 'import_failed', detail: String((e as Error)?.stack || (e as Error)?.message || e).slice(0, 600) });
+    return;
+  }
 
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
@@ -76,7 +98,7 @@ export default async function handler(req: Req, res: Res) {
   const report: Array<{ league: string; events: number; notifs: number; pushed: number }> = [];
   for (const row of rows || []) {
     const league = String(row.key).replace(/:wc:state$/, '');
-    const state = (row.value || null) as { draftDone?: boolean; teams?: Team[]; scoring?: typeof DEFAULT_SCORING } | null;
+    const state = (row.value || null) as { draftDone?: boolean; teams?: Team[]; scoring?: Scoring } | null;
     if (!state || !state.draftDone || !Array.isArray(state.teams) || !state.teams.length) continue;
     const teams = state.teams;
     const scoring = state.scoring || DEFAULT_SCORING;
@@ -98,7 +120,7 @@ export default async function handler(req: Req, res: Res) {
     const link = `${base}/?league=${league}`;
 
     // In-app feed (canonical history) — one entry per recipient, capped like notify.ts.
-    const adds = events.flatMap(ev => ev.recipients.map(rcp => ({
+    const adds = events.flatMap((ev: any) => ev.recipients.map((rcp: any) => ({
       id: uid(), to: rcp.memberId, kind: kindOf(ev.kind), title: ev.title, body: rcp.body, ts: now, read: false,
     })));
     if (adds.length) {
