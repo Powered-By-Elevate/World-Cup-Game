@@ -26,7 +26,7 @@ export type LaunchMode =
   // in-match mode the App renders once a match id + side are known.
   | { kind: 'live-new'; oppId: string; oppName: string }
   | { kind: 'live-join'; matchId: string }
-  | { kind: 'live'; matchId: string; side: 'a' | 'b' };
+  | { kind: 'live'; matchId: string; side: 'a' | 'b'; oppName?: string };
 
 export interface ScoreEntry { memberId: string; name: string; score: number; ts: number; }
 

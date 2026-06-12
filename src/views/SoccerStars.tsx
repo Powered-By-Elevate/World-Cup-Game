@@ -35,7 +35,7 @@ const PW_LO = 0.45, PW_HI = 0.78;
 const colorForPower = (p: number) => (p < PW_LO ? '#C8F23C' : p < PW_HI ? '#FFB000' : '#FF2D2D');
 
 /* pot accent colours (design palette) */
-const POT_COLOR: Record<string, string> = { FAV: '#FFB000', UND: '#07C2C7', LNG: '#FF3D9A' };
+export const POT_COLOR: Record<string, string> = { FAV: '#FFB000', UND: '#07C2C7', LNG: '#FF3D9A' };
 
 type Kind = 'me' | 'cpu' | 'ball';
 type Phase = 'me' | 'cpu' | 'sim' | 'goal' | 'over';
@@ -53,7 +53,7 @@ const pickRival = (exclude: string, avoid?: string) => {
 };
 
 /** Deterministic "level" badge from a string (purely decorative). */
-const levelOf = (s: string) => 12 + (Array.from(s).reduce((a, c) => a + c.charCodeAt(0), 0) % 11);
+export const levelOf = (s: string) => 12 + (Array.from(s).reduce((a, c) => a + c.charCodeAt(0), 0) % 11);
 
 /** Kickoff formation — me defends the LEFT goal, cpu the RIGHT. */
 function formation(): Body[] {
@@ -74,7 +74,7 @@ function formation(): Body[] {
 }
 
 /* one-time decorative crowd bokeh (stadium ambiance) */
-function buildBokeh() {
+export function buildBokeh() {
   const cols = ['#cfd6dd', '#7fe3e6', '#ffd27a', '#ff9ec6'];
   return Array.from({ length: 42 }, (_, i) => ({
     left: Math.random() * 100,
@@ -85,7 +85,7 @@ function buildBokeh() {
   }));
 }
 /* one-time confetti pieces for the goal celebration */
-function buildConfetti() {
+export function buildConfetti() {
   const cols = ['#C8F23C', '#FFB000', '#FFFFFF', '#9FC419', '#39E0FF'];
   return Array.from({ length: 64 }, (_, i) => ({
     left: Math.random() * 100,
@@ -548,7 +548,7 @@ function draw(
   if (drag && phase === 'me') drawAim(ctx, bs[drag.i], drag);
 }
 
-function drawPitch(ctx: CanvasRenderingContext2D) {
+export function drawPitch(ctx: CanvasRenderingContext2D) {
   // grass gradient
   const g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, '#3FA84B'); g.addColorStop(0.55, '#2E8B3C'); g.addColorStop(1, '#247031');
@@ -586,7 +586,7 @@ function drawPitch(ctx: CanvasRenderingContext2D) {
 }
 
 /** breathing turn-halo under the active side's discs (cyan = me, red = cpu) */
-function drawHalo(ctx: CanvasRenderingContext2D, b: Body, active: boolean, t: number) {
+export function drawHalo(ctx: CanvasRenderingContext2D, b: Body, active: boolean, t: number) {
   if (!active) return;
   const ph = (Math.sin(t / 382) + 1) / 2;               // 0..1 breathe
   const op = 0.42 + 0.45 * ph, rr = b.r + 7 + ph * 5;
@@ -609,7 +609,7 @@ function rimGradient(ctx: CanvasRenderingContext2D, x: number, y: number, r: num
 }
 
 /** A flag disc rendered as a physical poker chip. */
-function drawChip(ctx: CanvasRenderingContext2D, b: Body, img: HTMLImageElement | null, color: string, alt: string, code: string, dragging: boolean) {
+export function drawChip(ctx: CanvasRenderingContext2D, b: Body, img: HTMLImageElement | null, color: string, alt: string, code: string, dragging: boolean) {
   const r = b.r;
   // contact shadow
   ctx.beginPath(); ctx.ellipse(b.x, b.y + r - 1, r * 0.9, r * 0.32, 0, 0, Math.PI * 2);
@@ -663,7 +663,7 @@ function drawChip(ctx: CanvasRenderingContext2D, b: Body, img: HTMLImageElement 
 }
 
 /** A proper soccer ball: radial body, central pentagon, seams. */
-function drawBall(ctx: CanvasRenderingContext2D, ball: Body) {
+export function drawBall(ctx: CanvasRenderingContext2D, ball: Body) {
   const r = ball.r, cx = ball.x, cy = ball.y;
   // shadow
   ctx.beginPath(); ctx.ellipse(cx, cy + r - 1, r * 0.8, r * 0.3, 0, 0, Math.PI * 2);
@@ -688,7 +688,7 @@ function drawBall(ctx: CanvasRenderingContext2D, ball: Body) {
 }
 
 /** Aim redline: dashed pull + knob, power chevrons (2→6), power arc; lime→gold→red. */
-function drawAim(ctx: CanvasRenderingContext2D, b: Body, drag: { px: number; py: number }) {
+export function drawAim(ctx: CanvasRenderingContext2D, b: Body, drag: { px: number; py: number }) {
   const dx = b.x - drag.px, dy = b.y - drag.py;
   const pull = Math.hypot(dx, dy);
   if (pull <= MIN_PULL) return;
@@ -724,7 +724,7 @@ function drawAim(ctx: CanvasRenderingContext2D, b: Body, drag: { px: number; py:
   ctx.lineCap = 'butt';
 }
 
-function drawGoal(ctx: CanvasRenderingContext2D, x: number, left: boolean) {
+export function drawGoal(ctx: CanvasRenderingContext2D, x: number, left: boolean) {
   const d = 9, x0 = left ? x : x - d;                    // net region inside the mouth
   ctx.save();
   ctx.beginPath(); ctx.rect(x0, GT, d, GOAL_H); ctx.clip();

@@ -921,8 +921,15 @@
 .ss-endcard .ec-btn.primary{ background:#C8F23C; color:#15120C; box-shadow:0 10px 24px -10px rgba(200,242,60,.6); }
 .ss-endcard .ec-btn.ghost{ background:transparent; border:1.5px solid rgba(244,238,225,.3); color:#F4EEE1; }
 
+/* ---- live-match lobby spinner (challenger waiting on the opponent) ---- */
+.ss-spinner{ width:46px; height:46px; margin:6px 0 2px; border-radius:50%;
+  border:4px solid rgba(200,242,60,.18); border-top-color:#C8F23C;
+  animation:ssspin .9s linear infinite; }
+@keyframes ssspin{ to{ transform:rotate(360deg); } }
+
 /* ---- reduced motion ---- */
 @media (prefers-reduced-motion: reduce){
+  .ss-spinner{ animation-duration:2.4s; }
   .ss-drift,.ss-tok .dot,.ss-turnhint .pin{ animation:none !important; }
   .ss-goalmoment .flash,.ss-goalmoment .shock,.ss-goalmoment .word,.ss-goalmoment .confetti i{ animation:none !important; }
   .ss-goalmoment .confetti{ display:none; }

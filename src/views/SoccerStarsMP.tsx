@@ -9,144 +9,118 @@
    plays the left ('me') discs; side 'b' the right ('cpu') discs. Same board
    orientation for both, which is what keeps the replay deterministic.
 
-   First playable cut — drive a real two-device match to shake out feel/timing.
+   Presentation = the single-player "Arcade chip" design, verbatim: this view
+   re-uses the LOCKED draw helpers exported by views/SoccerStars.tsx (poker-chip
+   flag discs, stadium bokeh, redline aim, GOAL moment, end card, rotate gate),
+   so a live match looks identical to the game the family already knows. Each
+   player's pucks carry their OWN drafted nation (the App de-dupes nations when
+   both players run the same team). The challenger waits in a spinner lobby that
+   can be backed out of at any time (cancelling the invite).
    ============================================================ */
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { NATION } from '../data/nations';
+import { Flag } from '../components/Flag';
 import { Icon } from '../components/Icon';
 import {
-  W, H, GT, GB, R_P, R_B, MAX_PULL, formation, stepWorld, pullToVelocity,
+  buildBokeh, buildConfetti, drawPitch, drawGoal, drawHalo, drawChip, drawBall, drawAim,
+  POT_COLOR, levelOf,
+} from './SoccerStars';
+import {
+  W, H, formation, stepWorld, pullToVelocity,
   toWire, fromWire, type Body, type Kind,
 } from '../game/soccerSim';
 import {
-  loadMatch, submitTurn, requestRematch, abandonMatch, WIN_GOALS,
+  loadMatch, submitTurn, requestRematch, abandonMatch, declineMatch, WIN_GOALS,
   type SoccerMatch, type LastShot,
 } from '../utils/soccerMatch';
 
-const PW_LO = 0.45, PW_HI = 0.78;
-const powerColor = (p: number) => (p < PW_LO ? '#C8F23C' : p < PW_HI ? '#FFB000' : '#FF2D2D');
 const POLL_MS = 1200;
 
 interface Props {
   matchId: string;
   side: 'a' | 'b';
+  /** Who we're playing (the App knows it before the match record has them seated). */
+  oppName?: string;
   onClose: () => void;
 }
 
-/** The disc kind this side controls. */
+/** The disc kind this side controls ('me' = left/A discs, 'cpu' = right/B discs). */
 const myKind = (side: 'a' | 'b'): Kind => (side === 'a' ? 'me' : 'cpu');
 
-export function SoccerStarsMP({ matchId, side, onClose }: Props) {
+interface Pal { meColor: string; meAlt: string; cpuColor: string; cpuAlt: string; meId: string; cpuId: string; }
+
+export function SoccerStarsMP({ matchId, side, oppName: oppHint, onClose }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const bodies = useRef<Body[]>(formation());     // current rendered board
+  // simulation lives in refs (no re-render per frame); React state is HUD only.
+  const bodies = useRef<Body[]>(formation());
   const localSeq = useRef(0);                     // highest match.seq we've applied
-  const animating = useRef(false);                // a shot/replay is playing out
-  const drag = useRef<{ i: number; px: number; py: number } | null>(null);
+  const sim = useRef<{ running: boolean; onDone: ((scored: Kind | null) => void) | null }>({ running: false, onDone: null });
+  const drag = useRef<{ i: number; px: number; py: number } | null>(null);   // world coords
+  const busy = useRef(false);                     // a turn submit is in flight
   const sizeRef = useRef({ w: 1, h: 1, dpr: 1 });
-  const colorsRef = useRef<{ a: [string, string]; b: [string, string] }>({ a: ['#2BD4D4', '#0E3C7A'], b: ['#E8552B', '#111'] });
-  const redrawRef = useRef<() => void>(() => {});
+  const matchRef = useRef<SoccerMatch | null>(null);
+  const palRef = useRef<Pal>({ meColor: '#2BD4D4', meAlt: '#0E3C7A', cpuColor: '#E8552B', cpuAlt: '#111', meId: '', cpuId: '' });
+  const imgs = useRef<{ key: string; me: HTMLImageElement | null; cpu: HTMLImageElement | null }>({ key: '', me: null, cpu: null });
 
   const [match, setMatch] = useState<SoccerMatch | null>(null);
   const [myTurn, setMyTurn] = useState(false);
-  const [flash, setFlash] = useState<'a' | 'b' | null>(null);   // goal celebration side
-  const [busy, setBusy] = useState(false);                      // submitting a turn
+  const [celebrate, setCelebrate] = useState<'a' | 'b' | null>(null);   // which SIDE scored
+  const [inPlay, setInPlay] = useState(false);                          // a shot/replay is animating (HUD copy)
+
+  // decorative one-time visuals (same builders as single player)
+  const [bokeh] = useState(buildBokeh);
+  const [confetti] = useState(buildConfetti);
+
+  // landscape-only on touch devices: portrait shows a "rotate your phone" gate
+  const [portrait, setPortrait] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(orientation: portrait) and (pointer: coarse)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: portrait) and (pointer: coarse)');
+    const fn = (e: MediaQueryListEvent) => setPortrait(e.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
 
   const oppSide = side === 'a' ? 'b' : 'a';
-  const meName = match ? (side === 'a' ? match.a.name : match.b?.name) : 'You';
-  const oppName = match ? (side === 'a' ? match.b?.name : match.a.name) : null;
+  const meP = match ? (side === 'a' ? match.a : match.b) : null;
+  const oppP = match ? (side === 'a' ? match.b : match.a) : null;
+  const oppName = oppP?.name || match?.invitee?.name || oppHint || 'your opponent';
 
-  /* ---- world ⇄ screen ---- */
-  const toScreen = (x: number, y: number) => {
-    const { w, h } = sizeRef.current;
-    return { sx: (x / W) * w, sy: (y / H) * h };
-  };
-  const toWorld = (sx: number, sy: number) => {
-    const { w, h } = sizeRef.current;
-    return { x: (sx / w) * W, y: (sy / h) * H };
-  };
-
-  /* ---- draw ---- */
-  const draw = useCallback(() => {
-    const cv = canvasRef.current; if (!cv) return;
-    const ctx = cv.getContext('2d'); if (!ctx) return;
-    const { w, h, dpr } = sizeRef.current;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    // pitch
-    ctx.fillStyle = '#0f3d23'; ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 2;
-    ctx.strokeRect(4, 4, w - 8, h - 8);
-    ctx.beginPath(); ctx.moveTo(w / 2, 4); ctx.lineTo(w / 2, h - 4); ctx.stroke();
-    ctx.beginPath(); ctx.arc(w / 2, h / 2, (40 / W) * w, 0, Math.PI * 2); ctx.stroke();
-    // goal mouths (left/right)
-    const gy0 = (GT / H) * h, gy1 = (GB / H) * h;
-    ctx.strokeStyle = '#C8F23C'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(3, gy0); ctx.lineTo(3, gy1); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(w - 3, gy0); ctx.lineTo(w - 3, gy1); ctx.stroke();
-
-    const cols = colorsRef.current;
-    for (const b of bodies.current) {
-      if (b.kind === 'ball') continue;
-      const { sx, sy } = toScreen(b.x, b.y);
-      const rr = (b.r / W) * w;
-      const [c1, c2] = b.kind === 'me' ? cols.a : cols.b;
-      ctx.beginPath(); ctx.arc(sx, sy, rr, 0, Math.PI * 2);
-      ctx.fillStyle = c1; ctx.fill();
-      ctx.lineWidth = 3; ctx.strokeStyle = c2; ctx.stroke();
-      if (b.keeper) { ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(sx, sy, rr * 0.55, 0, Math.PI * 2); ctx.stroke(); }
-    }
-    // ball
-    const ball = bodies.current[bodies.current.length - 1];
-    const bp = toScreen(ball.x, ball.y);
-    ctx.beginPath(); ctx.arc(bp.sx, bp.sy, (R_B / W) * w, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#111'; ctx.stroke();
-
-    // aim line while dragging
-    if (drag.current) {
-      const d = bodies.current[drag.current.i];
-      const dw = toWorld(drag.current.px, drag.current.py);
-      const v = pullToVelocity(d.x - dw.x, d.y - dw.y);
-      const sp = Math.hypot(v.vx, v.vy);
-      if (sp > 0) {
-        const ds = toScreen(d.x, d.y);
-        const len = (Math.min(Math.hypot(d.x - dw.x, d.y - dw.y), MAX_PULL) / MAX_PULL);
-        const end = toScreen(d.x + (v.vx / sp) * 70 * len, d.y + (v.vy / sp) * 70 * len);
-        ctx.strokeStyle = powerColor(len); ctx.lineWidth = 4; ctx.lineCap = 'round';
-        ctx.beginPath(); ctx.moveTo(ds.sx, ds.sy); ctx.lineTo(end.sx, end.sy); ctx.stroke();
-      }
-    }
-  }, []);
-  redrawRef.current = draw;
-
-  /* ---- run the sim to rest, animating each frame; resolve when settled/scored ---- */
-  const runSim = useCallback((onDone: (scored: Kind | null) => void) => {
-    animating.current = true;
-    let raf = 0;
-    const tick = () => {
-      const r = stepWorld(bodies.current);
-      draw();
-      if (r.scored || r.settled) {
-        cancelAnimationFrame(raf);
-        animating.current = false;
-        onDone(r.scored);
-        return;
-      }
-      raf = requestAnimationFrame(tick);
+  /* ---- flag images for the chips (re-keyed if a nation ever changes) ---- */
+  const ensureImgs = (m: SoccerMatch) => {
+    const key = `${m.a.nation}|${m.b?.nation || ''}`;
+    if (imgs.current.key === key) return;
+    const load = (nation: string | undefined) => {
+      const flag = nation ? NATION[nation]?.flag : undefined;
+      if (!flag) return null;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = `https://flagcdn.com/w160/${flag}.png`;
+      return img;
     };
-    raf = requestAnimationFrame(tick);
-  }, [draw]);
+    imgs.current = { key, me: load(m.a.nation), cpu: load(m.b?.nation) };
+  };
+
+  /* ---- run the sim to rest (the rAF loop steps it); resolve when settled/scored ---- */
+  const runSim = useCallback((onDone: (scored: Kind | null) => void) => {
+    sim.current = { running: true, onDone };
+    setInPlay(true);
+  }, []);
 
   /* ---- apply a remote state (replay the opponent's shot, then snap) ---- */
   const applyMatch = useCallback((m: SoccerMatch) => {
+    matchRef.current = m;
     setMatch(m);
-    if (m.b) colorsRef.current = {
-      a: [NATION[m.a.nation]?.c1 || '#2BD4D4', NATION[m.a.nation]?.c2 || '#0E3C7A'],
-      b: [NATION[m.b.nation]?.c1 || '#E8552B', NATION[m.b.nation]?.c2 || '#111'],
+    palRef.current = {
+      meColor: NATION[m.a.nation]?.c1 || '#2BD4D4', meAlt: NATION[m.a.nation]?.c2 || '#0E3C7A',
+      cpuColor: (m.b && NATION[m.b.nation]?.c1) || '#E8552B', cpuAlt: (m.b && NATION[m.b.nation]?.c2) || '#111',
+      meId: m.a.nation, cpuId: m.b?.nation || '',
     };
-    if (m.seq === localSeq.current || animating.current) {
-      setMyTurn(m.status === 'active' && m.turn === side && !animating.current);
-      draw();
+    ensureImgs(m);
+    if (m.seq === localSeq.current || sim.current.running) {
+      setMyTurn(m.status === 'active' && m.turn === side && !sim.current.running);
       return;
     }
     const authoritative = m.bodies.length ? fromWire(m.bodies) : formation();
@@ -158,18 +132,20 @@ export function SoccerStarsMP({ matchId, side, onClose }: Props) {
       const d = bodies.current[shot.disc];
       if (d) { d.vx = shot.vx; d.vy = shot.vy; }
       runSim((scored) => {
-        if (scored) { setFlash(scored === 'me' ? 'a' : 'b'); window.setTimeout(() => setFlash(null), 1100); }
+        setInPlay(false);
+        if (scored) {
+          const sc = scored === 'me' ? 'a' : 'b';
+          setCelebrate(sc); window.setTimeout(() => setCelebrate(null), 1250);
+        }
         bodies.current = authoritative;
-        draw();
         setMyTurn(m.status === 'active' && m.turn === side);
       });
     } else {
       // our own echo, initial board, or a rematch reset — just snap
       bodies.current = authoritative;
-      draw();
       setMyTurn(m.status === 'active' && m.turn === side);
     }
-  }, [draw, oppSide, runSim, side]);
+  }, [oppSide, runSim, side]);
 
   /* ---- poll the match ---- */
   useEffect(() => {
@@ -180,77 +156,124 @@ export function SoccerStarsMP({ matchId, side, onClose }: Props) {
     return () => { alive = false; clearInterval(iv); };
   }, [matchId, applyMatch]);
 
-  /* ---- canvas sizing ---- */
+  /* ---- render + main loop (sizing + draw every frame, like single player) ---- */
   useEffect(() => {
-    const cv = canvasRef.current, wrap = wrapRef.current;
-    if (!cv || !wrap) return;
-    const fit = () => {
+    const cv = canvasRef.current!, wrap = wrapRef.current!;
+    const ctx = cv.getContext('2d')!;
+    let raf = 0;
+
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
       const cw = wrap.clientWidth;
-      const ch = (cw / W) * H;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      cv.width = cw * dpr; cv.height = ch * dpr;
-      cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
+      const ch = cw * H / W;
+      cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+      cv.style.height = `${ch}px`;
       sizeRef.current = { w: cw, h: ch, dpr };
-      draw();
     };
-    fit();
-    window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
-  }, [draw]);
+    resize();
+    const ro = new ResizeObserver(resize); ro.observe(wrap);
 
-  /* ---- leave: mark abandoned so the opponent isn't left hanging ---- */
-  const leave = useCallback(() => { void abandonMatch(matchId, side); onClose(); }, [matchId, side, onClose]);
+    const loop = (t: number) => {
+      raf = requestAnimationFrame(loop);
+      if (sim.current.running) {
+        const r = stepWorld(bodies.current);
+        if (r.scored || r.settled) {
+          sim.current.running = false;
+          const cb = sim.current.onDone; sim.current.onDone = null;
+          cb?.(r.scored);
+        }
+      }
+      // draw (identical dressing to single player via the shared helpers)
+      const { w, dpr } = sizeRef.current;
+      const s = w / W;
+      ctx.setTransform(dpr * s, 0, 0, dpr * s, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+      drawPitch(ctx);
+      drawGoal(ctx, 7, true); drawGoal(ctx, W - 7, false);
+      const m = matchRef.current;
+      const activeKind: Kind | null =
+        m && m.status === 'active' && !sim.current.running ? (m.turn === 'a' ? 'me' : 'cpu') : null;
+      const pal = palRef.current;
+      const bs = bodies.current;
+      for (let i = 0; i < bs.length; i++) {
+        const b = bs[i];
+        if (b.kind === 'ball') continue;
+        const mine = b.kind === 'me';
+        drawHalo(ctx, b, b.kind === activeKind, t);
+        drawChip(ctx, b, mine ? imgs.current.me : imgs.current.cpu,
+          mine ? pal.meColor : pal.cpuColor, mine ? pal.meAlt : pal.cpuAlt,
+          mine ? pal.meId : pal.cpuId, drag.current?.i === i);
+      }
+      drawBall(ctx, bs[bs.length - 1]);
+      if (drag.current) drawAim(ctx, bs[drag.current.i], drag.current);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+  }, []);
 
-  /* ---- aiming (only on my turn, not mid-animation) ---- */
-  const canShoot = myTurn && !animating.current && !busy;
-  const ptDown = (e: React.PointerEvent) => {
-    if (!canShoot) return;
-    const rect = canvasRef.current!.getBoundingClientRect();
-    const wpt = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+  /* ---- leave: cancel a pending invite, or concede an active match ---- */
+  const leave = useCallback(() => {
+    const st = matchRef.current?.status;
+    if (st === 'waiting') void declineMatch(matchId);
+    else if (st === 'active') void abandonMatch(matchId, side);
+    onClose();
+  }, [matchId, side, onClose]);
+
+  /* ---- pointer (pull-back aim, world coords — same feel as single player) ---- */
+  const toWorld = (e: React.PointerEvent) => {
+    const r = canvasRef.current!.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+  };
+  const canShoot = () => {
+    const m = matchRef.current;
+    return !!m && m.status === 'active' && m.turn === side && !sim.current.running && !busy.current;
+  };
+  const onDown = (e: React.PointerEvent) => {
+    if (!canShoot()) return;
+    const p = toWorld(e);
+    const bs = bodies.current;
     const mine = myKind(side);
-    let pick = -1, best = Infinity;
-    bodies.current.forEach((b, i) => {
-      if (b.kind !== mine) return;
-      const dist = Math.hypot(b.x - wpt.x, b.y - wpt.y);
-      if (dist < R_P * 1.6 && dist < best) { best = dist; pick = i; }
-    });
+    let pick = -1, bd = 1e9;
+    for (let i = 0; i < bs.length; i++) {
+      if (bs[i].kind !== mine) continue;
+      const d = Math.hypot(bs[i].x - p.x, bs[i].y - p.y);
+      if (d < bs[i].r + 16 && d < bd) { bd = d; pick = i; }
+    }
     if (pick < 0) return;
-    drag.current = { i: pick, px: e.clientX - rect.left, py: e.clientY - rect.top };
     (e.target as Element).setPointerCapture?.(e.pointerId);
+    drag.current = { i: pick, px: p.x, py: p.y };
   };
-  const ptMove = (e: React.PointerEvent) => {
+  const onMove = (e: React.PointerEvent) => {
     if (!drag.current) return;
-    const rect = canvasRef.current!.getBoundingClientRect();
-    drag.current = { ...drag.current, px: e.clientX - rect.left, py: e.clientY - rect.top };
-    draw();
+    const p = toWorld(e);
+    drag.current = { ...drag.current, px: p.x, py: p.y };
   };
-  const ptUp = () => {
+  const onUp = () => {
     const d = drag.current; drag.current = null;
-    if (!d || !canShoot) { draw(); return; }
+    if (!d || !canShoot()) return;
     const disc = bodies.current[d.i];
-    const dw = toWorld(d.px, d.py);
-    const v = pullToVelocity(disc.x - dw.x, disc.y - dw.y);
-    if (!v.vx && !v.vy) { draw(); return; }
+    const v = pullToVelocity(disc.x - d.px, disc.y - d.py);
+    if (!v.vx && !v.vy) return;                            // a tap, not a shot
     disc.vx = v.vx; disc.vy = v.vy;
     const shot: LastShot = { by: side, disc: d.i, vx: v.vx, vy: v.vy };
     setMyTurn(false);
     runSim(async (scored) => {
-      // score: 'me' goal = into right goal (a scores); 'cpu' goal = b scores
-      const score = { ...(match?.score || { a: 0, b: 0 }) };
+      setInPlay(false);
+      // score in board orientation: 'me' goal = into the right goal → side A scores
+      const score = { ...(matchRef.current?.score || { a: 0, b: 0 }) };
       let scoredSide: 'a' | 'b' | null = null;
       if (scored === 'me') { score.a++; scoredSide = 'a'; }
       else if (scored === 'cpu') { score.b++; scoredSide = 'b'; }
-      if (scoredSide) { setFlash(scoredSide); window.setTimeout(() => setFlash(null), 1100); }
+      if (scoredSide) { setCelebrate(scoredSide); window.setTimeout(() => setCelebrate(null), 1250); }
       // on a goal the board resets to a fresh formation (unless the game is won)
       const won = score.a >= WIN_GOALS || score.b >= WIN_GOALS;
       const finalBodies = scoredSide && !won ? formation() : bodies.current;
       bodies.current = finalBodies;
-      draw();
-      setBusy(true);
+      busy.current = true;
       const res = await submitTurn(matchId, localSeq.current, {
         bodies: toWire(finalBodies), lastShot: shot, score, scored: !!scoredSide,
       });
-      setBusy(false);
+      busy.current = false;
       if (res) { localSeq.current = res.seq; applyMatch(res); }
       else { const m = await loadMatch(matchId); if (m) applyMatch(m); }   // lost the race — re-sync
     });
@@ -261,49 +284,186 @@ export function SoccerStarsMP({ matchId, side, onClose }: Props) {
     if (m) { localSeq.current = m.seq - 1; applyMatch(m); }   // force re-apply of the reset board
   };
 
-  /* ---- HUD ---- */
+  /* ---- HUD derived ---- */
   const status = match?.status;
   const sa = match?.score.a ?? 0, sb = match?.score.b ?? 0;
-  const myScore = side === 'a' ? sa : sb, oppScore = side === 'a' ? sb : sa;
-  const iWon = status === 'over' && match?.winner === side;
-  const banner =
-    status === 'waiting' ? `Waiting for ${oppName || 'your opponent'} to join…`
-    : status === 'abandoned' ? `${oppName || 'Opponent'} left — you win by default`
-    : status === 'over' ? (iWon ? 'You win! 🏆' : `${oppName} wins`)
-    : myTurn ? 'Your shot — pull back a disc and fire'
-    : `Waiting for ${oppName || 'opponent'} to shoot…`;
+  const iWon = (status === 'over' || status === 'abandoned') && match?.winner === side;
+  const aNat = match ? NATION[match.a.nation] : null;
+  const bNat = match?.b ? NATION[match.b.nation] : null;
+  const turnSide = match?.turn;
+
+  const tokLabel =
+    status === 'waiting' ? 'Waiting…'
+    : status === 'over' || status === 'abandoned' ? 'Full time'
+    : inPlay ? 'In play'
+    : myTurn ? 'Your turn'
+    : `${oppName}'s turn`;
+  const hint =
+    inPlay ? 'Watch it play out…'
+    : myTurn ? 'Pull back & release to shoot'
+    : `${oppName} is lining one up…`;
+
+  // a player card for the HUD (pot-ring avatar + level + name) — single-player markup
+  const Pcard = (o: { side: 'left' | 'right'; on: boolean; dim: boolean; flagId: string; ring: string; name: string; sub: string; lv: number }) => (
+    <div className={`ss-pcard ${o.side === 'right' ? 'right' : ''} ${o.dim ? 'dim' : ''} ${o.on ? 'on' : ''}`}>
+      <div className="ss-avatar" style={{ ['--pot' as string]: o.ring }}>
+        <span className="ss-ring" />
+        <span className="ss-face">{o.flagId ? <Flag id={o.flagId} size={31} ring="ink" shine={false} /> : <span style={{ fontSize: 18 }}>⚽</span>}</span>
+        <span className="ss-lv">LV {o.lv}</span>
+      </div>
+      <div className="ss-pmeta">
+        <div className="ss-pname">{o.name}</div>
+        <div className="ss-psub">{o.sub}</div>
+      </div>
+    </div>
+  );
+
+  const scorerName = celebrate === 'a' ? (aNat?.name || match?.a.name) : (bNat?.name || match?.b?.name);
+  const meIsLeft = side === 'a';
+  const winnerName = match?.winner === 'a' ? match?.a.name : match?.b?.name;
+  const winnerNation = match?.winner === 'a' ? match?.a.nation : match?.b?.nation;
 
   return (
-    <div className="pen-overlay" style={{ position: 'fixed', inset: 0, background: '#0a0f0c', display: 'flex', flexDirection: 'column', zIndex: 60 }}>
-      <div className="between" style={{ padding: '12px 16px', color: '#fff' }}>
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center', fontWeight: 800 }}>
-          <span>{meName} <span style={{ color: '#C8F23C' }}>{myScore}</span></span>
-          <span style={{ opacity: .6 }}>vs</span>
-          <span><span style={{ color: '#FFB000' }}>{oppScore}</span> {oppName || '…'}</span>
+    <div className="ss-arcade">
+      {/* ===== stadium-at-night ambiance ===== */}
+      <div className="ss-stadium" aria-hidden="true">
+        <div className="ss-sky" />
+        <div className="ss-stands top" />
+        <div className="ss-stands bot" />
+        <div className="ss-bokeh">
+          {bokeh.map((b, i) => (
+            <span key={i} style={{ left: `${b.left}%`, top: `${b.top}%`, ['--c' as string]: b.c, opacity: b.o, transform: `scale(${b.s})` }} />
+          ))}
         </div>
-        <button className="hdr-btn" onClick={leave} style={{ border: '1.5px solid rgba(255,255,255,.3)', color: '#fff' }}><Icon name="x" size={18} /></button>
+        <div className="ss-flood l" /><div className="ss-flood r" />
+        <div className="ss-flood bl" /><div className="ss-flood br" />
+        <div className="ss-spot" />
+        <div className="ss-drift" />
       </div>
 
-      <div style={{ textAlign: 'center', color: myTurn ? '#C8F23C' : '#9C988C', fontSize: 13, fontWeight: 700, padding: '0 16px 8px', minHeight: 18 }}>
-        {flash ? <span style={{ color: '#C8F23C', fontSize: 18 }}>GOAL!</span> : banner}
+      <button className="ss-close" onClick={leave} aria-label="Close"><Icon name="x" size={16} /></button>
+
+      {/* ===== HUD — challenger (A) on the left, opponent (B) on the right ===== */}
+      <div className="ss-hud">
+        {Pcard({
+          side: 'left', on: status === 'active' && turnSide === 'a', dim: status === 'active' && turnSide === 'b',
+          flagId: match?.a.nation || '', ring: POT_COLOR[aNat?.pot || 'FAV'] || '#FFB000',
+          name: match?.a.name || '…', sub: `${meIsLeft ? 'You' : 'Live'} · ${aNat?.name || ''}`, lv: levelOf(match?.a.name || 'A'),
+        })}
+        <div className="ss-board">
+          <div className="ss-score"><b>{sa}</b><span className="sep">–</span><b>{sb}</b></div>
+          <div className="ss-tok"><span className="dot" />{tokLabel}</div>
+        </div>
+        {Pcard({
+          side: 'right', on: status === 'active' && turnSide === 'b', dim: status === 'active' && turnSide === 'a',
+          flagId: match?.b?.nation || '', ring: POT_COLOR[bNat?.pot || 'UND'] || '#07C2C7',
+          name: match?.b?.name || oppName, sub: match?.b ? `${meIsLeft ? 'Live' : 'You'} · ${bNat?.name || ''}` : 'Joining…', lv: levelOf(match?.b?.name || oppName),
+        })}
       </div>
 
-      <div ref={wrapRef} style={{ padding: '0 12px', flex: 1, display: 'grid', placeItems: 'center' }}>
+      {/* ===== pitch (canvas) ===== */}
+      <div className="ss-pitchwrap" ref={wrapRef}>
         <canvas
           ref={canvasRef}
-          onPointerDown={ptDown} onPointerMove={ptMove} onPointerUp={ptUp} onPointerCancel={ptUp}
-          style={{ borderRadius: 12, touchAction: 'none', maxWidth: '100%', boxShadow: '0 8px 40px rgba(0,0,0,.5)' }}
+          className="ss-canvas"
+          style={{ touchAction: 'none' }}
+          onPointerDown={onDown}
+          onPointerMove={onMove}
+          onPointerUp={onUp}
+          onPointerCancel={onUp}
         />
       </div>
 
-      <div style={{ padding: '12px 16px 22px', display: 'grid', gap: 10 }}>
-        {(status === 'over' || status === 'abandoned') && (
-          <div style={{ display: 'flex', gap: 10 }}>
-            {status === 'over' && <button className="btn btn-lime btn-block" onClick={rematch}>{match?.rematch[oppSide] ? 'Accept rematch' : 'Rematch'}</button>}
-            <button className="btn btn-block" onClick={onClose}>Leave</button>
+      {/* ===== turn hint ===== */}
+      {status === 'active' && (
+        <div className="ss-turnhint" data-on={myTurn ? 'true' : 'false'}>
+          <span className="pin" />{hint}
+        </div>
+      )}
+
+      {/* ===== goal celebration ===== */}
+      <div className={`ss-goalmoment ${celebrate ? 'show' : ''} ${celebrate && celebrate !== side ? 'cpu' : ''}`} aria-hidden="true">
+        <div className="flash" />
+        <div className="shock" />
+        {celebrate === side && (
+          <div className="confetti">
+            {confetti.map((c, i) => (
+              <i key={i} style={{ left: `${c.left}%`, background: c.bg, ['--d' as string]: `${c.d}s`, ['--delay' as string]: `${c.delay}s`, transform: `rotate(${c.rot}deg)` }} />
+            ))}
           </div>
         )}
+        <div className="word display">{celebrate === side ? 'Goal!' : 'Goal'}</div>
+        <div className="sub eyebrow">{scorerName || ''} strikes</div>
       </div>
+
+      {/* ===== waiting lobby: spinner until the opponent joins, cancel any time ===== */}
+      {status === 'waiting' && (
+        <div className="ss-endcard show">
+          <div className="ec-dim" />
+          <div className="ec-panel">
+            <div className="ec-eyebrow eyebrow">Live match</div>
+            <span className="ss-spinner" aria-hidden="true" />
+            <div className="ec-headline display" style={{ fontSize: 26, whiteSpace: 'normal' }}>Waiting on {oppName}</div>
+            <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5, color: 'rgba(244,238,225,.65)' }}>
+              They've been sent a notification — one tap drops them straight in here.
+            </p>
+            <div className="ec-actions">
+              <button className="ec-btn ghost" onClick={leave}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== full-time / abandoned / cancelled card ===== */}
+      {(status === 'over' || status === 'abandoned' || status === 'declined') && (
+        <div className="ss-endcard show">
+          <div className="ec-dim" />
+          <div className="ec-panel">
+            <div className="ec-eyebrow eyebrow">{status === 'over' ? 'Full time' : status === 'abandoned' ? 'Match over' : 'Live match'}</div>
+            {status === 'declined' ? (
+              <>
+                <div className="ec-headline display" style={{ fontSize: 28, whiteSpace: 'normal' }}>Match cancelled</div>
+                <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5, color: 'rgba(244,238,225,.65)' }}>This live invite is no longer open.</p>
+              </>
+            ) : (
+              <>
+                <div className="ss-ecdisc"><Flag id={(iWon ? meP?.nation : winnerNation) || winnerNation || 'BRA'} size={84} ring="pot" /></div>
+                <div className="ec-headline display">{iWon ? 'You win!' : `${winnerName || oppName} wins`}</div>
+                <div className="ec-score">{sa} – {sb}</div>
+                {status === 'abandoned' && (
+                  <p style={{ margin: 0, fontSize: 12.5, color: 'rgba(244,238,225,.65)' }}>
+                    {iWon ? `${oppName} left — you win by default.` : 'You left the match.'}
+                  </p>
+                )}
+              </>
+            )}
+            <div className="ec-actions">
+              <button className="ec-btn ghost" onClick={onClose}>Leave</button>
+              {status === 'over' && (
+                <button className="ec-btn primary" onClick={rematch}>
+                  {match?.rematch[oppSide] ? 'Accept rematch' : match?.rematch[side] ? 'Waiting…' : 'Rematch'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== portrait gate: rotate to landscape to play ===== */}
+      {portrait && (
+        <div className="ss-rotate">
+          <div>
+            <svg className="ph" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+              <rect x="22" y="10" width="20" height="38" rx="4" stroke="currentColor" strokeWidth="3" />
+              <line x1="28" y1="43" x2="36" y2="43" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+              <path d="M50 24 A 22 22 0 0 1 50 44" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+              <path d="M46 40 L50 46 L55 41" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <div className="display" style={{ fontSize: 30, color: '#F4EEE1' }}>Rotate your phone</div>
+            <div className="eyebrow" style={{ fontSize: 9.5, color: 'rgba(244,238,225,.6)', marginTop: 10 }}>Soccer Stars plays in landscape</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

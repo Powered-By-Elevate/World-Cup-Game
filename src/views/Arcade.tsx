@@ -126,7 +126,7 @@ export function Arcade({ meId, members, onLaunch, ...calls }: Props) {
                       <div style={{ fontWeight: 800, fontSize: 14 }}>Waiting for {i.toName}…</div>
                       <div className="muted" style={{ fontSize: 12 }}>Live invite sent</div>
                     </div>
-                    <button className="btn btn-sm" onClick={() => onLaunch('soccer', { kind: 'live', matchId: i.id, side: 'a' })}>Open</button>
+                    <button className="btn btn-sm" onClick={() => onLaunch('soccer', { kind: 'live', matchId: i.id, side: 'a', oppName: i.toName })}>Open</button>
                   </div>
                 ))}
               </>

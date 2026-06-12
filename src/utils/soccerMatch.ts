@@ -35,6 +35,7 @@ export interface SoccerMatch {
   id: string;
   a: MatchPlayer;                 // challenger — defends the LEFT goal, is 'me' bodies
   b: MatchPlayer | null;          // opponent — defends the RIGHT goal, is 'cpu' bodies; null until they join
+  invitee?: { id: string; name: string };  // who was challenged (for the waiting lobby before they join)
   status: MatchStatus;
   turn: 'a' | 'b';                // whose turn it is to shoot
   score: { a: number; b: number };
@@ -77,6 +78,7 @@ export async function createInvite(from: MatchPlayer, to: { id: string; name: st
     id: uid(),
     a: from,
     b: null,
+    invitee: { id: to.id, name: to.name },
     status: 'waiting',
     turn: 'a',
     score: { a: 0, b: 0 },
