@@ -130,9 +130,13 @@ export function Profile({ me, myTeam, isCommish, commishName, onClose, onRenameM
               <Avatar name={commishName || '?'} />
               <div><div style={{ fontWeight: 800 }}>{commishName ? `${commishName} 👑` : 'No commissioner yet'}</div><div className="muted" style={{ fontSize: 12 }}>Runs the draft &amp; rules</div></div>
             </div>
-            {isCommish && commishName
-              ? <span className="muted" style={{ fontSize: 12 }}>That's you</span>
-              : <button className="btn btn-ghost btn-sm" onClick={() => { onClaim(); onClose(); }}>{commishName ? 'Take over' : 'Claim'}</button>}
+            {commishName
+              ? (isCommish
+                ? <span className="muted" style={{ fontSize: 12 }}>That's you</span>
+                /* a commissioner already exists — only THEY can hand it over (Manage → a member → Make commissioner) */
+                : <span className="muted" style={{ fontSize: 12, textAlign: 'right' }}>Only {commishName} can reassign</span>)
+              /* no commissioner set yet — anyone may claim the empty seat */
+              : <button className="btn btn-ghost btn-sm" onClick={() => { onClaim(); onClose(); }}>Claim</button>}
           </div>
 
           {/* your team */}
