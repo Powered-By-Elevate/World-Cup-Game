@@ -351,10 +351,10 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
           // it leaves the lane it's "in play" and the assist switches off so it
           // never disturbs normal play on the right side.
           if (b.laneT && b.laneT > 0) {
-            if (b.p.x > 286 && b.p.y > 150 && b.p.y < 360) {
+            if (b.p.x > 284 && b.p.y > 86 && b.p.y < 360) {
               b.laneT += dt;
-              if (b.v.y > -60 && b.p.y > 240) b.v.y -= 900 * dt;               // nudge up if it stalls low
-              if (b.laneT > 1.3) { b.p.x = 274; b.p.y = 150; b.v.x = -70; b.v.y = 150; b.laneT = 0; }  // eject into play
+              if (b.v.y > -60 && b.p.y > 130) b.v.y -= 1000 * dt;              // keep it climbing if it stalls
+              if (b.laneT > 1.1) { b.p.x = 250; b.p.y = 170; b.v.x = -90; b.v.y = 170; b.laneT = 0; }  // eject into play
             } else { b.laneT = 0; }                                            // left the lane → in play
           }
           // anti-stuck: free a ball jammed up in the playfield (not one resting on
@@ -383,10 +383,11 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
     bg.addColorStop(0, '#0a0f1c'); bg.addColorStop(1, '#05080f');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch);
 
-    // fill the screen width and anchor the board to the BOTTOM (flippers at the
-    // player's thumbs); the dark area above becomes the backbox where the HUD sits.
-    const scale = cw / TW;
-    const ox = 0, oy = ch - TH * scale;
+    // fill the screen to the PLAYFIELD width (drop the dead cabinet side margins),
+    // centred vertically so the board sits in the middle of the phone.
+    const MARGIN = 14;                       // dead logical px each side (cabinet)
+    const scale = cw / (TW - 2 * MARGIN);
+    const ox = -MARGIN * scale, oy = (ch - TH * scale) / 2;
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
     // clip to table
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, TW, TH); ctx.clip();
