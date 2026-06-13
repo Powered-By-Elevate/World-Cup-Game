@@ -11,7 +11,13 @@ export const shuffle = <T>(arr: T[]): T[] => {
 
 export const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
-export const parseDate = (d: string) => new Date(d + ":00-04:00");
+// Our fixture strings are bare Eastern wall-time ("YYYY-MM-DDTHH:MM"); the live
+// feed sends full ISO with a zone (…Z or ±HH:MM). Pin the bare ones to Eastern;
+// use zoned ones as-is.
+export const parseDate = (d: string) => {
+  const hasZone = d.endsWith("Z") || /[+-]\d\d:?\d\d$/.test(d);
+  return new Date(hasZone ? d : d + ":00-04:00");
+};
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
