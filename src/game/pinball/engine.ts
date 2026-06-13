@@ -81,6 +81,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
   let serving = false;
   let charging = false;
   let charge = 0;
+  let servingT = 0;   // how long the ball has waited on the plunger (auto-launch failsafe)
 
   // timers
   let ballSave = 0;
@@ -121,14 +122,18 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
   /* ---------------- serving / launching ---------------- */
   function serveBall() {
     balls = [mkBall(SPAWN.x, SPAWN.y)];
-    serving = true; charging = false; charge = 0;
+    serving = true; charging = false; charge = 0; servingT = 0;
   }
   function launch() {
     if (!serving || !balls.length) return;
-    // fire straight up the right plunger lane; power from how long you hold.
-    const power = Math.max(0.5, charge);
-    balls[0].v = { x: 0, y: -(760 + power * 520) };
-    balls[0].laneT = 0.001;   // mark the launch phase active (assist runs until it exits the lane)
+    // The real Space Cadet launch lane is too narrow/jam-prone to deliver the
+    // ball reliably, so DROP it into the playfield from the top of the right lane
+    // with downward speed — this always puts a ball in play. Power = a bit of
+    // extra zip from how long you held.
+    const power = Math.max(0.4, charge);
+    balls[0].p = { x: 248, y: 158 };
+    balls[0].v = { x: -150, y: 120 + power * 160 };
+    balls[0].laneT = 0;
     serving = false; charging = false; charge = 0;
     ballSave = 5; play('plunger');
   }
@@ -340,9 +345,11 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
         if (c.timer <= 0) { balls.push(mkBall(c.x, c.y + 16, (Math.random() * 80 - 40), 240)); captured.splice(i, 1); }
       }
       if (serving) {
-        // ball rests on the centre spot; holding KICKOFF ramps the power
+        // ball rests on the plunger; holding LAUNCH ramps the power
         if (balls[0]) { balls[0].p.x = SPAWN.x; balls[0].p.y = SPAWN.y; balls[0].v.x = 0; balls[0].v.y = 0; }
         if (charging) charge = Math.min(1, charge + dt * 1.6);
+        servingT += dt;
+        if (servingT > 6) launch();   // failsafe: never let the ball sit on the plunger forever
       } else {
         for (const b of balls) {
           stepBall(b, dt, segs, bumpers, flips, onHit);
