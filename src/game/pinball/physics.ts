@@ -7,11 +7,11 @@
 import { closestOnSeg, reflect } from './vec';
 import type { Ball, Segment, Bumper, Flipper } from './types';
 
-export const GRAVITY = 900;         // units/s² (down)
-export const MAX_SPEED = 1350;
-const SUBSTEPS = 9;
-const SEG_R = 1.6;                  // thin wall collider so the narrow real lanes stay passable
-const FLIP_AV = 30;                 // flipper angular speed (rad/s)
+export const GRAVITY = 1000;        // units/s² (down) — calmer so the ball is controllable
+export const MAX_SPEED = 1280;      // the plunger briefly exceeds this; the clamp keeps play sane
+const SUBSTEPS = 8;
+const SEG_R = 2.5;                  // wall collider half-thickness
+const FLIP_AV = 28;                 // flipper angular speed (rad/s)
 const FLIP_E = 0.5;
 
 export type HitFn = (type: 'wall' | 'sling' | 'bumper' | 'flip', data: { x: number; y: number; id?: string; score?: number; light?: string }) => void;
@@ -89,7 +89,7 @@ export function stepBall(b: Ball, dt: number, segs: Segment[], bumpers: Bumper[]
         const nr = reflect(relv, n, FLIP_E);
         b.v.x = nr.x + u.x; b.v.y = nr.y + u.y;
         // guarantee a lively pop when the flipper is actively swinging up
-        if (f.pressed && Math.abs(f.omega) > 4) { b.v.x += n.x * 230; b.v.y += n.y * 230; }
+        if (f.pressed && Math.abs(f.omega) > 4) { b.v.x += n.x * 120; b.v.y += n.y * 120; }
         hit('flip', { x: cp.x, y: cp.y, id: f.side });
       } else {
         // resting contact — keep the ball on the surface without sticking
