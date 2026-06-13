@@ -53,7 +53,7 @@ function statusOf(s: string): 'ft' | 'live' | null {
 /** A match being played right now (free tier: teams + kickoff, no in-play score). */
 export interface LiveNowMatch { mi: string | null; round: string | null; h: string; a: string; date: string; }
 
-export interface LiveData { scores: Record<string, ScoreEntry>; ko: KOMatch[]; liveNow: LiveNowMatch[]; }
+export interface LiveData { scores: Record<string, ScoreEntry>; ko: KOMatch[]; liveNow: LiveNowMatch[]; dates: Record<string, string>; }
 
 interface FeedMatch {
   id: number | string; stage: string; status: string;
@@ -80,6 +80,7 @@ export function mapLive(matches: FeedMatch[]): LiveData {
   const scores: Record<string, ScoreEntry> = {};
   const ko: KOMatch[] = [];
   const liveNow: LiveNowMatch[] = [];
+  const dates: Record<string, string> = {};   // fixture mi → real feed kickoff (overrides our placeholder dates)
 
   for (const m of matches) {
     const h = toId(m.home?.name ?? m.home?.tla);
@@ -87,8 +88,9 @@ export function mapLive(matches: FeedMatch[]): LiveData {
 
     if (m.stage === 'GROUP_STAGE') {
       const st = statusOf(m.status);
+      const f = h && a ? PAIR[[h, a].sort().join('|')] : undefined;
+      if (f && m.date) dates[f.mi] = m.date;          // keep the schedule honest even for TIMED matches
       if (!st || !h || !a) continue;
-      const f = PAIR[[h, a].sort().join('|')];
       if (st === 'live') liveNow.push({ mi: f?.mi || null, round: null, h, a, date: m.date || '' });
       if (m.hs == null || m.as == null || !f) continue;
       scores[f.mi] = f.home === h ? { h: m.hs, a: m.as, st } : { h: m.as, a: m.hs, st };
@@ -113,7 +115,7 @@ export function mapLive(matches: FeedMatch[]): LiveData {
     });
   }
 
-  return { scores, ko, liveNow };
+  return { scores, ko, liveNow, dates };
 }
 
 /** A fixture that hasn't kicked off yet, resolved to our nation ids. */

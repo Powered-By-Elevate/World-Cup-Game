@@ -975,10 +975,13 @@ export default function App() {
   }, [showPushPrompt, enableDeviceNotifs]);
 
   const announce = useCallback(async (message: string) => {
-    const subject = `📣 ${realLeagueName || 'World Cup pool'}`;
-    const r = await sendAnnouncement(leagueCodeRef.current, subject, message, leagueLink(leagueCodeRef.current));
+    // stamp the sender so an announcement can never be anonymous
+    const who = me?.name?.trim() || 'The commissioner';
+    const subject = `📣 ${who} · ${realLeagueName || 'World Cup pool'}`;
+    const body = `${who}: ${message}`;
+    const r = await sendAnnouncement(leagueCodeRef.current, subject, body, leagueLink(leagueCodeRef.current));
     toast(r ? `Sent to ${r.emailed} ${r.emailed === 1 ? 'inbox' : 'inboxes'}${r.pushed ? ` · ${r.pushed} push` : ''}` : "Couldn't send message");
-  }, [realLeagueName, toast]);
+  }, [realLeagueName, toast, me]);
 
   const signOutNow = useCallback(async () => {
     await signOut();
@@ -1119,7 +1122,7 @@ export default function App() {
         {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} calls={state.calls || {}} callChanges={state.callChanges || {}} meId={me!.id} names={callerNames} onCall={api.makeCall} liveNow={demo ? [] : (live?.liveNow ?? [])} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
-        {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} />}
+        {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} dates={demo ? {} : (live?.dates ?? {})} />}
         {tab === "arcade" && <Arcade calls={state.calls || {}} callChanges={state.callChanges || {}} scores={scores} meId={me!.id} names={callerNames} onCall={api.makeCall} members={chatMembers} onLaunch={launchGame} />}
         {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
         {tab === "cabinet" && <TrophyRoom teams={state.teams || []} awardsByTeam={awardsByTeam} myTeam={myTeam} isCommish={isCommish} onSetAwardHolder={api.setAwardHolder} onShare={toast} />}

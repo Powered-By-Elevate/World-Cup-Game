@@ -11,18 +11,23 @@ interface Props {
   scores: Record<string, ScoreEntry>;
   ko: KOMatch[];
   myTeam: Team | null;
+  /** Real kickoff dates from the live feed, keyed by fixture id (overrides our placeholder fixture dates). */
+  dates?: Record<string, string>;
 }
 
-export function MatchesView({ scores, ko, myTeam }: Props) {
+export function MatchesView({ scores, ko, myTeam, dates = {} }: Props) {
   const [mode, setMode] = useState<'group' | 'ko'>('group');
   const [filter, setFilter] = useState<'all' | 'mine' | 'live'>('all');
   const myIds = myTeam?.picks ? POT_KEYS.map(pk => myTeam.picks![pk]) : [];
 
+  // prefer the live feed's real kickoff date over our placeholder fixture date
+  const dOf = (f: { i: string; d: string }) => dates[f.i] || f.d;
+
   // always present the schedule in true kickoff order, grouped by ET day
-  let fx = [...MATCHES].sort((a, b) => parseDate(a.d).getTime() - parseDate(b.d).getTime());
+  let fx = [...MATCHES].sort((a, b) => parseDate(dOf(a)).getTime() - parseDate(dOf(b)).getTime());
   if (filter === 'mine') fx = fx.filter(f => myIds.includes(f.h) || myIds.includes(f.a));
-  if (filter === 'live') fx = fx.filter(f => matchStatus(f.d, scores[f.i]) === 'live');
-  const days = [...new Set(fx.map(f => dayKeyOf(f.d)))].sort();
+  if (filter === 'live') fx = fx.filter(f => matchStatus(dOf(f), scores[f.i]) === 'live');
+  const days = [...new Set(fx.map(f => dayKeyOf(dOf(f))))].sort();
 
   return (
     <div className="content">
@@ -46,9 +51,9 @@ export function MatchesView({ scores, ko, myTeam }: Props) {
           <div key={day}>
             <div className="sec-head" style={{ margin: '18px 2px 9px' }}><span className="eyebrow">{fmtDayLabel(day)}</span></div>
             <div className="card flat" style={{ overflow: 'hidden' }}>
-              {fx.filter(f => dayKeyOf(f.d) === day).map(f => {
+              {fx.filter(f => dayKeyOf(dOf(f)) === day).map(f => {
                 const s = scores[f.i];
-                const stt = matchStatus(f.d, s);
+                const stt = matchStatus(dOf(f), s);
                 const done = s && (s.st === 'ft' || s.st === 'live') && s.h != null;
                 const mine = myIds.includes(f.h) || myIds.includes(f.a);
                 return (
@@ -57,7 +62,7 @@ export function MatchesView({ scores, ko, myTeam }: Props) {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                       {done
                         ? <span className="scorebug">{s.h}<span style={{ opacity: .4 }}>:</span>{s.a}</span>
-                        : <span className="scorebug sched">{fmtTime(f.d).replace(' ET', '')}</span>}
+                        : <span className="scorebug sched">{fmtTime(dOf(f)).replace(' ET', '')}</span>}
                       {stt === 'live' && <span className="badge live" style={{ height: 16, fontSize: 8 }}><span className="dot" />LIVE</span>}
                       {done && stt !== 'live' && <span className="badge ft" style={{ height: 16, fontSize: 8 }}>FT</span>}
                     </div>

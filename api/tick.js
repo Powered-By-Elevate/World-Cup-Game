@@ -275,13 +275,15 @@ function mapLive(matches) {
   const scores = {};
   const ko = [];
   const liveNow = [];
+  const dates = {};
   for (const m of matches) {
     const h = toId(m.home?.name ?? m.home?.tla);
     const a = toId(m.away?.name ?? m.away?.tla);
     if (m.stage === "GROUP_STAGE") {
       const st2 = statusOf(m.status);
+      const f = h && a ? PAIR[[h, a].sort().join("|")] : void 0;
+      if (f && m.date) dates[f.mi] = m.date;
       if (!st2 || !h || !a) continue;
-      const f = PAIR[[h, a].sort().join("|")];
       if (st2 === "live") liveNow.push({ mi: f?.mi || null, round: null, h, a, date: m.date || "" });
       if (m.hs == null || m.as == null || !f) continue;
       scores[f.mi] = f.home === h ? { h: m.hs, a: m.as, st: st2 } : { h: m.as, a: m.hs, st: st2 };
@@ -310,7 +312,7 @@ function mapLive(matches) {
       d: (m.date || "").slice(0, 10)
     });
   }
-  return { scores, ko, liveNow };
+  return { scores, ko, liveNow, dates };
 }
 function upcomingFromFeed(matches) {
   const out = [];
@@ -331,7 +333,14 @@ function upcomingFromFeed(matches) {
 
 // src/utils/helpers.ts
 var uid = () => Math.random().toString(36).slice(2, 9);
-var parseDate = (d) => /* @__PURE__ */ new Date(d + ":00-04:00");
+var parseDate = (d) => {
+  const hasZone = d.endsWith("Z") || /[+-]\d\d:?\d\d$/.test(d);
+  return new Date(hasZone ? d : d + ":00-04:00");
+};
+var ET_TZ = "America/New_York";
+var ET_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: ET_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
+var ET_TIME = new Intl.DateTimeFormat("en-US", { timeZone: ET_TZ, hour: "numeric", minute: "2-digit", hour12: true });
+var ET_LABEL = new Intl.DateTimeFormat("en-US", { timeZone: ET_TZ, weekday: "short", month: "short", day: "numeric" });
 
 // src/utils/scoring.ts
 var STAGE_MATCH_COUNT = {
