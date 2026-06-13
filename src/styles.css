@@ -1168,20 +1168,20 @@
 .pin-flipzone:active{ background:radial-gradient(120% 60% at 50% 100%, rgba(255,255,255,.07), transparent 70%); }
 .pin-zhint{ font-family:'Anton',sans-serif; font-size:26px; color:rgba(244,238,225,.16); pointer-events:none; }
 
-/* ---- big KICKOFF button (press & hold to load power; fades out once in play) ---- */
-.pin-kickoff{ position:absolute; left:50%; bottom:30px; transform:translateX(-50%); z-index:8;
-  width:min(78vw,300px); padding:16px 24px 15px; border-radius:18px; border:0; cursor:pointer;
+/* ---- LAUNCH plunger button (right side; fades out once the ball's in play) ---- */
+.pin-kickoff{ position:absolute; right:14px; bottom:26px; z-index:8;
+  width:min(48vw,184px); padding:16px 20px 15px; border-radius:18px; border:0; cursor:pointer;
   background:radial-gradient(120% 150% at 50% 0%, #ffe488, #FFC400); color:#3a2a00;
   display:flex; flex-direction:column; align-items:center; gap:2px; overflow:hidden;
   box-shadow:0 12px 30px rgba(255,196,0,.5), inset 0 -4px 8px rgba(150,90,0,.4);
   transition:opacity .35s ease, transform .35s ease; -webkit-tap-highlight-color:transparent; touch-action:none; }
-.pin-kickoff:active{ transform:translateX(-50%) scale(.97); }
-.pin-kickoff .kc-title{ font-family:'Anton',sans-serif; font-size:30px; letter-spacing:2.5px; line-height:1; }
-.pin-kickoff .kc-sub{ font-family:'Archivo',sans-serif; font-weight:800; font-size:10.5px; letter-spacing:2px;
+.pin-kickoff:active{ transform:scale(.97); }
+.pin-kickoff .kc-title{ font-family:'Anton',sans-serif; font-size:26px; letter-spacing:2px; line-height:1; }
+.pin-kickoff .kc-sub{ font-family:'Archivo',sans-serif; font-weight:800; font-size:10px; letter-spacing:1.5px;
   text-transform:uppercase; opacity:.65; }
 .pin-kickoff .kc-bar{ position:absolute; left:0; right:0; bottom:0; height:5px; background:rgba(58,42,0,.3); }
 .pin-kickoff .kc-bar i{ display:block; height:100%; width:0; background:linear-gradient(90deg,#fff,#ff5b2d); }
-.pin-kickoff.spent{ opacity:0; transform:translateX(-50%) scale(.82); pointer-events:none; }
+.pin-kickoff.spent{ opacity:0; transform:scale(.82); pointer-events:none; }
 
 /* ---- start / pause / full-time cards ---- */
 .pin-screen{ position:absolute; inset:0; z-index:12; display:grid; place-items:center; padding:22px;

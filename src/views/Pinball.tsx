@@ -151,13 +151,13 @@ export function Pinball({ onClose, onScore }: Props) {
           </div>
         )}
 
-        {/* big KICKOFF button: press & hold to load power, release to launch.
-            Fades out of sight once the ball is in play. */}
+        {/* LAUNCH plunger (right side): press & hold to load power, release to
+            fire the ball up the right lane. Fades away once the ball's in play. */}
         {status === 'playing' && !paused && (
           <button className={'pin-kickoff' + (launched ? ' spent' : '')}
             onPointerDown={hold(true)} onPointerUp={hold(false)} onPointerCancel={hold(false)}>
-            <span className="kc-title">KICKOFF</span>
-            <span className="kc-sub">press &amp; hold</span>
+            <span className="kc-title">LAUNCH</span>
+            <span className="kc-sub">hold &amp; release</span>
             <span className="kc-bar"><i style={{ width: `${(snap?.charge ?? 0) * 100}%` }} /></span>
           </button>
         )}

@@ -84,7 +84,7 @@ export interface Flipper {
   pressed: boolean;
 }
 
-export interface Ball { p: Vec; v: Vec; r: number; stuck?: number; }
+export interface Ball { p: Vec; v: Vec; r: number; stuck?: number; laneT?: number; }
 
 export type Status = 'attract' | 'ready' | 'playing' | 'over';
 
