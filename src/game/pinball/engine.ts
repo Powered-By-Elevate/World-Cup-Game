@@ -357,8 +357,10 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
     bg.addColorStop(0, '#0a0f1c'); bg.addColorStop(1, '#05080f');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch);
 
-    const scale = Math.min(cw / TW, ch / TH);
-    const ox = (cw - TW * scale) / 2, oy = (ch - TH * scale) / 2;
+    // fill the screen width and anchor the board to the BOTTOM (flippers at the
+    // player's thumbs); the dark area above becomes the backbox where the HUD sits.
+    const scale = cw / TW;
+    const ox = 0, oy = ch - TH * scale;
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
     // clip to table
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, TW, TH); ctx.clip();
@@ -390,7 +392,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
       rank: RANKS[rankIndex], rankIndex, rankMax: RANKS.length - 1,
       mission: curMission().name, missionHint: curMission().hint, missionNeed: curMission().need, missionDone, missionActive,
       ballSave: ballSave > 0, kickback: kickback.armed, locks,
-      charge, muted: !!opts.muted, inMultiball, message: msgTimer > 0 ? msg : '',
+      awaitingLaunch: serving, charge, muted: !!opts.muted, inMultiball, message: msgTimer > 0 ? msg : '',
     };
     const sig = JSON.stringify(snap);
     if (sig !== lastSig) { lastSig = sig; opts.onState(snap); }

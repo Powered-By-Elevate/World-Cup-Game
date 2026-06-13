@@ -120,6 +120,7 @@ export interface Snapshot {
   ballSave: boolean;
   kickback: boolean;
   locks: number;             // balls locked toward multiball
+  awaitingLaunch: boolean;   // a ball is parked on the plunger, waiting to be kicked off
   charge: number;            // plunger charge 0..1
   muted: boolean;
   inMultiball: boolean;
