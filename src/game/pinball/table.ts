@@ -52,7 +52,7 @@ export function buildSegments(): Segment[] {
   // every real Space Cadet wall polyline — except the angled deflectors that
   // cross the right launch lane (they'd block a straight-up plunger shot); the
   // lane's vertical side walls (|dx|≈0) are kept so the ball still rides the lane.
-  const inLane = (p: Vec) => p.x > 289 && p.x < 312 && p.y > 116 && p.y < 274;
+  const inLane = (p: Vec) => p.x > 284 && p.x < 313 && p.y > 86 && p.y < 274;
   const crossesLane = (a: Vec, b: Vec) => inLane(a) && inLane(b) && Math.abs(a.x - b.x) > 7;
   for (const poly of SC_WALLS) {
     if (poly.length < 2) continue;
