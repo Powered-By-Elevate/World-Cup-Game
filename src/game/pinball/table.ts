@@ -31,9 +31,7 @@ export const SPAWN: Vec = v(plunger.x, plunger.y);
 export const CHUTE = { x0: plunger.x - 13, x1: plunger.x + 13, top: plunger.y - 150, bottom: plunger.y + 14 };
 export const DRAIN_Y = TH - 14;
 
-/* the GOAL = the top-most real kickout (ball drops in → score → keeper clears) */
-const kouts = partsOf('kout').slice().sort((a, b) => a.y - b.y);
-const goalKout = kouts[0] || { x: TW / 2, y: 40, r: 8 };
+const kouts = partsOf('kout');
 
 function chain(pts: Vec[], e: number, kind: Segment['kind'] = 'wall'): Segment[] {
   const out: Segment[] = [];
@@ -88,15 +86,18 @@ export function buildTargets(): Target[] {
 }
 
 export function buildGoal(): Goal {
-  return { p: v(goalKout.x - 22, goalKout.y - 13), w: 44, h: 26, lit: 0 };
+  // the decorative GOAL net at top-centre is also a sensor zone (matches the
+  // design art at 176,15 → 234,40). Reachable via the top orbit.
+  return { p: v(176, 15), w: 58, h: 26, lit: 0 };
 }
 
 export function buildHoles(): Hole[] {
-  // every sink + remaining kickout (the goal kout is excluded)
-  const holes = [...partsOf('sink'), ...kouts.slice(1)];
+  // every sink + kickout. The gold kickout (≈x249) is the LOCK; the cyan one
+  // (≈x152, the TUNNEL) and the sinks are hyperspace holes — matching the skin.
+  const holes = [...kouts, ...partsOf('sink')];
   return holes.map((p, i) => ({
     id: 'h' + i, p: v(p.x, p.y), r: Math.max(9, p.r || 0),
-    kind: i === 0 ? 'lock' as const : 'hyper' as const, lit: 0, locked: 0,
+    kind: (p.type === 'kout' && p.x > 200) ? 'lock' as const : 'hyper' as const, lit: 0, locked: 0,
   }));
 }
 
