@@ -31,7 +31,7 @@ const plunger = partsOf('plunger')[0] || { x: TW - 30, y: TH - 90, r: 2 };
 // real ~14px lane passable; an engine launch-assist guarantees it reaches play.
 export const SPAWN: Vec = v(300, 344);
 export const CHUTE = { x0: plunger.x - 13, x1: plunger.x + 13, top: plunger.y - 150, bottom: plunger.y + 14 };
-export const DRAIN_Y = TH - 14;
+export const DRAIN_Y = TH - 36;   // just below the flippers — a ball past them is lost
 
 const kouts = partsOf('kout');
 

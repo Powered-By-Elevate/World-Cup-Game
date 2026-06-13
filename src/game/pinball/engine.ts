@@ -370,11 +370,12 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
               b.laneT = 0;
             }
           }
-          // anti-stuck: free a ball jammed up in the playfield (not one resting on
-          // the flippers — leave the lower cradle zone alone so you can hold it)
+          // anti-stuck: jammed UP in the playfield → nudge it free; loitering DOWN
+          // past the flippers → it's lost, send it to the drain so the ball ends.
           const sp = Math.hypot(b.v.x, b.v.y);
           b.stuck = sp < 12 ? (b.stuck || 0) + dt : 0;
           if (b.stuck > 1.6 && b.p.y < 330) { b.v.x += (Math.random() - 0.5) * 220; b.v.y -= 160; b.stuck = 0; }
+          else if (b.stuck > 1.2 && b.p.y > 388) { b.p.y = TH + 12; }
         }
         sensors(dt);
       }
