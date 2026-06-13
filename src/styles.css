@@ -1119,8 +1119,15 @@
    ============================================================ */
 .pin-overlay{ position:fixed; inset:0; z-index:80; background:#05080f;
   touch-action:none; user-select:none; -webkit-user-select:none; overscroll-behavior:none; }
-.pin-stage{ position:absolute; inset:0; display:flex; align-items:stretch; justify-content:center; }
-.pin-canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+/* the table is rendered flat to the canvas, then tilted back into a 2.5D
+   pinball perspective (the Space-Cadet look). Only the canvas tilts — the HUD,
+   touch zones and cards stay flat on top. transform-origin bottom keeps the
+   flippers anchored at the player's thumbs. */
+.pin-stage{ position:absolute; inset:0; overflow:hidden;
+  perspective:880px; perspective-origin:50% 40%; }
+.pin-canvas{ position:absolute; inset:0; width:100%; height:100%; display:block;
+  transform-origin:50% 100%; transform:rotateX(20deg) scale(1.03); }
+@media (max-aspect-ratio:3/5){ .pin-canvas{ transform:rotateX(17deg) scale(1.02); } }
 
 /* ---- broadcast HUD (top) ---- */
 .pin-hud{ position:absolute; top:0; left:0; right:0; padding:8px 12px calc(8px); pointer-events:none;

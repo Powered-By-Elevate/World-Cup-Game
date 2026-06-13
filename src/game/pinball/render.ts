@@ -66,12 +66,19 @@ export function drawTable(ctx: CanvasRenderingContext2D, sc: Scene): void {
   drawSling(ctx, 112, 522, 154, 552, t);
   drawSling(ctx, 248, 522, 206, 552, t);
 
-  // ---- walls ----
+  // ---- walls (extruded so they read as raised rails under the tilt) ----
+  ctx.lineCap = 'round';
   for (const s of sc.segs) {
     if (s.kind === 'sling') continue;        // drawn as pads above
-    ctx.strokeStyle = s.kind === 'metal' ? 'rgba(220,225,235,0.85)' : 'rgba(240,245,235,0.5)';
+    // front face / height — darker band offset toward the viewer (+y = nearer)
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = (s.kind === 'metal' ? 3 : 3.4) + 3.5;
+    ctx.beginPath(); ctx.moveTo(s.a.x, s.a.y + 3.5); ctx.lineTo(s.b.x, s.b.y + 3.5); ctx.stroke();
+  }
+  for (const s of sc.segs) {
+    if (s.kind === 'sling') continue;
+    // bright top edge
+    ctx.strokeStyle = s.kind === 'metal' ? 'rgba(228,233,242,0.95)' : 'rgba(244,248,238,0.72)';
     ctx.lineWidth = s.kind === 'metal' ? 3 : 3.2;
-    ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(s.a.x, s.a.y); ctx.lineTo(s.b.x, s.b.y); ctx.stroke();
   }
 
@@ -94,6 +101,9 @@ export function drawTable(ctx: CanvasRenderingContext2D, sc: Scene): void {
   // ---- bumpers as soccer balls with a coloured energy ring ----
   for (const b of sc.bumpers) {
     const flash = Math.max(b.lit, sc.aim === 'bumpers' ? (Math.sin(t / 140) * 0.5 + 0.5) * 0.5 : 0);
+    // raised drop-shadow (height under the tilt)
+    ctx.beginPath(); ctx.ellipse(b.p.x, b.p.y + b.r * 0.75, b.r * 1.05, b.r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.32)'; ctx.fill();
     ctx.beginPath(); ctx.arc(b.p.x, b.p.y, b.r + 5 + flash * 4, 0, Math.PI * 2);
     const ring = ctx.createRadialGradient(b.p.x, b.p.y, b.r, b.p.x, b.p.y, b.r + 9);
     ring.addColorStop(0, hexA(b.color, 0.2 + flash * 0.7)); ring.addColorStop(1, hexA(b.color, 0));
@@ -109,10 +119,10 @@ export function drawTable(ctx: CanvasRenderingContext2D, sc: Scene): void {
   // ---- plunger (charge bar in the chute) ----
   drawPlunger(ctx, sc.charge);
 
-  // ---- balls ----
+  // ---- balls (raised shadow sells the ball sitting above the tilted board) ----
   for (const b of sc.balls) {
-    ctx.beginPath(); ctx.ellipse(b.p.x, b.p.y + b.r * 0.8, b.r * 0.9, b.r * 0.4, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(b.p.x + 2, b.p.y + b.r * 1.05, b.r * 1.0, b.r * 0.42, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.38)'; ctx.fill();
     drawSoccerBall(ctx, b.p.x, b.p.y, b.r);
   }
 
