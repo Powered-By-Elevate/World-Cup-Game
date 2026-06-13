@@ -49,10 +49,16 @@ export function buildSegments(): Segment[] {
     { a: v(3, 3), b: v(TW - 3, 3), e: 0.3, kind: 'wall' },
     { a: v(TW - 3, 3), b: v(TW - 3, TH), e: 0.3, kind: 'wall' },
   );
-  // every real Space Cadet wall polyline
+  // every real Space Cadet wall polyline — except the angled deflectors that
+  // cross the right launch lane (they'd block a straight-up plunger shot); the
+  // lane's vertical side walls (|dx|≈0) are kept so the ball still rides the lane.
+  const inLane = (p: Vec) => p.x > 289 && p.x < 312 && p.y > 116 && p.y < 274;
+  const crossesLane = (a: Vec, b: Vec) => inLane(a) && inLane(b) && Math.abs(a.x - b.x) > 7;
   for (const poly of SC_WALLS) {
     if (poly.length < 2) continue;
-    segs.push(...chain(poly.map(([x, y]) => v(x, y)), 0.34, 'wall'));
+    for (const s of chain(poly.map(([x, y]) => v(x, y)), 0.34, 'wall')) {
+      if (!crossesLane(s.a, s.b)) segs.push(s);
+    }
   }
   // slingshot kicking faces over the two real kickers
   for (const k of partsOf('kicker')) {
