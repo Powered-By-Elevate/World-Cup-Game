@@ -27,7 +27,10 @@ const flipL = SC_FLIPPERS.find(f => f.side === 'L')!;
 const flipR = SC_FLIPPERS.find(f => f.side === 'R')!;
 
 const plunger = partsOf('plunger')[0] || { x: TW - 30, y: TH - 90, r: 2 };
-export const SPAWN: Vec = v(plunger.x, plunger.y);
+// The ball kicks off from the CENTRE SPOT — Space Cadet's real launch lane is
+// only ~14px wide (too tight for a playable ball + wall colliders, so it jams),
+// and a centre kick-off is both reliable and thematically a soccer kickoff.
+export const SPAWN: Vec = v(205, 210);
 export const CHUTE = { x0: plunger.x - 13, x1: plunger.x + 13, top: plunger.y - 150, bottom: plunger.y + 14 };
 export const DRAIN_Y = TH - 14;
 

@@ -82,24 +82,11 @@ export function Pinball({ onClose, onScore }: Props) {
     if (down) (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
     ctrlRef.current?.pressFlipper(side, down);
   };
-  // pull-back plunger: drag DOWN from the knob to charge, release to launch.
-  const PULL_MAX = 130;
-  const pullStart = useRef<number | null>(null);
-  const [pull, setPull] = useState(0);
-  const kickDown = (e: React.PointerEvent) => {
+  // KICKOFF: press & hold to load power, release to kick the ball into play.
+  const hold = (down: boolean) => (e: React.PointerEvent) => {
     e.preventDefault(); resume();
-    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
-    pullStart.current = e.clientY; setPull(0); ctrlRef.current?.setCharge(0);
-  };
-  const kickMove = (e: React.PointerEvent) => {
-    if (pullStart.current == null) return;
-    const d = Math.max(0, Math.min(1, (e.clientY - pullStart.current) / PULL_MAX));
-    setPull(d); ctrlRef.current?.setCharge(d);
-  };
-  const kickUp = () => {
-    if (pullStart.current == null) return;
-    pullStart.current = null; setPull(0);
-    ctrlRef.current?.plunger(false);   // release → fire with the charge we set
+    if (down) (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    ctrlRef.current?.plunger(down);
   };
 
   const startGame = useCallback(() => { resume(); scoredRef.current = false; ctrlRef.current?.start(); setPaused(false); }, []);
@@ -164,15 +151,15 @@ export function Pinball({ onClose, onScore }: Props) {
           </div>
         )}
 
-        {/* pull-back plunger: drag the knob DOWN to load power, release to kick
-            off. Fades translucent + out of the way once the ball is in play. */}
+        {/* big KICKOFF button: press & hold to load power, release to launch.
+            Fades out of sight once the ball is in play. */}
         {status === 'playing' && !paused && (
-          <div className={'pin-plunger' + (launched ? ' spent' : '')}
-            onPointerDown={kickDown} onPointerMove={kickMove} onPointerUp={kickUp} onPointerCancel={kickUp}>
-            <span className="pl-track"><i className="pl-fill" style={{ height: `${pull * 100}%` }} /></span>
-            <span className="pl-knob" style={{ transform: `translateY(${pull * (PULL_MAX - 14)}px)` }} />
-            <span className="pl-lbl">{pull > 0.02 ? 'RELEASE!' : 'PULL ▼'}</span>
-          </div>
+          <button className={'pin-kickoff' + (launched ? ' spent' : '')}
+            onPointerDown={hold(true)} onPointerUp={hold(false)} onPointerCancel={hold(false)}>
+            <span className="kc-title">KICKOFF</span>
+            <span className="kc-sub">press &amp; hold</span>
+            <span className="kc-bar"><i style={{ width: `${(snap?.charge ?? 0) * 100}%` }} /></span>
+          </button>
         )}
 
         {/* attract / start */}
