@@ -93,7 +93,8 @@ export function Pinball({ onClose, onScore }: Props) {
   const toggleMute = useCallback(() => setMuted(m => { const n = !m; audioRef.current?.setMuted(n); return n; }), []);
 
   const status = snap?.status ?? 'attract';
-  const serving = status === 'playing' && (snap?.charge ?? 0) >= 0 && snap?.ballSave === false;   // plunger relevant; UI hint only
+  // a ball is in play (kicked off) → the left/right screen-half flip taps are armed
+  const launched = status === 'playing' && !paused && snap?.awaitingLaunch === false;
 
   return (
     <div className="pin-overlay">
@@ -131,20 +132,32 @@ export function Pinball({ onClose, onScore }: Props) {
           <button className="pin-ibtn" onClick={onClose} aria-label="Close"><Icon name="x" size={16} /></button>
         </div>
 
-        {/* touch zones (under overlays, over canvas) */}
+        {/* touch zones: tap the LEFT / RIGHT half of the whole screen to flip —
+            only armed once the ball is launched. The plunger gets the taps while
+            you're still waiting to kick off. */}
         {status === 'playing' && !paused && (
-          <div className="pin-zones">
-            <div className="pin-flipzone left" onPointerDown={flip('L', true)} onPointerUp={flip('L', false)} onPointerCancel={flip('L', false)} onPointerLeave={flip('L', false)}>
-              <span className="pin-zhint">◀ FLIP</span>
+          <div className="pin-zones" data-armed={launched ? 'true' : 'false'}>
+            <div className="pin-flipzone left"
+              onPointerDown={launched ? flip('L', true) : undefined}
+              onPointerUp={flip('L', false)} onPointerCancel={flip('L', false)} onPointerLeave={flip('L', false)}>
+              {launched && <span className="pin-zhint">◀</span>}
             </div>
-            <div className="pin-flipzone right" onPointerDown={flip('R', true)} onPointerUp={flip('R', false)} onPointerCancel={flip('R', false)} onPointerLeave={flip('R', false)}>
-              <span className="pin-zhint">FLIP ▶</span>
+            <div className="pin-flipzone right"
+              onPointerDown={launched ? flip('R', true) : undefined}
+              onPointerUp={flip('R', false)} onPointerCancel={flip('R', false)} onPointerLeave={flip('R', false)}>
+              {launched && <span className="pin-zhint">▶</span>}
             </div>
-            <button className="pin-plunge" onPointerDown={plunge(true)} onPointerUp={plunge(false)} onPointerCancel={plunge(false)}>
-              <span>{serving ? 'HOLD' : 'LAUNCH'}</span>
-              <span className="pin-pbar"><i style={{ height: `${(snap?.charge ?? 0) * 100}%` }} /></span>
-            </button>
           </div>
+        )}
+
+        {/* hold-to-kick-off button: prominent while a ball waits on the plunger,
+            then fades translucent + out of the way once you've launched */}
+        {status === 'playing' && !paused && (
+          <button className={'pin-kickoff' + (launched ? ' spent' : '')}
+            onPointerDown={plunge(true)} onPointerUp={plunge(false)} onPointerCancel={plunge(false)}>
+            <span className="kc-lbl">{launched ? 'LAUNCHED' : 'HOLD TO KICK OFF'}</span>
+            <span className="kc-bar"><i style={{ width: `${(snap?.charge ?? 0) * 100}%` }} /></span>
+          </button>
         )}
 
         {/* attract / start */}
