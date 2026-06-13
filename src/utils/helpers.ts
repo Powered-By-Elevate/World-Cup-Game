@@ -13,26 +13,29 @@ export const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.mi
 
 export const parseDate = (d: string) => new Date(d + ":00-04:00");
 
-const DAYNAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export { MONTHS_SHORT as MONTHS };
 
+// Match kickoffs are Eastern ("ET"). Format AND group days in America/New_York so
+// the schedule reads correctly and in order regardless of the device's timezone
+// (previously times were shown in local time but grouped by the raw ET date, so
+// on any non-Eastern device the schedule looked out of order).
+const ET_TZ = "America/New_York";
+const ET_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: ET_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
+const ET_TIME = new Intl.DateTimeFormat("en-US", { timeZone: ET_TZ, hour: "numeric", minute: "2-digit", hour12: true });
+const ET_LABEL = new Intl.DateTimeFormat("en-US", { timeZone: ET_TZ, weekday: "short", month: "short", day: "numeric" });
+
+/** ET calendar-day key ("YYYY-MM-DD") for a fixture timestamp. */
 export function dayKeyOf(d: string) {
-  return d.slice(0, 10);
+  return ET_DAY.format(parseDate(d));
 }
 
 export function fmtDayLabel(key: string) {
-  const dt = parseDate(key + "T12:00");
-  return `${DAYNAMES[dt.getDay()]} \u00B7 ${MONTHS_SHORT[dt.getMonth()]} ${dt.getDate()}`;
+  const dt = new Date(key + "T12:00:00-04:00");   // noon ET of that day
+  return ET_LABEL.format(dt).replace(", ", " \u00B7 ");
 }
 
 export function fmtTime(d: string) {
-  const dt = parseDate(d);
-  let h = dt.getHours();
-  const m = dt.getMinutes();
-  const ap = h >= 12 ? "PM" : "AM";
-  h = h % 12;
-  if (h === 0) h = 12;
-  return `${h}:${m.toString().padStart(2, "0")} ${ap} ET`;
+  return `${ET_TIME.format(parseDate(d))} ET`;
 }

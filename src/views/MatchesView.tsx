@@ -4,7 +4,7 @@ import { MATCHES, KO_LABEL, KO_SORT_ORDER } from '../data/fixtures';
 import type { KOMatch } from '../data/fixtures';
 import type { ScoreEntry, Team } from '../data/types';
 import { matchStatus } from '../utils/scoring';
-import { dayKeyOf, fmtDayLabel, fmtTime } from '../utils/helpers';
+import { dayKeyOf, fmtDayLabel, fmtTime, parseDate } from '../utils/helpers';
 import { Flag } from '../components/Flag';
 
 interface Props {
@@ -18,7 +18,8 @@ export function MatchesView({ scores, ko, myTeam }: Props) {
   const [filter, setFilter] = useState<'all' | 'mine' | 'live'>('all');
   const myIds = myTeam?.picks ? POT_KEYS.map(pk => myTeam.picks![pk]) : [];
 
-  let fx = MATCHES;
+  // always present the schedule in true kickoff order, grouped by ET day
+  let fx = [...MATCHES].sort((a, b) => parseDate(a.d).getTime() - parseDate(b.d).getTime());
   if (filter === 'mine') fx = fx.filter(f => myIds.includes(f.h) || myIds.includes(f.a));
   if (filter === 'live') fx = fx.filter(f => matchStatus(f.d, scores[f.i]) === 'live');
   const days = [...new Set(fx.map(f => dayKeyOf(f.d)))].sort();
