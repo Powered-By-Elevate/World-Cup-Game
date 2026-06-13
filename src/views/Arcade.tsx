@@ -92,6 +92,15 @@ export function Arcade({ meId, members, onLaunch, ...calls }: Props) {
               <span className="at-go">Play <Icon name="chevron" size={14} /></span>
             </button>
 
+            <button className="arcade-tile pin" onClick={() => setPicker('pinball')}>
+              <span className="at-art" aria-hidden="true">🎯</span>
+              <span className="at-meta">
+                <span className="at-name display">World Cup Pinball</span>
+                <span className="at-sub">Space-Cadet pinball, World-Cup dressed — bumpers, multiball, climb to G.O.A.T.</span>
+              </span>
+              <span className="at-go">Play <Icon name="chevron" size={14} /></span>
+            </button>
+
             <button className="arcade-tile calls" onClick={() => setView('calls')}>
               <span className="at-art" aria-hidden="true"><Icon name="bolt" size={26} /></span>
               <span className="at-meta">
