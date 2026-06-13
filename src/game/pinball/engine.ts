@@ -351,11 +351,17 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
           // it leaves the lane it's "in play" and the assist switches off so it
           // never disturbs normal play on the right side.
           if (b.laneT && b.laneT > 0) {
-            if (b.p.x > 284 && b.p.y > 86 && b.p.y < 360) {
+            if (b.p.x > 284 && b.p.y > 150) {
+              // still climbing the right lane — keep it moving up, with a backstop
               b.laneT += dt;
-              if (b.v.y > -60 && b.p.y > 130) b.v.y -= 1000 * dt;              // keep it climbing if it stalls
-              if (b.laneT > 1.1) { b.p.x = 250; b.p.y = 170; b.v.x = -90; b.v.y = 170; b.laneT = 0; }  // eject into play
-            } else { b.laneT = 0; }                                            // left the lane → in play
+              if (b.v.y > -80) b.v.y -= 1100 * dt;
+              if (b.laneT > 1.4) { b.p.x = 240; b.p.y = 168; b.v.x = -130; b.v.y = 150; b.laneT = 0; }  // stalled → eject
+            } else {
+              // reached the TOP of the lane (or drifted out) → curve it into the
+              // playfield (the cleared lane no longer deflects it on its own)
+              if (b.p.x > 284 && b.p.y <= 150) { b.p.x = 240; b.p.y = 168; b.v.x = -150; b.v.y = 150; }
+              b.laneT = 0;
+            }
           }
           // anti-stuck: free a ball jammed up in the playfield (not one resting on
           // the flippers — leave the lower cradle zone alone so you can hold it)
