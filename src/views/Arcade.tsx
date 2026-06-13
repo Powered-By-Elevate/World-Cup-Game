@@ -229,6 +229,7 @@ export function Arcade({ meId, members, onLaunch, ...calls }: Props) {
         <GameChooser
           game={picker}
           members={members}
+          soloOnly={picker === 'pinball'}
           onClose={() => setPicker(null)}
           onSolo={() => { const g = picker; setPicker(null); onLaunch(g, { kind: 'solo' }); }}
           onChallenge={(m) => { const g = picker; setPicker(null); onLaunch(g, { kind: 'challenge', oppId: m.id, oppName: m.name }); }}
@@ -240,8 +241,8 @@ export function Arcade({ meId, members, onLaunch, ...calls }: Props) {
 }
 
 /* ---- bottom-sheet chooser: Single Player vs Multiplayer (pick a member) ---- */
-function GameChooser({ game, members, onClose, onSolo, onChallenge, onLive }: {
-  game: ArcadeGame; members: Member[]; onClose: () => void;
+function GameChooser({ game, members, soloOnly, onClose, onSolo, onChallenge, onLive }: {
+  game: ArcadeGame; members: Member[]; soloOnly?: boolean; onClose: () => void;
   onSolo: () => void; onChallenge: (m: Member) => void; onLive?: (m: Member) => void;
 }) {
   const [mp, setMp] = useState(false);
@@ -256,10 +257,12 @@ function GameChooser({ game, members, onClose, onSolo, onChallenge, onLive }: {
         </div>
         {!mp ? (
           <div style={{ padding: '0 18px 26px' }}>
-            <button className="btn btn-ink btn-block" onClick={onSolo}>🎮 Single player</button>
-            <button className="btn btn-block" style={{ marginTop: 10 }} onClick={() => setMp(true)}>⚔ Play a league member</button>
+            <button className="btn btn-ink btn-block" onClick={onSolo}>🎮 {soloOnly ? 'Play' : 'Single player'}</button>
+            {!soloOnly && <button className="btn btn-block" style={{ marginTop: 10 }} onClick={() => setMp(true)}>⚔ Play a league member</button>}
             <p className="muted" style={{ fontSize: 12, marginTop: 12, lineHeight: 1.5, textAlign: 'center' }}>
-              {onLive
+              {soloOnly
+                ? 'Climb the high-score board — bumpers, multiball and the rank ladder to G.O.A.T.'
+                : onLive
                 ? '⚡ Live: a turn-based match right now, first to 3. ⚔ Challenge: you each play a solo leg and the high score wins.'
                 : 'In a challenge you each play your own leg — high score wins. They get a notification to play theirs.'}
             </p>
