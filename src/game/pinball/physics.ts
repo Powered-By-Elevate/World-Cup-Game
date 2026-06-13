@@ -7,12 +7,12 @@
 import { closestOnSeg, reflect } from './vec';
 import type { Ball, Segment, Bumper, Flipper } from './types';
 
-export const GRAVITY = 980;         // units/s² (down) — tuned for the ~430-tall table
-export const MAX_SPEED = 1300;
-const SUBSTEPS = 6;
-const SEG_R = 2.2;                  // visual line thickness as a collider
-const FLIP_AV = 22;                 // flipper angular speed (rad/s)
-const FLIP_E = 0.42;
+export const GRAVITY = 1500;        // units/s² (down) — tuned for the 360×620 table
+export const MAX_SPEED = 1850;
+const SUBSTEPS = 8;
+const SEG_R = 2.5;                  // wall collider half-thickness
+const FLIP_AV = 30;                 // flipper angular speed (rad/s) — snappy, powerful
+const FLIP_E = 0.5;
 
 export type HitFn = (type: 'wall' | 'sling' | 'bumper' | 'flip', data: { x: number; y: number; id?: string; score?: number; light?: string }) => void;
 

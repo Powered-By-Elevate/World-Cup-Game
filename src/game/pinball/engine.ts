@@ -99,7 +99,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
 
   // entities
   let balls: Ball[] = [];
-  const BALL_R = 5;   // faithful-but-small, matching Space Cadet's real proportions
+  const BALL_R = 9;
   const parked: Ball = { p: { x: SPAWN.x, y: SPAWN.y }, v: { x: 0, y: 0 }, r: BALL_R };
 
   /* ---------------- helpers ---------------- */
@@ -127,8 +127,8 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
     if (!serving || !balls.length) return;
     // KICK OFF from the centre spot: fire up into the playfield (random spread so
     // every kickoff differs), power from how long the button is held.
-    const power = Math.max(0.34, charge);
-    balls[0].v = { x: (Math.random() - 0.5) * 260, y: -(230 + power * 320) };
+    const power = Math.max(0.4, charge);
+    balls[0].v = { x: (Math.random() - 0.5) * 220, y: -(560 + power * 420) };
     serving = false; charging = false; charge = 0;
     ballSave = 5; play('plunger');
   }
@@ -279,7 +279,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
 
   function startMultiball() {
     locks = 0; inMultiball = true; serving = false;
-    balls = [mkBall(252, 270, 120, 200), mkBall(108, 270, -120, 200), mkBall(180, 300, 0, -200)];
+    balls = [mkBall(140, 244, 120, 160), mkBall(220, 244, -120, 160), mkBall(180, 300, 0, -260)];
     message('🏆 TROPHY-LIFT MULTIBALL!', 2.6); confettiBurst(TW / 2, 240, 70); play('multiball');
     ballSave = 6;
   }
