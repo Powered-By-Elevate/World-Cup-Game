@@ -1,14 +1,16 @@
 /* ============================================================
-   WORLD CUP PINBALL — playable table geometry (purpose-built to PLAY, dressed
-   in the World-Cup design look by render.ts). 360×620 portrait.
-
-   Space Cadet's authentic collider map can't play at phone scale (narrow lanes
-   jam the ball, tiny flippers can't catch it), so this is a clean, contained
-   layout: a WIDE right launch chute that the ball rides up and curves into play,
-   big flippers over a real central drain + outlanes, three pop bumpers, two
-   slingshots, TUNNEL/LOCK holes, a spinner, a top GOAL net, rollover lanes and
-   a TACTICS bank. A hard outer backstop guarantees containment; only the bottom
-   drains. Keep the World-Cup IDEA + look; the geometry just actually works.
+   WORLD CUP PINBALL — table geometry, now sourced from Space Cadet's REAL
+   table. scData.ts is auto-generated from the decompiled .dat dump (112 wall
+   polylines + every part at its true coordinate, normalized to logical TW×TH,
+   plunger on the right). This module maps that raw geometry onto the engine's
+   entities and soccer-skins the roles:
+     • 7 pop bumpers      → midfield jets
+     • 2 kickers          → slingshots
+     • sinks + kickouts   → the GOAL (one kickout) + hyperspace/lock holes
+     • 2 flag spinners    → corner flags
+     • targets + rollers  → TACTICS bank + multiplier lanes + scoring banks
+     • 2 flippers          → real pivots/angles (faithful, small)
+   A hard backstop still guarantees the ball can't escape; only the bottom drains.
    ============================================================ */
 import type { Vec } from './vec';
 import { v } from './vec';
@@ -16,17 +18,22 @@ import {
   type Segment, type Bumper, type Target, type Goal, type Flipper,
   type Hole, type Spinner, type Kickback,
 } from './types';
+import { SC_TW, SC_TH, SC_WALLS, SC_PARTS, SC_FLIPPERS } from './scData';
 
-export const TW = 360, TH = 620;
-export const SPAWN: Vec = v(333, 582);                 // bottom of the right launch chute
-export const CHUTE = { x0: 320, x1: 346, top: 150, bottom: 600 };
-export const DRAIN_Y = 598;                            // just below the flipper tips
+export const TW = SC_TW, TH = SC_TH;
 
-const D = Math.PI / 180;
-const FLIP = {
-  L: { pivot: v(118, 560), len: 58, r: 11, rest: 28 * D, up: -26 * D },
-  R: { pivot: v(242, 560), len: 58, r: 11, rest: 152 * D, up: 206 * D },
-};
+const partsOf = (type: string) => SC_PARTS.filter(p => p.type === type);
+const flipL = SC_FLIPPERS.find(f => f.side === 'L')!;
+const flipR = SC_FLIPPERS.find(f => f.side === 'R')!;
+
+const plunger = partsOf('plunger')[0] || { x: TW - 30, y: TH - 90, r: 2 };
+// Launch from the RIGHT plunger lane (Space Cadet style). A small ball keeps the
+// real ~14px lane passable; an engine launch-assist guarantees it reaches play.
+export const SPAWN: Vec = v(300, 344);
+export const CHUTE = { x0: plunger.x - 13, x1: plunger.x + 13, top: plunger.y - 150, bottom: plunger.y + 14 };
+export const DRAIN_Y = TH - 36;   // just below the flippers — a ball past them is lost
+
+const kouts = partsOf('kout');
 
 function chain(pts: Vec[], e: number, kind: Segment['kind'] = 'wall'): Segment[] {
   const out: Segment[] = [];
@@ -34,80 +41,101 @@ function chain(pts: Vec[], e: number, kind: Segment['kind'] = 'wall'): Segment[]
   return out;
 }
 
+/** Bounding-box span of a wall polyline (used to tell structural walls from the
+ *  small decorative clutter that traps the ball). */
+function wallSpan(poly: number[][]): number {
+  let mnx = 1e9, mny = 1e9, mxx = -1e9, mxy = -1e9;
+  for (const [x, y] of poly) { mnx = Math.min(mnx, x); mxx = Math.max(mxx, x); mny = Math.min(mny, y); mxy = Math.max(mxy, y); }
+  return Math.max(mxx - mnx, mxy - mny);
+}
+
 export function buildSegments(): Segment[] {
-  const s: Segment[] = [];
-  // hard outer backstop (containment; only the bottom drains)
-  s.push(
-    { a: v(6, 6), b: v(6, TH), e: 0.3, kind: 'wall' },
-    { a: v(6, 6), b: v(TW - 6, 6), e: 0.3, kind: 'wall' },
-    { a: v(TW - 6, 6), b: v(TW - 6, TH), e: 0.3, kind: 'wall' },
+  const segs: Segment[] = [];
+  // hard outer backstop (containment; never drawn — only the bottom drains)
+  segs.push(
+    { a: v(3, 3), b: v(3, TH), e: 0.3, kind: 'wall' },
+    { a: v(3, 3), b: v(TW - 3, 3), e: 0.3, kind: 'wall' },
+    { a: v(TW - 3, 3), b: v(TW - 3, TH), e: 0.3, kind: 'wall' },
   );
-  // left wall + stadium-roof top arc, ending where the chute roof begins
-  s.push(...chain([
-    v(20, 470), v(20, 150), v(30, 108), v(58, 72), v(100, 46),
-    v(150, 34), v(210, 34), v(264, 46), v(300, 70), v(314, 100), v(314, 116),
-  ], 0.4, 'wall'));
-  // ---- right LAUNCH CHUTE: wide lane the ball rides up, with an angled roof
-  //      that deflects it left into the playfield at the top ----
-  s.push(...chain([v(314, 116), v(346, 150)], 0.5, 'metal'));   // roof (deflector)
-  s.push(...chain([v(346, 150), v(346, 600)], 0.4, 'metal'));   // chute outer wall
-  s.push(...chain([v(320, 172), v(320, 540)], 0.4, 'metal'));   // chute divider = right playfield wall
-  // ---- lower funnels down to the flippers (gaps beside them = outlanes) ----
-  s.push(...chain([v(20, 470), v(20, 540), v(72, 596), v(98, 606)], 0.35, 'wall'));
-  s.push(...chain([v(320, 540), v(288, 596), v(262, 606)], 0.35, 'wall'));
-  // ---- slingshots (kicking faces) + top guards ----
-  s.push({ a: v(94, 504), b: v(150, 540), e: 0.7, kind: 'sling', kick: 560, score: 110, light: 'slL' });
-  s.push({ a: v(266, 504), b: v(210, 540), e: 0.7, kind: 'sling', kick: 560, score: 110, light: 'slR' });
-  s.push(...chain([v(94, 504), v(102, 482)], 0.4, 'wall'));
-  s.push(...chain([v(266, 504), v(258, 482)], 0.4, 'wall'));
-  return s;
+  // COLLIDE ONLY with the major structural walls (boundary, lanes, orbits) — the
+  // design renders every wall regardless, but small decorative polylines must NOT
+  // be colliders or they trap the ball. Also drop deflectors that cross the right
+  // launch lane (they'd block the plunger shot).
+  const inLane = (p: Vec) => p.x > 284 && p.x < 313 && p.y > 86 && p.y < 274;
+  const crossesLane = (a: Vec, b: Vec) => inLane(a) && inLane(b) && Math.abs(a.x - b.x) > 7;
+  for (const poly of SC_WALLS) {
+    if (poly.length < 2 || wallSpan(poly) < 34) continue;       // skip the small clutter
+    for (const s of chain(poly.map(([x, y]) => v(x, y)), 0.34, 'wall')) {
+      if (!crossesLane(s.a, s.b)) segs.push(s);
+    }
+  }
+  // slingshot kicking faces over the two real kickers
+  for (const k of partsOf('kicker')) {
+    segs.push({ a: v(k.x - 16, k.y + 10), b: v(k.x + 16, k.y + 10), e: 0.6, kind: 'sling', kick: 360, score: 110, light: 'sl' });
+  }
+  return segs;
 }
 
 export function buildBumpers(): Bumper[] {
-  const mk = (id: string, x: number, y: number, color: string): Bumper =>
-    ({ id, p: v(x, y), r: 20, e: 0.5, kick: 540, score: 250, color, lit: 0 });
-  return [
-    mk('b1', 138, 250, '#D80000'),
-    mk('b2', 222, 250, '#6000F0'),
-    mk('b3', 180, 196, '#00C060'),
-  ];
+  const cols = ['#E1342B', '#1769FF', '#FFC400'];
+  return partsOf('bumper').map((p, i) => ({
+    id: 'b' + i, p: v(p.x, p.y), r: Math.max(11, p.r || 0),
+    e: 0.5, kick: 420, score: 250, color: cols[i % 3], lit: 0,
+  }));
 }
 
 export function buildTargets(): Target[] {
-  const roll = (id: string, x: number, y: number): Target =>
-    ({ id, p: v(x, y), r: 12, score: 150, lit: 0, on: false, kind: 'rollover', group: 'mult' });
-  const tgt = (id: string, x: number, y: number): Target =>
-    ({ id, p: v(x, y), r: 9, score: 200, lit: 0, on: false, kind: 'target', group: 'tactics' });
-  return [
-    roll('r1', 120, 96), roll('r2', 180, 86), roll('r3', 240, 96),
-    tgt('t1', 46, 344), tgt('t2', 42, 376), tgt('t3', 46, 408),
-  ];
+  const out: Target[] = [];
+  // rollovers: the 3 highest become the multiplier lanes; the rest just score
+  const rolls = [...partsOf('roll'), ...partsOf('rollG')].sort((a, b) => a.y - b.y);
+  rolls.forEach((p, i) => out.push({
+    id: 'ro' + i, p: v(p.x, p.y), r: 9, score: 150, lit: 0, on: false,
+    kind: 'rollover', group: i < 3 ? 'mult' : 'lane',
+  }));
+  // standing targets: a left cluster becomes TACTICS (cues the mission); rest score
+  const tgts = [...partsOf('yTarget'), ...partsOf('rTarget')];
+  const tactics = [...tgts].sort((a, b) => a.x - b.x).slice(0, 3);
+  tgts.forEach((p, i) => out.push({
+    id: 'tg' + i, p: v(p.x, p.y), r: 8, score: 200, lit: 0, on: false,
+    kind: 'target', group: tactics.includes(p) ? 'tactics' : 'bank',
+  }));
+  return out;
 }
 
 export function buildGoal(): Goal {
-  return { p: v(150, 28), w: 60, h: 30, lit: 0 };
+  // the decorative GOAL net at top-centre is also a sensor zone (matches the
+  // design art at 176,15 → 234,40). Reachable via the top orbit.
+  return { p: v(176, 15), w: 58, h: 26, lit: 0 };
 }
 
 export function buildHoles(): Hole[] {
-  return [
-    { id: 'tunnel', p: v(112, 318), r: 15, kind: 'hyper', lit: 0, locked: 0 },
-    { id: 'lock', p: v(248, 318), r: 15, kind: 'lock', lit: 0, locked: 0 },
-  ];
+  // every sink + kickout. The gold kickout (≈x249) is the LOCK; the cyan one
+  // (≈x152, the TUNNEL) and the sinks are hyperspace holes — matching the skin.
+  const holes = [...kouts, ...partsOf('sink')];
+  return holes.map((p, i) => ({
+    id: 'h' + i, p: v(p.x, p.y), r: Math.max(9, p.r || 0),
+    kind: (p.type === 'kout' && p.x > 200) ? 'lock' as const : 'hyper' as const, lit: 0, locked: 0,
+  }));
 }
 
 export function buildSpinner(): Spinner {
-  return { id: 'flag', a: v(24, 212), b: v(52, 212), spin: 0, value: 90 };
+  const f = partsOf('flag')[0] || { x: 30, y: 150 };
+  return { id: 'flag', a: v(f.x - 12, f.y), b: v(f.x + 12, f.y), spin: 0, value: 90 };
 }
 
 export function buildKickback(): Kickback {
-  return { p: v(80, 600), r: 14, armed: true };
+  // left outlane saver, just inside the left flipper
+  return { p: v(Math.min(flipL.x, flipR.x) - 34, TH - 24), r: 12, armed: true };
 }
 
 export function buildFlippers(): Flipper[] {
-  return [
-    { side: 'L', pivot: FLIP.L.pivot, len: FLIP.L.len, r: FLIP.L.r, rest: FLIP.L.rest, up: FLIP.L.up, angle: FLIP.L.rest, omega: 0, pressed: false },
-    { side: 'R', pivot: FLIP.R.pivot, len: FLIP.R.len, r: FLIP.R.r, rest: FLIP.R.rest, up: FLIP.R.up, angle: FLIP.R.rest, omega: 0, pressed: false },
-  ];
+  // the design's flippers are small; a slightly fatter collision radius makes
+  // them reliably catch the ball while still leaving a centre drain gap so you
+  // can actually lose (the controls, not the board art).
+  return SC_FLIPPERS.map(f => ({
+    side: f.side, pivot: v(f.x, f.y), len: f.len, r: 5.5,
+    rest: f.rest, up: f.up, angle: f.rest, omega: 0, pressed: false,
+  }));
 }
 
 export const flipperTip = (f: Flipper): Vec => v(f.pivot.x + Math.cos(f.angle) * f.len, f.pivot.y + Math.sin(f.angle) * f.len);
