@@ -7,8 +7,8 @@
 import { closestOnSeg, reflect } from './vec';
 import type { Ball, Segment, Bumper, Flipper } from './types';
 
-export const GRAVITY = 1500;        // units/s² (down)
-export const MAX_SPEED = 1750;
+export const GRAVITY = 980;         // units/s² (down) — tuned for the ~430-tall table
+export const MAX_SPEED = 1300;
 const SUBSTEPS = 6;
 const SEG_R = 2.2;                  // visual line thickness as a collider
 const FLIP_AV = 22;                 // flipper angular speed (rad/s)

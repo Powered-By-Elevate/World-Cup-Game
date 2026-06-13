@@ -98,10 +98,11 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
 
   // entities
   let balls: Ball[] = [];
-  const parked: Ball = { p: { x: SPAWN.x, y: SPAWN.y }, v: { x: 0, y: 0 }, r: 9 };
+  const BALL_R = 6;   // faithful-but-small, matching Space Cadet's real proportions
+  const parked: Ball = { p: { x: SPAWN.x, y: SPAWN.y }, v: { x: 0, y: 0 }, r: BALL_R };
 
   /* ---------------- helpers ---------------- */
-  const mkBall = (x: number, y: number, vx = 0, vy = 0): Ball => ({ p: { x, y }, v: { x: vx, y: vy }, r: 9 });
+  const mkBall = (x: number, y: number, vx = 0, vy = 0): Ball => ({ p: { x, y }, v: { x: vx, y: vy }, r: BALL_R });
   const addScore = (n: number) => { score += Math.round(n); if (score > high) { high = score; localStorage.setItem(HIGH_KEY, String(high)); } };
   const message = (t: string, secs = 1.7) => { msg = t; msgTimer = secs; };
   const popup = (x: number, y: number, text: string, color = '#fff') => { popups.push({ p: { x, y }, text, color, ttl: 0.9, life: 0.9 }); };
@@ -124,7 +125,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
   function launch() {
     if (!serving || !balls.length) return;
     const power = Math.max(0.28, charge);
-    balls[0].v = { x: (Math.random() - 0.5) * 30, y: -(640 + power * 1040) };
+    balls[0].v = { x: (Math.random() - 0.5) * 24, y: -(430 + power * 720) };
     serving = false; charging = false; charge = 0;
     ballSave = 5; play('plunger');
   }
@@ -201,9 +202,11 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
               multiplier = Math.min(6, multiplier + 1); message(`MULTIPLIER ×${multiplier}`, 1.6); play('missionStart');
               targets.forEach(t => { if (t.group === 'mult') t.on = false; });
             }
-          } else { // tactics — cue the next mission
+          } else if (tg.group === 'tactics') { // cue the next mission
             addScore(tg.score * multiplier); play('target');
-            if (!missionActive) { selected = (selected + 1) % MISSIONS.length; message(`MISSION CUED — ${curMission().name}`, 1.4); holes.find(h => h.kind === 'hyper')!.lit = 1; }
+            if (!missionActive) { selected = (selected + 1) % MISSIONS.length; message(`MISSION CUED — ${curMission().name}`, 1.4); const hy = holes.find(h => h.kind === 'hyper'); if (hy) hy.lit = 1; }
+          } else { // a plain scoring target / lane
+            if (!tg.on) { tg.on = true; addScore(tg.score * multiplier); popup(tg.p.x, tg.p.y - 12, `+${tg.score * multiplier}`, '#fff'); play('target'); }
           }
           break;
         }
@@ -258,11 +261,12 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
     addScore(base * multiplier);
     popup(TW / 2, goal.p.y + 40, inMultiball ? `JACKPOT +${base * multiplier}` : `GOAL +${base * multiplier}`, GOLD);
     message(inMultiball ? 'JACKPOT!' : 'GOAL!', 1.4);
-    confettiBurst(TW / 2, 70, 46); play('goal'); play('cheer');
-    // kick out of the net downward
-    b.p.x = TW / 2 + (Math.random() * 36 - 18); b.p.y = goal.p.y + goal.h + b.r + 4;
-    b.v = { x: (Math.random() * 120 - 60), y: 440 };
-    if (missionActive && curMission().aim === 'goal') progressMission(TW / 2, goal.p.y + 30);
+    const gx = goal.p.x + goal.w / 2;
+    confettiBurst(gx, goal.p.y, 46); play('goal'); play('cheer');
+    // keeper clears it: eject the ball out of the kickout, downward
+    b.p.x = gx + (Math.random() * 24 - 12); b.p.y = goal.p.y + goal.h + b.r + 4;
+    b.v = { x: (Math.random() * 100 - 50), y: 340 };
+    if (missionActive && curMission().aim === 'goal') progressMission(gx, goal.p.y + 22);
   }
 
   function startMultiball() {

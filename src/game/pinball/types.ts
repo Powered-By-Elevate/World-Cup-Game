@@ -6,7 +6,9 @@
    ============================================================ */
 import type { Vec } from './vec';
 
-export const TW = 360, TH = 640;   // logical table size (portrait)
+// logical table size = Space Cadet's real proportions (see scData.ts, derived
+// from the decompiled .dat geometry). Portrait, ~0.84 w/h.
+export const TW = 360, TH = 430;
 
 export type SegKind = 'wall' | 'metal' | 'sling' | 'flip';
 

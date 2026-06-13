@@ -62,9 +62,8 @@ export function drawTable(ctx: CanvasRenderingContext2D, sc: Scene): void {
   // ---- kickout holes (hyperspace + multiball lock) ----
   for (const h of sc.holes) drawHole(ctx, h, t);
 
-  // ---- slingshot pads (under the kicking segments) ----
-  drawSling(ctx, 112, 522, 154, 552, t);
-  drawSling(ctx, 248, 522, 206, 552, t);
+  // ---- slingshot pads (over each real kicking segment) ----
+  for (const s of sc.segs) if (s.kind === 'sling') drawSling(ctx, s.a.x, s.a.y, s.b.x, s.b.y, t);
 
   // ---- walls (extruded so they read as raised rails under the tilt) ----
   ctx.lineCap = 'round';
