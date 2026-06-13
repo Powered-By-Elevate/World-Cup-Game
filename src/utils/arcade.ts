@@ -8,13 +8,14 @@
 import { sget, sset } from './storage';
 import { uid } from './helpers';
 
-export type ArcadeGame = 'penalty' | 'soccer';
+export type ArcadeGame = 'penalty' | 'soccer' | 'pinball';
 
 export const GAME_META: Record<ArcadeGame, { name: string; emoji: string; cls: string; board: string; verb: string }> = {
   penalty: { name: 'Penalty Streak', emoji: '🥅', cls: 'pen', board: 'best streak', verb: 'scored' },
   soccer:  { name: 'Soccer Stars',   emoji: '⚽', cls: 'soc', board: 'total wins',  verb: 'beat the CPU by' },
+  pinball: { name: 'World Cup Pinball', emoji: '🎯', cls: 'pin', board: 'high score', verb: 'scored' },
 };
-export const GAMES: ArcadeGame[] = ['penalty', 'soccer'];
+export const GAMES: ArcadeGame[] = ['penalty', 'soccer', 'pinball'];
 
 /** How a game is launched from the Arcade. */
 export type LaunchMode =

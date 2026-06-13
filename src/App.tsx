@@ -45,6 +45,7 @@ import { detectMatchEvents } from './utils/matchNotify';
 // Penalty Streak pulls in Three.js + the GLB/FBX loaders — lazy-load it so that
 // weight only lands when someone actually opens the game.
 const PenaltyStreak = lazy(() => import('./views/PenaltyStreak').then(m => ({ default: m.PenaltyStreak })));
+const Pinball = lazy(() => import('./views/Pinball').then(m => ({ default: m.Pinball })));
 import { Profile } from './views/Profile';
 import { Leagues } from './views/Leagues';
 import { SignIn } from './views/SignIn';
@@ -780,6 +781,7 @@ export default function App() {
     // streak — but only SOLO runs (a timed challenge leg is a head-to-head goal
     // count, not a streak, so it doesn't belong on the streak board).
     if (game === 'soccer') { if (score > 0) await recordScore('soccer', me.id, me.name, 1, 'add'); }
+    else if (game === 'pinball') { await recordScore('pinball', me.id, me.name, score, 'best'); }
     else if (launch?.mode.kind === 'solo') await recordScore('penalty', me.id, me.name, score, 'best');
     const cur = launch;
     if (!cur || launchDone.current) return;
@@ -1196,6 +1198,11 @@ export default function App() {
       {launch?.game === 'penalty' && (
         <Suspense fallback={<div className="pen-overlay" style={{ display: 'grid', placeItems: 'center', color: '#dfe5ea', fontWeight: 600 }}>Warming up the pitch…</div>}>
           <PenaltyStreak onClose={() => setLaunch(null)} onScore={(s) => handleArcadeScore('penalty', s)} mode={launch.mode.kind === 'solo' ? 'streak' : 'timed'} />
+        </Suspense>
+      )}
+      {launch?.game === 'pinball' && (
+        <Suspense fallback={<div className="pin-overlay" style={{ display: 'grid', placeItems: 'center', color: '#dfe5ea', fontWeight: 600 }}>Loading the table…</div>}>
+          <Pinball onClose={() => setLaunch(null)} onScore={(s) => handleArcadeScore('pinball', s)} />
         </Suspense>
       )}
       {shareModal}
