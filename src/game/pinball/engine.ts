@@ -99,7 +99,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
 
   // entities
   let balls: Ball[] = [];
-  const BALL_R = 5;   // faithful-but-small, matching Space Cadet's real proportions
+  const BALL_R = 4.5;   // small so the real Space Cadet lanes stay passable
   const parked: Ball = { p: { x: SPAWN.x, y: SPAWN.y }, v: { x: 0, y: 0 }, r: BALL_R };
 
   /* ---------------- helpers ---------------- */
@@ -125,10 +125,10 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
   }
   function launch() {
     if (!serving || !balls.length) return;
-    // KICK OFF from the centre spot: fire up into the playfield (random spread so
-    // every kickoff differs), power from how long the button is held.
-    const power = Math.max(0.34, charge);
-    balls[0].v = { x: (Math.random() - 0.5) * 260, y: -(230 + power * 320) };
+    // fire straight up the right plunger lane; power from how long you hold.
+    const power = Math.max(0.5, charge);
+    balls[0].v = { x: 0, y: -(760 + power * 520) };
+    balls[0].laneT = 0.001;   // mark the launch phase active (assist runs until it exits the lane)
     serving = false; charging = false; charge = 0;
     ballSave = 5; play('plunger');
   }
@@ -346,6 +346,17 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
       } else {
         for (const b of balls) {
           stepBall(b, dt, segs, bumpers, flips, onHit);
+          // launch-assist: ONLY the freshly launched ball (laneT>0). Keep it
+          // climbing the narrow right lane and guarantee it pops into play; once
+          // it leaves the lane it's "in play" and the assist switches off so it
+          // never disturbs normal play on the right side.
+          if (b.laneT && b.laneT > 0) {
+            if (b.p.x > 286 && b.p.y > 150 && b.p.y < 360) {
+              b.laneT += dt;
+              if (b.v.y > -60 && b.p.y > 240) b.v.y -= 900 * dt;               // nudge up if it stalls low
+              if (b.laneT > 1.3) { b.p.x = 274; b.p.y = 150; b.v.x = -70; b.v.y = 150; b.laneT = 0; }  // eject into play
+            } else { b.laneT = 0; }                                            // left the lane → in play
+          }
           // anti-stuck: free a ball jammed up in the playfield (not one resting on
           // the flippers — leave the lower cradle zone alone so you can hold it)
           const sp = Math.hypot(b.v.x, b.v.y);
