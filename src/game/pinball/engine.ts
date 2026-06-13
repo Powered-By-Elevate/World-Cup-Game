@@ -99,7 +99,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
 
   // entities
   let balls: Ball[] = [];
-  const BALL_R = 6;   // faithful-but-small, matching Space Cadet's real proportions
+  const BALL_R = 5;   // faithful-but-small, matching Space Cadet's real proportions
   const parked: Ball = { p: { x: SPAWN.x, y: SPAWN.y }, v: { x: 0, y: 0 }, r: BALL_R };
 
   /* ---------------- helpers ---------------- */
@@ -125,10 +125,10 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
   }
   function launch() {
     if (!serving || !balls.length) return;
-    // pull-back power → upward launch; min keeps even a light pull clearing the
-    // launch lane into the top orbit, full pull rockets it round.
+    // KICK OFF from the centre spot: fire up into the playfield (random spread so
+    // every kickoff differs), power from how long the button is held.
     const power = Math.max(0.34, charge);
-    balls[0].v = { x: (Math.random() - 0.5) * 18, y: -(560 + power * 760) };
+    balls[0].v = { x: (Math.random() - 0.5) * 260, y: -(230 + power * 320) };
     serving = false; charging = false; charge = 0;
     ballSave = 5; play('plunger');
   }
@@ -340,11 +340,17 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
         if (c.timer <= 0) { balls.push(mkBall(c.x, c.y + 16, (Math.random() * 80 - 40), 240)); captured.splice(i, 1); }
       }
       if (serving) {
-        // ball rests on the plunger; keyboard Space auto-ramps, touch sets charge directly
+        // ball rests on the centre spot; holding KICKOFF ramps the power
         if (balls[0]) { balls[0].p.x = SPAWN.x; balls[0].p.y = SPAWN.y; balls[0].v.x = 0; balls[0].v.y = 0; }
-        if (charging) charge = Math.min(1, charge + dt * 1.5);
+        if (charging) charge = Math.min(1, charge + dt * 1.6);
       } else {
-        for (const b of balls) stepBall(b, dt, segs, bumpers, flips, onHit);
+        for (const b of balls) {
+          stepBall(b, dt, segs, bumpers, flips, onHit);
+          // anti-stuck: a ball loitering at low speed gets a nudge so it can never jam
+          const sp = Math.hypot(b.v.x, b.v.y);
+          b.stuck = sp < 14 ? (b.stuck || 0) + dt : 0;
+          if (b.stuck > 1.2) { b.v.x += (Math.random() - 0.5) * 200; b.v.y -= 140; b.stuck = 0; }
+        }
         sensors(dt);
       }
     }
