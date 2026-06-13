@@ -81,7 +81,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
   let serving = false;
   let charging = false;
   let charge = 0;
-  let servingT = 0;   // how long the ball has waited on the plunger (auto-launch failsafe)
+  let servingT = 0;   // time on the plunger (auto-launch failsafe)
 
   // timers
   let ballSave = 0;
@@ -100,7 +100,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
 
   // entities
   let balls: Ball[] = [];
-  const BALL_R = 4.5;   // small so the real Space Cadet lanes stay passable
+  const BALL_R = 9;
   const parked: Ball = { p: { x: SPAWN.x, y: SPAWN.y }, v: { x: 0, y: 0 }, r: BALL_R };
 
   /* ---------------- helpers ---------------- */
@@ -126,14 +126,11 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
   }
   function launch() {
     if (!serving || !balls.length) return;
-    // The real Space Cadet launch lane is too narrow/jam-prone to deliver the
-    // ball reliably, so DROP it into the playfield from the top of the right lane
-    // with downward speed — this always puts a ball in play. Power = a bit of
-    // extra zip from how long you held.
-    const power = Math.max(0.4, charge);
-    balls[0].p = { x: 248, y: 158 };
-    balls[0].v = { x: -150, y: 120 + power * 160 };
-    balls[0].laneT = 0;
+    // fire the ball UP the wide right chute; the angled roof + a launch-assist
+    // curve it into the playfield. Power = how long you held LAUNCH.
+    const power = Math.max(0.55, charge);
+    balls[0].v = { x: 0, y: -(1060 + power * 460) };
+    balls[0].laneT = 0.001;
     serving = false; charging = false; charge = 0;
     ballSave = 5; play('plunger');
   }
@@ -284,7 +281,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
 
   function startMultiball() {
     locks = 0; inMultiball = true; serving = false;
-    balls = [mkBall(252, 270, 120, 200), mkBall(108, 270, -120, 200), mkBall(180, 300, 0, -200)];
+    balls = [mkBall(140, 244, 120, 160), mkBall(220, 244, -120, 160), mkBall(180, 300, 0, -260)];
     message('🏆 TROPHY-LIFT MULTIBALL!', 2.6); confettiBurst(TW / 2, 240, 70); play('multiball');
     ballSave = 6;
   }
@@ -349,33 +346,25 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
         if (balls[0]) { balls[0].p.x = SPAWN.x; balls[0].p.y = SPAWN.y; balls[0].v.x = 0; balls[0].v.y = 0; }
         if (charging) charge = Math.min(1, charge + dt * 1.6);
         servingT += dt;
-        if (servingT > 6) launch();   // failsafe: never let the ball sit on the plunger forever
+        if (servingT > 6) launch();   // failsafe: never let the ball sit forever
       } else {
         for (const b of balls) {
           stepBall(b, dt, segs, bumpers, flips, onHit);
-          // launch-assist: ONLY the freshly launched ball (laneT>0). Keep it
-          // climbing the narrow right lane and guarantee it pops into play; once
-          // it leaves the lane it's "in play" and the assist switches off so it
-          // never disturbs normal play on the right side.
+          // launch-assist: while the freshly-launched ball is in the right chute,
+          // shove it left into the playfield near the top (with a stalled backstop)
           if (b.laneT && b.laneT > 0) {
-            if (b.p.x > 284 && b.p.y > 150) {
-              // still climbing the right lane — keep it moving up, with a backstop
+            if (b.p.x > 312) {
               b.laneT += dt;
-              if (b.v.y > -80) b.v.y -= 1100 * dt;
-              if (b.laneT > 1.4) { b.p.x = 240; b.p.y = 168; b.v.x = -130; b.v.y = 150; b.laneT = 0; }  // stalled → eject
-            } else {
-              // reached the TOP of the lane (or drifted out) → curve it into the
-              // playfield (the cleared lane no longer deflects it on its own)
-              if (b.p.x > 284 && b.p.y <= 150) { b.p.x = 240; b.p.y = 168; b.v.x = -150; b.v.y = 150; }
-              b.laneT = 0;
-            }
+              if (b.p.y < 180) b.v.x -= 1000 * dt;                              // near top → curve left into play
+              if (b.laneT > 1.6) { b.p.x = 300; b.p.y = 184; b.v.x = -220; b.v.y = 150; b.laneT = 0; }
+            } else { b.laneT = 0; }                                             // left the chute → in play
           }
-          // anti-stuck: jammed UP in the playfield → nudge it free; loitering DOWN
-          // past the flippers → it's lost, send it to the drain so the ball ends.
+          // anti-stuck: jammed UP in the field → nudge; loitering DOWN past the
+          // flippers → it's lost, send it to the drain so the ball ends.
           const sp = Math.hypot(b.v.x, b.v.y);
           b.stuck = sp < 12 ? (b.stuck || 0) + dt : 0;
-          if (b.stuck > 1.6 && b.p.y < 330) { b.v.x += (Math.random() - 0.5) * 220; b.v.y -= 160; b.stuck = 0; }
-          else if (b.stuck > 1.2 && b.p.y > 388) { b.p.y = TH + 12; }
+          if (b.stuck > 1.5 && b.p.y < 470) { b.v.x += (Math.random() - 0.5) * 220; b.v.y -= 170; b.stuck = 0; }
+          else if (b.stuck > 1.0 && b.p.y > 560) { b.p.y = TH + 12; }
         }
         sensors(dt);
       }
@@ -397,11 +386,10 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
     bg.addColorStop(0, '#0a0f1c'); bg.addColorStop(1, '#05080f');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch);
 
-    // fill the screen to the PLAYFIELD width (drop the dead cabinet side margins),
-    // centred vertically so the board sits in the middle of the phone.
-    const MARGIN = 14;                       // dead logical px each side (cabinet)
-    const scale = cw / (TW - 2 * MARGIN);
-    const ox = -MARGIN * scale, oy = (ch - TH * scale) / 2;
+    // fill the screen width and anchor the board to the BOTTOM (flippers at the
+    // player's thumbs); the dark area above becomes the backbox where the HUD sits.
+    const scale = cw / TW;
+    const ox = 0, oy = ch - TH * scale;
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
     // clip to table
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, TW, TH); ctx.clip();
