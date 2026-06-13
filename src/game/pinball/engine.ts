@@ -40,6 +40,7 @@ export interface PinballOpts {
 export interface PinballControls {
   pressFlipper(side: 'L' | 'R', down: boolean): void;
   plunger(down: boolean): void;
+  setCharge(c: number): void;          // pull-back amount 0..1 (touch plunger)
   start(): void;
   togglePause(): void;
   paused(): boolean;
@@ -124,10 +125,17 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
   }
   function launch() {
     if (!serving || !balls.length) return;
-    const power = Math.max(0.28, charge);
-    balls[0].v = { x: (Math.random() - 0.5) * 24, y: -(430 + power * 720) };
+    // pull-back power → upward launch; min keeps even a light pull clearing the
+    // launch lane into the top orbit, full pull rockets it round.
+    const power = Math.max(0.34, charge);
+    balls[0].v = { x: (Math.random() - 0.5) * 18, y: -(560 + power * 760) };
     serving = false; charging = false; charge = 0;
     ballSave = 5; play('plunger');
+  }
+  function setCharge(c: number) {
+    if (status !== 'playing' || !serving) return;
+    charging = false;                      // a touch pull drives charge directly (no auto-ramp)
+    charge = c < 0 ? 0 : c > 1 ? 1 : c;
   }
 
   /* ---------------- scoring events from physics ---------------- */
@@ -332,8 +340,8 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
         if (c.timer <= 0) { balls.push(mkBall(c.x, c.y + 16, (Math.random() * 80 - 40), 240)); captured.splice(i, 1); }
       }
       if (serving) {
-        // park the serve ball on the plunger; charge while held
-        if (balls[0]) { balls[0].p.x = SPAWN.x; balls[0].p.y = SPAWN.y - charge * 40; balls[0].v.x = 0; balls[0].v.y = 0; }
+        // ball rests on the plunger; keyboard Space auto-ramps, touch sets charge directly
+        if (balls[0]) { balls[0].p.x = SPAWN.x; balls[0].p.y = SPAWN.y; balls[0].v.x = 0; balls[0].v.y = 0; }
         if (charging) charge = Math.min(1, charge + dt * 1.5);
       } else {
         for (const b of balls) stepBall(b, dt, segs, bumpers, flips, onHit);
@@ -420,9 +428,10 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
     },
     plunger(down) {
       if (status !== 'playing') return;
-      if (down) charging = true;
-      else if (serving) launch();
+      if (down) charging = true;           // keyboard Space: hold to auto-ramp
+      else if (serving) launch();          // release → fire with current charge
     },
+    setCharge,
     start,
     togglePause() { if (status === 'playing') paused = !paused; },
     paused: () => paused,
