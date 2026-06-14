@@ -35,6 +35,13 @@ export interface PinballOpts {
   onGameEnd: (score: number) => void;
   muted?: boolean;
   play: (name: import('./audio').Sfx) => void;
+  debug?: boolean;                     // DEV: collect interaction events for the diag harness
+}
+
+export interface DebugSnapshot {
+  status: string; ball: number; serving: boolean; charge: number;
+  balls: { x: number; y: number; vx: number; vy: number; sp: number }[];
+  events: { t: number; kind: string; id?: string; x: number; y: number }[];  // drained from the buffer
 }
 
 export interface PinballControls {
@@ -45,11 +52,23 @@ export interface PinballControls {
   togglePause(): void;
   paused(): boolean;
   destroy(): void;
+  // DEV-only (present when opts.debug): telemetry + ball injection for diagnostics.
+  debugState?(): DebugSnapshot;
+  debugPlaceBall?(x: number, y: number, vx?: number, vy?: number): void;
 }
 
 export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): PinballControls {
   const ctx = canvas.getContext('2d')!;
   const play = opts.play;
+
+  // ---- DEV diagnostics (only active when opts.debug) ----
+  const DBG = !!opts.debug;
+  let dbgEvents: { t: number; kind: string; id?: string; x: number; y: number }[] = [];
+  const logEv = (kind: string, x: number, y: number, id?: string) => {
+    if (!DBG) return;
+    dbgEvents.push({ t: tms, kind, id, x, y });
+    if (dbgEvents.length > 6000) dbgEvents = dbgEvents.slice(-4000);
+  };
 
   // ---- table (rebuilt on each new game) ----
   let segs = buildSegments();
@@ -130,16 +149,17 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
   }
   function launch() {
     if (!serving || !balls.length) return;
-    // The real Space Cadet launch lane is too narrow/jam-prone to deliver the
-    // ball reliably, so DROP it into the playfield from the top of the right lane
-    // with downward speed — this always puts a ball in play. Power = a bit of
-    // extra zip from how long you held.
-    const power = Math.max(0.4, charge);
-    balls[0].p = { x: 248, y: 158 };
-    balls[0].v = { x: -150, y: 120 + power * 160 };
-    balls[0].laneT = 0;
+    // REAL plunger: fire the ball straight UP the right launch lane. It rides to
+    // the top, the lane roof curves it left into the top orbit, and it comes down
+    // through the playfield — authentic Space-Cadet flow. Power (hold time) sets
+    // launch speed; even the minimum clears the top.
+    const power = Math.max(0.5, charge);
+    balls[0].p = { x: SPAWN.x, y: SPAWN.y };
+    balls[0].v = { x: 0, y: -(360 + power * 260) };
+    balls[0].laneT = 0.0001;            // marks a freshly-launched ball (guided lane climb)
     serving = false; charging = false; charge = 0;
     if (freshBall) { ballSave = 5; freshBall = false; }   // grace only on a new ball
+    logEv('launch', balls[0].p.x, balls[0].p.y);
     play('plunger');
   }
   function setCharge(c: number) {
@@ -150,6 +170,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
 
   /* ---------------- scoring events from physics ---------------- */
   const onHit: HitFn = (type, d) => {
+    logEv(type, d.x, d.y, d.id);
     if (type === 'bumper') {
       const b = bumpers.find(x => x.id === d.id); if (b) b.lit = 0.28;
       addScore((d.score || 250) * multiplier); popup(d.x, d.y - 14, `+${(d.score || 250) * multiplier}`, '#fff');
@@ -192,7 +213,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
     for (const b of balls) {
       const sx = (spinner.a.x + spinner.b.x) / 2, sy = (spinner.a.y + spinner.b.y) / 2;
       if (Math.hypot(b.p.x - sx, b.p.y - sy) < 16 && Math.abs(b.v.y) > 50 && spinCooldown <= 0) {
-        spinner.spin += 1; spinCooldown = 0.12;
+        spinner.spin += 1; spinCooldown = 0.12; logEv('spinner', sx, sy);
         addScore(spinner.value * multiplier);
         if (missionActive && curMission().aim === 'spinner') progressMission(sx, sy);
         play('rollover');
@@ -212,7 +233,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
       if (tg.lit > 0) continue;
       for (const b of balls) {
         if (Math.hypot(b.p.x - tg.p.x, b.p.y - tg.p.y) < b.r + tg.r) {
-          tg.lit = 0.5;
+          tg.lit = 0.5; logEv('target', tg.p.x, tg.p.y, tg.group);
           if (tg.group === 'mult') {
             if (!tg.on) { tg.on = true; addScore(tg.score * multiplier); popup(tg.p.x, tg.p.y - 12, `+${tg.score * multiplier}`, LIME); play('rollover'); }
             if (missionActive && curMission().aim === 'lanes') progressMission(tg.p.x, tg.p.y);
@@ -236,7 +257,9 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
       if (h.lit > 0.0001) h.lit = Math.max(0, h.lit - dt * 0.5);
       for (let i = balls.length - 1; i >= 0; i--) {
         const b = balls[i];
+        if (b.laneT && b.laneT > 0) continue;   // a ball still climbing the launch lane is immune (a sink sits in the lane)
         if (Math.hypot(b.p.x - h.p.x, b.p.y - h.p.y) < h.r * 0.85) {
+          logEv('hole', h.p.x, h.p.y, h.kind);
           balls.splice(i, 1);
           if (h.kind === 'hyper') {
             if (!missionActive) { missionActive = true; missionDone = 0; message(`MISSION — ${curMission().name.toUpperCase()}`, 2.2); play('missionStart'); }
@@ -263,13 +286,13 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
     for (let i = balls.length - 1; i >= 0; i--) {
       const b = balls[i];
       if (Math.hypot(b.p.x - kickback.p.x, b.p.y - kickback.p.y) < kickback.r && b.v.y > 0) {
-        if (kickback.armed) { b.v = { x: 30, y: -1180 }; kickback.armed = false; message('KICKBACK!', 1.3); play('save'); sparkBurst(kickback.p.x, kickback.p.y, LIME, 10); }
+        if (kickback.armed) { b.v = { x: 30, y: -1180 }; kickback.armed = false; logEv('kickback', kickback.p.x, kickback.p.y); message('KICKBACK!', 1.3); play('save'); sparkBurst(kickback.p.x, kickback.p.y, LIME, 10); }
       }
     }
 
     // drain
     for (let i = balls.length - 1; i >= 0; i--) {
-      if (balls[i].p.y > DRAIN_Y) { balls.splice(i, 1); onDrain(); }
+      if (balls[i].p.y > DRAIN_Y) { logEv('drain', balls[i].p.x, balls[i].p.y); balls.splice(i, 1); onDrain(); }
     }
   }
 
@@ -358,21 +381,25 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
       } else {
         for (const b of balls) {
           stepBall(b, dt, segs, bumpers, flips, onHit);
-          // launch-assist: ONLY the freshly launched ball (laneT>0). Keep it
-          // climbing the narrow right lane and guarantee it pops into play; once
-          // it leaves the lane it's "in play" and the assist switches off so it
-          // never disturbs normal play on the right side.
+          // launch-assist (freshly launched ball only): the real 14px collider
+          // lane is too tight to ride on physics alone, so carry the ball up a
+          // GUIDED RAIL — pin it to the lane centre (x≈300, clear of both walls)
+          // and keep it climbing — then release it LEFT into the top orbit so it
+          // re-enters the playfield over the top. Switches off once it's in play.
           if (b.laneT && b.laneT > 0) {
-            if (b.p.x > 284 && b.p.y > 150) {
-              // still climbing the right lane — keep it moving up, with a backstop
-              b.laneT += dt;
-              if (b.v.y > -80) b.v.y -= 1100 * dt;
-              if (b.laneT > 1.4) { b.p.x = 240; b.p.y = 168; b.v.x = -130; b.v.y = 150; b.laneT = 0; }  // stalled → eject
+            b.laneT += dt;
+            if (b.p.y > 118 && b.laneT < 2.5) {
+              // climb the guided rail up the right lane (visible launch). The inner
+              // lane wall runs to y≈127, so we carry it just past the crest.
+              b.p.x += (300 - b.p.x) * Math.min(1, dt * 14); b.v.x = 0;  // centre in the lane
+              if (b.v.y > -400) b.v.y = -400;                            // keep climbing
             } else {
-              // reached the TOP of the lane (or drifted out) → curve it into the
-              // playfield (the cleared lane no longer deflects it on its own)
-              if (b.p.x > 284 && b.p.y <= 150) { b.p.x = 240; b.p.y = 168; b.v.x = -150; b.v.y = 150; }
-              b.laneT = 0;
+              // crested → enter the playfield at the top, descending into the bumper
+              // field. (The real top-orbit tube is too tight to thread on physics;
+              // the ball has already ridden up the right lane, so this reads as a
+              // launch that loops over the top.)
+              b.p.x = 256; b.p.y = 104; b.v.x = -150; b.v.y = 150;
+              b.laneT = 0;                                               // released → in play
             }
           }
           // anti-stuck: jammed UP in the playfield → nudge it free; loitering DOWN
@@ -475,5 +502,15 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
     togglePause() { if (status === 'playing') paused = !paused; },
     paused: () => paused,
     destroy() { alive = false; cancelAnimationFrame(raf); },
+    debugState: !DBG ? undefined : () => {
+      const out: DebugSnapshot = {
+        status, ball: ballNum, serving, charge,
+        balls: balls.map(b => ({ x: b.p.x, y: b.p.y, vx: b.v.x, vy: b.v.y, sp: Math.hypot(b.v.x, b.v.y) })),
+        events: dbgEvents,
+      };
+      dbgEvents = [];
+      return out;
+    },
+    debugPlaceBall: !DBG ? undefined : (x, y, vx = 0, vy = 0) => { serving = false; charging = false; balls = [mkBall(x, y, vx, vy)]; },
   };
 }

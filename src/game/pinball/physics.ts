@@ -54,6 +54,8 @@ export function stepBall(b: Ball, dt: number, segs: Segment[], bumpers: Bumper[]
       if (seg.kind === 'sling' && seg.kick) {
         b.v.x += n.x * seg.kick; b.v.y += n.y * seg.kick;
         hit('sling', { x: cp.x, y: cp.y, score: seg.score, light: seg.light });
+      } else {
+        hit('wall', { x: cp.x, y: cp.y });
       }
     }
 
