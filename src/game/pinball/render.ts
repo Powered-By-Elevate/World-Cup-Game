@@ -10,6 +10,7 @@
    particles) is drawn each frame from the engine `Scene`.
    ============================================================ */
 import { SC_TW, SC_TH, SC_WALLS, SC_PARTS, type SCPart } from './scData';
+import { GUARD_RAILS } from './table';
 import type { Segment, Bumper, Target, Goal, Flipper, Ball, Popup, Confetti, Spark, Hole, Spinner, Kickback } from './types';
 
 const TW = SC_TW, TH = SC_TH;
@@ -129,12 +130,67 @@ function drawWalls(ctx: Ctx) {
     ctx.fill(pth);
   });
   ctx.restore();
-  const wp = new Path2D();
-  SC_WALLS.forEach((p, idx) => { if (idx === 3 || wallBig(p) < 4) return; p.forEach((q, i) => i ? wp.lineTo(q[0], q[1]) : wp.moveTo(q[0], q[1])); });
-  ctx.strokeStyle = 'rgba(150,178,220,.13)'; ctx.lineWidth = 4.6; ctx.stroke(wp);
-  chromeWire(ctx, wp, 2.1);
+  // Split walls into structural GUARD RAILS (long spans — the outer rails, lane
+  // guides, slingshot bodies, flipper return rails, plunger lane) and small TRIM.
+  // Guard rails get bold bright Space-Cadet chrome; trim stays subtle so it reads
+  // as plastic posts, not rails.
+  const RAIL = 40;
+  const railPath = new Path2D(), trimPath = new Path2D();
+  const railPolys: number[][][] = [];
+  SC_WALLS.forEach((p, idx) => {
+    if (idx === 3 || wallBig(p) < 4) return;
+    if (wallBig(p) > RAIL) { railPolys.push(p); p.forEach((q, i) => i ? railPath.lineTo(q[0], q[1]) : railPath.moveTo(q[0], q[1])); }
+    else p.forEach((q, i) => i ? trimPath.lineTo(q[0], q[1]) : trimPath.moveTo(q[0], q[1]));
+  });
+  // soft seat under everything
+  ctx.strokeStyle = 'rgba(150,178,220,.12)'; ctx.lineWidth = 4.6; ctx.stroke(trimPath);
+  ctx.strokeStyle = 'rgba(170,196,236,.16)'; ctx.lineWidth = 6.4; ctx.stroke(railPath);
+  // small trim: thin chrome
+  chromeWire(ctx, trimPath, 1.9);
+  // GUARD RAILS: bold tubular chrome
+  guardRail(ctx, railPath, 3.5);
+  // outer boundary rail (boldest run round the whole table)
   const bp = new Path2D(); BOUND.forEach((p, i) => i ? bp.lineTo(p[0], p[1]) : bp.moveTo(p[0], p[1]));
-  chromeWire(ctx, bp, 2.9);
+  guardRail(ctx, bp, 4.0);
+  // lit guide bulbs threaded along the boundary + the long guard rails
+  railBulbs(ctx, [BOUND, ...railPolys.filter(p => wallBig(p) > 70)]);
+  // authored flipper-zone guard rails (inlane guides + outlane walls)
+  const gp = new Path2D();
+  for (const r of GUARD_RAILS) { gp.moveTo(r.a.x, r.a.y); gp.lineTo(r.b.x, r.b.y); }
+  guardRail(ctx, gp, 3.2);
+  railBulbs(ctx, GUARD_RAILS.map(r => [[r.a.x, r.a.y], [r.b.x, r.b.y]]));
+}
+/** Bold, bright tubular chrome — the Space-Cadet guard-rail look: dark seat,
+ *  steel body, a fat upper highlight toward the light, and a hot specular line. */
+function guardRail(ctx: Ctx, p: Path2D, w: number) {
+  ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.shadowColor = 'rgba(2,5,11,.6)'; ctx.shadowBlur = 3.4; ctx.shadowOffsetX = LX * 2.1; ctx.shadowOffsetY = LY * 2.1;
+  ctx.strokeStyle = '#0b1120'; ctx.lineWidth = w + 2.2; ctx.stroke(p); ctx.restore();
+  ctx.strokeStyle = '#222c40'; ctx.lineWidth = w + 0.6; ctx.stroke(p);
+  ctx.strokeStyle = '#53607e'; ctx.lineWidth = w; ctx.stroke(p);
+  ctx.save(); ctx.translate(-LX * w * 0.3, -LY * w * 0.3); ctx.strokeStyle = '#aab6d0'; ctx.lineWidth = w * 0.52; ctx.stroke(p); ctx.restore();
+  ctx.save(); ctx.translate(-LX * w * 0.44, -LY * w * 0.44); ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = w * 0.2; ctx.stroke(p); ctx.restore();
+}
+/** Warm guide bulbs evenly spaced along rail polylines (steady-lit like the real
+ *  machine's lane lights), nudged just inside the rail toward the playfield. */
+function railBulbs(ctx: Ctx, polys: number[][][]) {
+  ctx.save();
+  for (const poly of polys) {
+    let carry = 12;
+    for (let i = 0; i < poly.length - 1; i++) {
+      const ax = poly[i][0], ay = poly[i][1], bx = poly[i + 1][0], by = poly[i + 1][1];
+      const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
+      if (len < 0.01) continue;
+      const ux = dx / len, uy = dy / len;          // along
+      const nx = uy, ny = -ux;                       // inward-ish normal
+      for (let d = carry; d < len; d += 24) {
+        const x = ax + ux * d + nx * 2.4, y = ay + uy * d + ny * 2.4;
+        glowDot(ctx, x, y, 1.5, 'rgba(255,236,180,1)', 0.9);
+      }
+      carry = Math.max(0, (carry - len) % 24 + 24) % 24;
+    }
+  }
+  ctx.restore();
 }
 function drawStand(ctx: Ctx, p: number[][], label: string) {
   const pth = new Path2D(); p.forEach((pt, i) => i ? pth.lineTo(pt[0], pt[1]) : pth.moveTo(pt[0], pt[1])); pth.closePath();
@@ -333,6 +389,7 @@ function drawBall(ctx: Ctx, x: number, y: number, r: number) {
   ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = .5;
   const g = ctx.createRadialGradient(x - r * .42, y - r * .46, .4, x, y, r); g.addColorStop(0, '#fff'); g.addColorStop(.4, 'rgba(255,255,255,.28)'); g.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = .5; ctx.beginPath(); ctx.arc(x, y, r - .4, Math.PI * .85, Math.PI * 1.7); ctx.stroke(); ctx.restore();
 }
 function drawChevron(ctx: Ctx, x: number, y: number, a: number, col: string, lit: number) {
   ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.globalAlpha = .22 + lit * .78;

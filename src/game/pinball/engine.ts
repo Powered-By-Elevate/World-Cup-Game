@@ -120,9 +120,13 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
   const aim = (): Aim => (missionActive ? curMission().aim : null);
 
   /* ---------------- serving / launching ---------------- */
-  function serveBall() {
+  // `fresh` = a genuinely new ball (game start / next ball) → earns the ball-save
+  // grace on launch. A re-serve after a ball-save or a lock is NOT fresh, so the
+  // save can't re-arm forever (which would make the game impossible to lose).
+  let freshBall = false;
+  function serveBall(fresh = false) {
     balls = [mkBall(SPAWN.x, SPAWN.y)];
-    serving = true; charging = false; charge = 0; servingT = 0;
+    serving = true; charging = false; charge = 0; servingT = 0; freshBall = fresh;
   }
   function launch() {
     if (!serving || !balls.length) return;
@@ -135,7 +139,8 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
     balls[0].v = { x: -150, y: 120 + power * 160 };
     balls[0].laneT = 0;
     serving = false; charging = false; charge = 0;
-    ballSave = 5; play('plunger');
+    if (freshBall) { ballSave = 5; freshBall = false; }   // grace only on a new ball
+    play('plunger');
   }
   function setCharge(c: number) {
     if (status !== 'playing' || !serving) return;
@@ -297,7 +302,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
     }
     // last active ball lost
     if (ballSave > 0) { ballSave = 0; message('BALL SAVED — SHOOT AGAIN', 1.8); play('save'); serveBall(); return; }
-    if (ballNum < ballsTotal) { ballNum++; resetForNewBall(); serveBall(); message(`BALL ${ballNum}`, 1.4); }
+    if (ballNum < ballsTotal) { ballNum++; resetForNewBall(); serveBall(true); message(`BALL ${ballNum}`, 1.4); }
     else gameOver();
   }
 
@@ -322,7 +327,7 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
     ballSave = 0; goalCooldown = 0; flashGoal = 0; msg = ''; msgTimer = 0;
     popups.length = 0; confetti.length = 0; sparks.length = 0; captured.length = 0;
     status = 'playing'; paused = false;
-    serveBall(); message('KICK OFF!', 1.6);
+    serveBall(true); message('KICK OFF!', 1.6);
   }
 
   /* ---------------- update ---------------- */
@@ -374,8 +379,9 @@ export function createPinball(canvas: HTMLCanvasElement, opts: PinballOpts): Pin
           // past the flippers → it's lost, send it to the drain so the ball ends.
           const sp = Math.hypot(b.v.x, b.v.y);
           b.stuck = sp < 12 ? (b.stuck || 0) + dt : 0;
-          if (b.stuck > 1.6 && b.p.y < 330) { b.v.x += (Math.random() - 0.5) * 220; b.v.y -= 160; b.stuck = 0; }
-          else if (b.stuck > 1.2 && b.p.y > 388) { b.p.y = TH + 12; }
+          if (b.stuck > 1.2 && b.p.y > 388) { b.p.y = TH + 12; }          // loitering at the drain → lose it
+          else if (b.stuck > 1.6 && b.p.y > 300) { b.v.x += (b.p.x < TW / 2 ? 1 : -1) * 180; b.v.y += 220; b.stuck = 0; }  // wedged in a lower pocket → shove it down toward the flippers
+          else if (b.stuck > 1.6) { b.v.x += (Math.random() - 0.5) * 220; b.v.y -= 160; b.stuck = 0; }  // stuck up top → jiggle free
         }
         sensors(dt);
       }

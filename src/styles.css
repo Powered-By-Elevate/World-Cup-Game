@@ -1118,17 +1118,66 @@
    start/pause/full-time cards over it. Scoped under .pin-overlay.
    ============================================================ */
 .pin-overlay{ position:fixed; inset:0; z-index:80; background:#05080f;
+  display:flex; align-items:center; justify-content:center; padding:6px;
   touch-action:none; user-select:none; -webkit-user-select:none; overscroll-behavior:none; }
-/* the table is rendered flat to the canvas, then tilted back into a 2.5D
-   pinball perspective (the Space-Cadet look). Only the canvas tilts — the HUD,
-   touch zones and cards stay flat on top. transform-origin bottom keeps the
-   flippers anchored at the player's thumbs. */
-.pin-stage{ position:absolute; inset:0; overflow:hidden;
-  perspective:1300px; perspective-origin:50% 50%; }
+/* the machine cabinet: backbox (DMD scoreboard) → tilted playfield → lockbar,
+   stacked like a real Space-Cadet table. */
+.pin-cabinet{ display:flex; flex-direction:column; width:min(440px,99vw); max-height:100dvh; gap:0; }
+@media (max-height:760px){ .pin-cabinet{ width:min(384px,96vw); } }
+@media (max-height:640px){ .pin-cabinet{ width:min(332px,92vw); } }
+
+/* BACKBOX — gold cup, title, brand strip, dot-matrix DMD */
+.pin-backbox{ position:relative; flex:none; z-index:3; overflow:hidden;
+  background:linear-gradient(180deg,#0c1424,#070b14); border:1px solid #1b2742; border-bottom:0;
+  border-radius:14px 14px 4px 4px; padding:9px 13px 11px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 -6px 26px rgba(96,0,240,.12); }
+.pin-flood{ position:absolute; top:-8px; width:46px; height:46px; border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle, rgba(255,255,255,.8), rgba(255,240,180,.22) 42%, transparent 70%); filter:blur(2px); opacity:.85; }
+.pin-flood-l{ left:12px; } .pin-flood-r{ right:12px; }
+.bb-title{ text-align:center; font-family:'Anton',sans-serif; font-size:14px; letter-spacing:.5px; color:#cdd7ea; }
+.bb-title b{ color:#A8F000; }
+.bb-trophy{ height:19px; width:auto; vertical-align:-5px; margin-right:4px; filter:drop-shadow(0 0 5px rgba(255,196,0,.55)); }
+.bb-badge{ display:inline-block; font-family:'Anton',sans-serif; font-size:12px; line-height:1; padding:2px 4px; border-radius:4px; color:#fff;
+  background:linear-gradient(135deg,#6000F0 0 48%, #D80000 52% 100%); margin-right:4px; box-shadow:0 0 0 1px rgba(255,255,255,.16); }
+.bb-strip{ height:3px; border-radius:2px; margin:6px 2px 7px;
+  background:linear-gradient(90deg,#D80000 0 20%,#6000F0 20% 40%,#A8F000 40% 60%,#00C060 60% 80%,#FFC400 80% 100%); }
+.pin-dmd{ background:#020407; border-radius:7px; padding:7px 9px; border:1px solid #14203a; box-shadow:inset 0 0 22px rgba(0,0,0,.9); }
+.dmd-glass{ border-radius:5px; padding:6px 9px;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.5) 0 1px, transparent 1px 3px),
+             repeating-linear-gradient(90deg, rgba(0,0,0,.5) 0 1px, transparent 1px 3px); }
+.dmd-row{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+.dmd-lbl{ font-family:'Archivo',sans-serif; font-weight:800; font-size:9px; letter-spacing:2px; color:#b06a12; }
+.dmd-score{ font-family:'Doto','Anton',sans-serif; font-weight:900; font-size:26px; letter-spacing:1px; color:#ffb031; line-height:1;
+  text-shadow:0 0 8px rgba(255,150,20,.7), 0 0 2px rgba(255,180,60,.9); }
+.dmd-mid{ display:flex; gap:9px; flex-wrap:wrap; margin-top:5px; }
+.dmd-tag{ font-family:'Doto','Anton',sans-serif; font-weight:700; font-size:9.5px; letter-spacing:.5px; color:#d98a2a; white-space:nowrap; text-transform:uppercase; }
+.dmd-tag b{ color:#ffb84d; }
+.dmd-tag.gold{ color:#ffcf66; } .dmd-tag.gold b{ color:#ffd066; }
+.dmd-tag.dim{ color:#6f7e96; } .dmd-tag.dim b{ color:#9fb0c8; }
+.dmd-tag.lime{ color:#cdf25a; } .dmd-tag.red{ color:#ff8a82; }
+.dmd-mission{ font-family:'Doto','Anton',sans-serif; font-weight:700; font-size:10px; letter-spacing:.5px; color:#8fd0ff; margin-top:6px; min-height:12px; }
+@media (max-height:640px){ .bb-title{ font-size:12px; } .dmd-score{ font-size:22px; } }
+
+/* PLAYFIELD STAGE — flat canvas tilted into the 2.5D Space-Cadet POV. Only the
+   canvas tilts; the HUD, touch zones and cards stay flat. transform-origin bottom
+   keeps the flippers anchored at the player's thumbs. */
+.pin-stage{ position:relative; width:100%; aspect-ratio:360/430; overflow:hidden; flex:0 1 auto; min-height:0;
+  background:#04070d; border:1px solid #1b2742; border-top:0; border-bottom:0; z-index:2;
+  perspective:760px; perspective-origin:50% 30%; box-shadow:inset 0 0 60px rgba(0,0,0,.7); }
 .pin-canvas{ position:absolute; inset:0; width:100%; height:100%; display:block;
-  transform-origin:50% 50%; transform:rotateX(11deg) scale(1.02);
-  filter:saturate(1.14) contrast(1.04); }
-@media (max-aspect-ratio:3/5){ .pin-canvas{ transform:rotateX(9deg) scale(1.01); } }
+  transform-origin:50% 100%; transform:rotateX(28deg) scale(1.08) translateY(-3%);
+  filter:saturate(1.16) contrast(1.05); }
+@media (max-aspect-ratio:3/5){ .pin-canvas{ transform:rotateX(23deg) scale(1.05) translateY(-2%); } }
+
+/* LOCKDOWN BAR — flipper buttons + sound, like the machine apron */
+.pin-lockbar{ position:relative; z-index:3; flex:none; display:flex; align-items:center; justify-content:space-between; gap:8px;
+  background:linear-gradient(180deg,#13192a,#080c15); border:1px solid #1b2742; border-top:0;
+  border-radius:0 0 14px 14px; padding:9px 12px; box-shadow:0 8px 18px rgba(0,0,0,.5); }
+.lb-btn{ font-family:'Anton',sans-serif; font-size:13px; letter-spacing:1px; color:#fff; flex:1; text-align:center; cursor:pointer;
+  background:linear-gradient(180deg,#2a3450,#161d30); border:1px solid #36436a; border-radius:8px; padding:11px 18px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12); -webkit-tap-highlight-color:transparent; touch-action:none; }
+.lb-btn:active{ background:linear-gradient(180deg,#3a6a18,#23440d); border-color:#A8F000; color:#A8F000; }
+.lb-mid{ background:#0c1320; border:1px solid #243150; color:#fff; border-radius:8px; padding:11px 14px; font-size:15px; cursor:pointer; flex:none; }
 
 /* ---- broadcast HUD (top) ---- */
 .pin-hud{ position:absolute; top:0; left:0; right:0; padding:8px 12px calc(8px); pointer-events:none;

@@ -63,18 +63,47 @@ export function buildSegments(): Segment[] {
   // launch lane (they'd block the plunger shot).
   const inLane = (p: Vec) => p.x > 284 && p.x < 313 && p.y > 86 && p.y < 274;
   const crossesLane = (a: Vec, b: Vec) => inLane(a) && inLane(b) && Math.abs(a.x - b.x) > 7;
+  // The very bottom of the table is the DRAIN, not a wall. The Space-Cadet dump
+  // includes the apron / drain-line as polylines (y≈390 ledges + the y≈398 base);
+  // as colliders they catch a drained ball ON the ledge just above DRAIN_Y, so it
+  // never falls through and the game can never end. Anything below the flippers is
+  // open drain — drop those segments so a ball past the flippers is cleanly lost.
+  const isApron = (a: Vec, b: Vec) => a.y >= 386 && b.y >= 386;
   for (const poly of SC_WALLS) {
     if (poly.length < 2 || wallSpan(poly) < 34) continue;       // skip the small clutter
     for (const s of chain(poly.map(([x, y]) => v(x, y)), 0.34, 'wall')) {
-      if (!crossesLane(s.a, s.b)) segs.push(s);
+      if (!crossesLane(s.a, s.b) && !isApron(s.a, s.b)) segs.push(s);
     }
   }
   // slingshot kicking faces over the two real kickers
   for (const k of partsOf('kicker')) {
     segs.push({ a: v(k.x - 16, k.y + 10), b: v(k.x + 16, k.y + 10), e: 0.6, kind: 'sling', kick: 360, score: 110, light: 'sl' });
   }
+  // ACTIVE SLINGSHOTS on the inner faces of the two triangle bodies above the
+  // flippers — offset a few px into the playfield so they kick the ball back
+  // toward centre (real Space-Cadet sling action) without double-hitting the
+  // coincident triangle wall.
+  segs.push({ a: v(155, 302), b: v(169, 336), e: 0.45, kind: 'sling', kick: 190, score: 110, light: 'sl' });
+  segs.push({ a: v(256, 302), b: v(242, 336), e: 0.45, kind: 'sling', kick: 190, score: 110, light: 'sl' });
+  // GUARD-RAIL FUNNEL: inlane guides that catch a descending ball outside each
+  // flipper and feed it onto the bat, plus outlane walls that define a narrow
+  // drain channel on each side. These are the Space-Cadet lower-third rails —
+  // drawn in chrome (see render.ts) and collided here.
+  for (const r of GUARD_RAILS) segs.push({ a: r.a, b: r.b, e: 0.28, kind: 'wall' });
   return segs;
 }
+
+/** Lower-third guard rails (flipper-zone lane guides + outlane walls). Authored
+ *  in logical coords against the real flipper/sling anchors. Shared by the
+ *  collider builder above and the chrome renderer. */
+export const GUARD_RAILS: { a: Vec; b: Vec }[] = [
+  // RIGHT inlane guide — a single gentle diagonal just right of the right
+  // slingshot that catches balls falling down the right side and rolls them
+  // down-left toward the right flipper, instead of letting them drain in the
+  // old wide-open dead-zone outside the flipper. Kept as one clean segment (no
+  // pockets) so it can't trap the ball.
+  { a: v(280, 322), b: v(242, 360) },
+];
 
 export function buildBumpers(): Bumper[] {
   const cols = ['#E1342B', '#1769FF', '#FFC400'];
