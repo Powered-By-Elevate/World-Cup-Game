@@ -97,39 +97,67 @@ export function Pinball({ onClose, onScore }: Props) {
   // a ball is in play (kicked off) → the left/right screen-half flip taps are armed
   const launched = status === 'playing' && !paused && snap?.awaitingLaunch === false;
 
+  // ---- backbox DMD readout (mirrors the Space-Cadet machine scoreboard) ----
+  const playing = status === 'playing';
+  const dmdMission = playing && snap
+    ? (snap.missionActive
+        ? `▸ ${snap.mission} — ${snap.missionDone}/${snap.missionNeed} · ${snap.missionHint}`
+        : `NEXT ▸ ${snap.mission} · ${snap.missionHint}`)
+    : 'PRESS KICK OFF ▸ HOLD LAUNCH TO SHOOT';
+
   return (
     <div className="pin-overlay">
-      <div className="pin-stage" ref={wrapRef}>
-        <canvas ref={canvasRef} className="pin-canvas" />
+      <div className="pin-cabinet">
 
-        {/* broadcast HUD */}
-        {status === 'playing' && snap && (
-          <div className="pin-hud">
-            <div className="pin-hud-row">
-              <div className="pin-stat"><span className="pl">SCORE</span><b>{fmt(snap.score)}</b></div>
-              <div className="pin-stat r"><span className="pl">HIGH</span><b>{fmt(snap.high)}</b></div>
-            </div>
-            <div className="pin-hud-row sub">
-              <span className="pin-chip">⚽ Ball {snap.ball}/{snap.balls}</span>
-              <span className="pin-chip gold">×{snap.multiplier}</span>
-              <span className="pin-chip">🏅 {snap.rank}</span>
-              {snap.locks > 0 && <span className="pin-chip gold">LOCK {snap.locks}/2</span>}
-              {snap.ballSave && <span className="pin-chip lime">SHOOT AGAIN</span>}
-              {snap.kickback && <span className="pin-chip lime">KICKBACK</span>}
-              {snap.inMultiball && <span className="pin-chip red">MULTIBALL</span>}
-            </div>
-            <div className="pin-mission">
-              <span className="pl">{snap.missionActive ? 'MISSION' : 'NEXT'}</span>
-              <b>{snap.mission}</b>
-              <span className="pin-mhint">{snap.missionActive ? `${snap.missionDone}/${snap.missionNeed} · ${snap.missionHint}` : snap.missionHint}</span>
+        {/* BACKBOX — gold cup, title, color strip, DMD scoreboard */}
+        <div className="pin-backbox">
+          <div className="pin-flood pin-flood-l" /><div className="pin-flood pin-flood-r" />
+          <div className="bb-title">
+            <svg className="bb-trophy" viewBox="0 0 28 30" aria-hidden="true">
+              <defs><linearGradient id="pinGoldG" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="#ffe69a" /><stop offset=".5" stopColor="#ffc400" /><stop offset="1" stopColor="#a87600" />
+              </linearGradient></defs>
+              <g fill="url(#pinGoldG)" stroke="#8a6200" strokeWidth=".6">
+                <path d="M8 3 h12 v6.5 a6 6 0 0 1 -12 0 z" />
+                <path d="M8 4.5 h-3.2 a3 3 0 0 0 0 6 h1.4" fill="none" stroke="#e8af14" strokeWidth="1.5" />
+                <path d="M20 4.5 h3.2 a3 3 0 0 1 0 6 h-1.4" fill="none" stroke="#e8af14" strokeWidth="1.5" />
+                <rect x="12.6" y="15" width="2.8" height="5" />
+                <path d="M9 20 h10 l-1.6 4 h-6.8 z" /><rect x="7" y="24" width="14" height="2.6" rx="1.2" />
+              </g>
+            </svg>
+            <span className="bb-badge">26</span> WORLD CUP <b>PINBALL</b>
+          </div>
+          <div className="bb-strip" />
+          <div className="pin-dmd">
+            <div className="dmd-glass">
+              <div className="dmd-row">
+                <div className="dmd-lbl">SCORE</div>
+                <div className="dmd-score">{fmt(snap?.score ?? 0)}</div>
+              </div>
+              <div className="dmd-mid">
+                <span className="dmd-tag">BALL <b>{snap?.ball ?? 1}</b>/{snap?.balls ?? 3}</span>
+                <span className="dmd-tag gold">×<b>{snap?.multiplier ?? 1}</b></span>
+                <span className="dmd-tag">{snap?.rank ?? 'Debut'}</span>
+                <span className="dmd-tag dim">HIGH <b>{fmt(snap?.high ?? 0)}</b></span>
+                {playing && snap && (<>
+                  {snap.locks > 0 && <span className="dmd-tag gold">LOCK <b>{snap.locks}</b>/2</span>}
+                  {snap.ballSave && <span className="dmd-tag lime">SHOOT AGAIN</span>}
+                  {snap.kickback && <span className="dmd-tag lime">KICKBACK</span>}
+                  {snap.inMultiball && <span className="dmd-tag red">MULTIBALL</span>}
+                </>)}
+              </div>
+              <div className="dmd-mission">{dmdMission}</div>
             </div>
           </div>
-        )}
+        </div>
+
+        {/* PLAYFIELD STAGE — the tilted 2.5D canvas + flat overlays */}
+        <div className="pin-stage" ref={wrapRef}>
+          <canvas ref={canvasRef} className="pin-canvas" />
 
         {/* top-right controls */}
         <div className="pin-topbtns">
           {status === 'playing' && <button className="pin-ibtn" onClick={togglePause} aria-label="Pause">{paused ? '▶' : '⏸'}</button>}
-          <button className="pin-ibtn" onClick={toggleMute} aria-label="Mute">{muted ? '🔇' : '🔊'}</button>
           <button className="pin-ibtn" onClick={onClose} aria-label="Close"><Icon name="x" size={16} /></button>
         </div>
 
@@ -202,6 +230,19 @@ export function Pinball({ onClose, onScore }: Props) {
             </div>
           </div>
         )}
+        </div>
+
+        {/* LOCKDOWN BAR — flipper buttons + sound, like the real machine apron */}
+        <div className="pin-lockbar">
+          <button className="lb-btn"
+            onPointerDown={flip('L', true)} onPointerUp={flip('L', false)}
+            onPointerCancel={flip('L', false)} onPointerLeave={flip('L', false)}>◀ FLIP</button>
+          <button className="lb-mid" onClick={toggleMute} aria-label="Sound">{muted ? '🔇' : '🔊'}</button>
+          <button className="lb-btn"
+            onPointerDown={flip('R', true)} onPointerUp={flip('R', false)}
+            onPointerCancel={flip('R', false)} onPointerLeave={flip('R', false)}>FLIP ▶</button>
+        </div>
+
       </div>
     </div>
   );
