@@ -7,11 +7,11 @@
    Free-tier feed: every fixture + kickoff time, `IN_PLAY` while a match
    is being played (no in-play score), final score once it finishes.
    ============================================================ */
-import { MATCHES, GROUP_LETTERS } from './fixtures';
+import { MATCHES } from './fixtures';
 import type { KOMatch } from './fixtures';
 import { NATION, NATIONS } from './nations';
 import type { ScoreEntry } from './types';
-import { groupTable } from '../utils/scoring';
+import { qualifierInfo } from '../utils/scoring';
 
 /* feed team NAME → our nation id. Exact NATION names match automatically;
    ALIAS covers every spelling the feed uses that differs from ours. */
@@ -90,25 +90,7 @@ export async function fetchLiveResults(): Promise<LiveData | null> {
    "everyone is out."
    ------------------------------------------------------------------ */
 function resolveBracketTeams(ko: KOMatch[], scores: Record<string, ScoreEntry>): KOMatch[] {
-  const groupDone = (g: string) =>
-    MATCHES.filter(m => m.g === g).every(m => { const s = scores[m.i]; return !!s && s.st === 'ft' && s.h != null; });
-  const allGroupsDone = GROUP_LETTERS.every(groupDone);
-
-  const winner: Record<string, string> = {};
-  const runner: Record<string, string> = {};
-  const thirds: { g: string; id: string; pts: number; gd: number; gf: number }[] = [];
-  for (const g of GROUP_LETTERS) {
-    if (!groupDone(g)) continue;
-    const t = groupTable(g, scores);
-    if (t[0]) winner[g] = t[0].id;
-    if (t[1]) runner[g] = t[1].id;
-    if (t[2]) thirds.push({ g, id: t[2].id, pts: t[2].pts, gd: t[2].gd, gf: t[2].gf });
-  }
-  // FIFA third-place ranking: points, then goal difference, then goals for.
-  thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.g.localeCompare(b.g));
-  // Only the eight best third-placed teams advance, and only once every group
-  // is final (the ranking spans all 12 groups).
-  const best8 = allGroupsDone ? thirds.slice(0, 8) : [];
+  const { winner, runner, best8 } = qualifierInfo(scores);
   const best8Group = new Set(best8.map(x => x.g));
 
   // Assign each "3<groups>" slot to a qualifying third whose group is in its

@@ -19,6 +19,7 @@ import { MATCH_DATE } from './data/fixtures';
 import { teamStats, computeMovers, stageWinners, stageComplete } from './utils/scoring';
 import type { StandingEntry, StageWinner } from './utils/scoring';
 import { computeAwards, aliveCount } from './utils/awards';
+import { computeRedraft } from './utils/redraft';
 import { Icon, Mark } from './components/Icon';
 import type { IconName } from './components/Icon';
 import { Avatar, Celebration } from './components/shared';
@@ -852,6 +853,28 @@ export default function App() {
     for (const t of state.teams || []) m[t.id] = aliveCount(t, ko, groupDone);
     return { aliveByTeam: m, koStarted: groupDone };
   }, [state.teams, scores, ko]);
+
+  // One-time knockout re-draft: the moment the group stage is final, replace each
+  // team's eliminated nations and lock it (redraftDone). The computation is
+  // deterministic, but to keep one trusted writer it only fires on the
+  // COMMISSIONER's device (like the original draft); the redraftDone guard makes
+  // it idempotent. Skipped in demo mode so simulated results never write
+  // replacements into the shared pool.
+  useEffect(() => {
+    if (demo || !isCommish) return;
+    if (!state.draftDone || state.redraftDone) return;
+    if (!stageComplete('Group', scores, ko)) return;
+    const { byTeam, changed } = computeRedraft(state, scores, ko, state.scoring || DEFAULT_SCORING);
+    void commitState(s => {
+      if (s.redraftDone) return s;
+      if (changed) for (const t of s.teams) {
+        const r = byTeam[t.id];
+        if (r) t.replacements = { ...(t.replacements || {}), ...r };
+      }
+      s.redraftDone = true;
+      return s;
+    });
+  }, [demo, isCommish, state, scores, ko, commitState]);
 
   // The active league's real name: prefer the live shared name, fall back to the
   // locally-known registry name (e.g. right after switching, before shared state

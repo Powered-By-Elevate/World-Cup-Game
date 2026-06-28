@@ -1,4 +1,4 @@
-import { GROUP_MATCHES_OF, MATCHES, MATCH_DATE, MILESTONE_ORDER } from '../data/fixtures';
+import { GROUP_MATCHES_OF, GROUP_LETTERS, MATCHES, MATCH_DATE, MILESTONE_ORDER } from '../data/fixtures';
 import type { KOMatch } from '../data/fixtures';
 import { NATION, POT_KEYS } from '../data/nations';
 import type { Team, Scoring, ScoreEntry } from '../data/types';
@@ -79,7 +79,10 @@ export function nationStats(
   nid: string,
   scores: Record<string, ScoreEntry>,
   ko: KOMatch[],
-  scoring: Scoring
+  scoring: Scoring,
+  /** Restrict to one phase. Used by the knockout re-draft: a replaced slot scores
+   *  its eliminated nation's GROUP points plus its replacement's KNOCKOUT points. */
+  phase?: 'group' | 'ko'
 ): NationStats {
   const st: NationStats = {
     pts: 0, gf: 0, ga: 0, w: 0, d: 0, l: 0, played: 0,
@@ -87,7 +90,7 @@ export function nationStats(
   };
   const addStage = (stage: string, pts: number) => { if (pts) st.byStage[stage] = (st.byStage[stage] || 0) + pts; };
 
-  (GROUP_MATCHES_OF[nid] || []).forEach(m => {
+  if (phase !== 'ko') (GROUP_MATCHES_OF[nid] || []).forEach(m => {
     const s = scores[m.i];
     const counted = s && (s.st === "ft" || s.st === "live") && s.h != null && s.a != null;
     const isHome = m.h === nid;
@@ -105,7 +108,7 @@ export function nationStats(
     st.games.push({ m, isHome, gf, ga, r, live: s.st === "live" });
   });
 
-  ko.forEach(k => {
+  if (phase !== 'group') ko.forEach(k => {
     if (k.h !== nid && k.a !== nid) return;
     const mi = MILESTONE_ORDER.indexOf(k.round === "3rd" ? "SF" : k.round);
     if (mi > st.deepest) st.deepest = mi;
@@ -143,6 +146,21 @@ export function nationStats(
   return st;
 }
 
+/** Fuse an eliminated nation's GROUP-only stats with its replacement's KNOCKOUT-only
+ *  stats into one slot — the scoring shape of a re-drafted pick. */
+function mergeNationStats(g: NationStats, k: NationStats): NationStats {
+  const byStage: Record<string, number> = { ...g.byStage };
+  for (const [s, v] of Object.entries(k.byStage)) byStage[s] = (byStage[s] || 0) + v;
+  return {
+    pts: g.pts + k.pts, gf: g.gf + k.gf, ga: g.ga + k.ga,
+    w: g.w + k.w, d: g.d + k.d, l: g.l + k.l, played: g.played + k.played,
+    bonus: k.bonus,                       // milestone bonuses are knockout-only
+    games: [...g.games, ...k.games],
+    champ: k.champ, deepest: k.deepest,
+    total: g.pts + k.pts + k.bonus, byStage,
+  };
+}
+
 export function teamStats(
   team: Team,
   scores: Record<string, ScoreEntry>,
@@ -155,7 +173,12 @@ export function teamStats(
   POT_KEYS.forEach(pk => {
     const nid = team.picks?.[pk];
     if (!nid) return;
-    const ns = nationStats(nid, scores, ko, scoring);
+    const repl = team.replacements?.[pk];
+    // A re-drafted slot keeps the eliminated nation's group points and earns the
+    // replacement's knockout points; an untouched slot scores normally.
+    const ns = repl && repl !== nid
+      ? mergeNationStats(nationStats(nid, scores, ko, scoring, 'group'), nationStats(repl, scores, ko, scoring, 'ko'))
+      : nationStats(nid, scores, ko, scoring);
     per[pk] = ns;
     pts += ns.pts; gf += ns.gf; ga += ns.ga; bonus += ns.bonus;
     played += ns.played; w += ns.w; d += ns.d; l += ns.l;
@@ -244,6 +267,53 @@ export function groupTable(letter: string, scores: Record<string, ScoreEntry>) {
   });
   return Object.values(t).map(x => ({ ...x, gd: x.gf - x.ga }))
     .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || (NATION[a.id]?.name || "").localeCompare(NATION[b.id]?.name || ""));
+}
+
+export interface ThirdEntry { g: string; id: string; pts: number; gd: number; gf: number }
+export interface QualifierInfo {
+  winner: Record<string, string>;            // group letter → winner nation id
+  runner: Record<string, string>;            // group letter → runner-up nation id
+  best8: ThirdEntry[];                        // the 8 best third-placed teams (strongest first)
+  /** The 32 nations through to the Round of 32 — only populated once every group
+   *  is final (the third-place ranking spans all 12 groups). */
+  set: Set<string>;
+  /** Group-stage record for every team with a complete-enough table — used to
+   *  rank replacement candidates in the knockout re-draft. */
+  strength: Record<string, { pts: number; gd: number; gf: number }>;
+  allGroupsDone: boolean;
+}
+
+/** Derive the knockout qualifiers (group winners, runners-up, eight best thirds)
+ *  straight from the live group scores — the single source of truth shared by the
+ *  bracket-slot resolver and the eliminated-nation re-draft. */
+export function qualifierInfo(scores: Record<string, ScoreEntry>): QualifierInfo {
+  const groupDone = (g: string) =>
+    MATCHES.filter(m => m.g === g).every(m => { const s = scores[m.i]; return !!s && s.st === 'ft' && s.h != null; });
+  const allGroupsDone = GROUP_LETTERS.every(groupDone);
+
+  const winner: Record<string, string> = {};
+  const runner: Record<string, string> = {};
+  const strength: Record<string, { pts: number; gd: number; gf: number }> = {};
+  const thirds: ThirdEntry[] = [];
+  for (const g of GROUP_LETTERS) {
+    if (!groupDone(g)) continue;
+    const t = groupTable(g, scores);
+    t.forEach(x => { strength[x.id] = { pts: x.pts, gd: x.gd, gf: x.gf }; });
+    if (t[0]) winner[g] = t[0].id;
+    if (t[1]) runner[g] = t[1].id;
+    if (t[2]) thirds.push({ g, id: t[2].id, pts: t[2].pts, gd: t[2].gd, gf: t[2].gf });
+  }
+  // FIFA third-place ranking: points, then goal difference, then goals for.
+  thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.g.localeCompare(b.g));
+  const best8 = allGroupsDone ? thirds.slice(0, 8) : [];
+
+  const set = new Set<string>();
+  if (allGroupsDone) {
+    Object.values(winner).forEach(id => set.add(id));
+    Object.values(runner).forEach(id => set.add(id));
+    best8.forEach(x => set.add(x.id));
+  }
+  return { winner, runner, best8, set, strength, allGroupsDone };
 }
 
 export interface MoversResult {

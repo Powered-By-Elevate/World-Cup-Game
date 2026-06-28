@@ -49,10 +49,11 @@ function nationEliminated(nid: string, ko: KOMatch[], groupDone: boolean): boole
   return false;
 }
 
-/** How many of a team's nations are still alive in the tournament. */
+/** How many of a team's nations are still alive in the tournament. Counts the
+ *  EFFECTIVE knockout roster — a re-drafted slot uses its replacement nation. */
 export function aliveCount(team: Team, ko: KOMatch[], groupDone: boolean): number {
   return POT_KEYS.reduce((n, pk) => {
-    const nid = team.picks?.[pk];
+    const nid = team.replacements?.[pk] || team.picks?.[pk];
     return n + (nid && !nationEliminated(nid, ko, groupDone) ? 1 : 0);
   }, 0);
 }

@@ -18,6 +18,11 @@ export interface Team {
   name: string;
   members: Member[];
   picks: Record<string, string> | null;
+  /** One-time knockout re-draft: pot key → replacement nation id, set only for a
+   *  slot whose drafted nation was eliminated in the group stage. The original
+   *  pick keeps its group-stage points; the replacement earns knockout points.
+   *  Absent/empty when nothing was replaced. */
+  replacements?: Record<string, string>;
 }
 
 export interface Scoring {
@@ -46,6 +51,9 @@ export interface AppState {
   /** Times each member has CHANGED a call: memberId → matchId → count. A pick
    *  can be adjusted up to 2 times before kickoff (initial + 2 changes). */
   callChanges?: Record<string, Record<string, number>>;
+  /** Set true once the one-time knockout re-draft has run (eliminated group-stage
+   *  nations replaced for the bracket). Guards against it ever firing twice. */
+  redraftDone?: boolean;
   v: number;
 }
 
@@ -120,6 +128,7 @@ export function withDefaults(s: Partial<AppState> | null): AppState {
     draftAt: typeof s.draftAt === 'number' ? s.draftAt : null,
     awards: Array.isArray(s.awards) ? s.awards : [],
     calls: s.calls && typeof s.calls === 'object' && !Array.isArray(s.calls) ? s.calls : {},
+    redraftDone: !!s.redraftDone,
     v: 1,
   };
 }

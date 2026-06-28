@@ -55,15 +55,18 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
   }
 
   const grad = teamGradient(myTeam);
-  const myIds = POT_KEYS.map(pk => myTeam.picks?.[pk]).filter(Boolean) as string[];
+  // Group fixtures follow the ORIGINAL picks; knockout fixtures follow the
+  // EFFECTIVE roster (a re-drafted slot uses its replacement nation).
+  const origIds = POT_KEYS.map(pk => myTeam.picks?.[pk]).filter(Boolean) as string[];
+  const koIds = POT_KEYS.map(pk => myTeam.replacements?.[pk] || myTeam.picks?.[pk]).filter(Boolean) as string[];
   const rank = standings.findIndex(s => s.team.id === myTeam.id) + 1;
   const st = standings.find(s => s.team.id === myTeam.id);
 
   const rows: Row[] = [];
-  myIds.forEach(nid => (GROUP_MATCHES_OF[nid] || []).forEach(m => rows.push({ ...m, nid })));
+  origIds.forEach(nid => (GROUP_MATCHES_OF[nid] || []).forEach(m => rows.push({ ...m, nid })));
   (ko || []).forEach(k => {
-    if (myIds.includes(k.h) || myIds.includes(k.a))
-      rows.push({ ko: true, ...k, nid: myIds.includes(k.h) ? k.h : k.a });
+    if (koIds.includes(k.h) || koIds.includes(k.a))
+      rows.push({ ko: true, ...k, nid: koIds.includes(k.h) ? k.h : k.a });
   });
   rows.sort((a, b) => (a.ko ? 'Z' + a.id : a.d).localeCompare(b.ko ? 'Z' + b.id : b.d));
 
@@ -126,13 +129,23 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
         {/* picks */}
         <div style={{ padding: '14px 14px 16px' }}>
           <div className="row" style={{ gap: 10, justifyContent: 'space-between' }}>
-            {POT_KEYS.map(pot => (
-              <div key={pot} style={{ flex: 1, textAlign: 'center' }}>
-                <Flag id={myTeam.picks![pot]} size={56} ring="pot" />
-                <div style={{ fontWeight: 800, fontSize: 13, marginTop: 8 }}>{NATION[myTeam.picks![pot]].name}</div>
-                <div style={{ marginTop: 4 }}><PotTag pot={pot} /></div>
-              </div>
-            ))}
+            {POT_KEYS.map(pot => {
+              const orig = myTeam.picks![pot];
+              const repl = myTeam.replacements?.[pot];
+              const shown = repl || orig;
+              return (
+                <div key={pot} style={{ flex: 1, textAlign: 'center' }}>
+                  <Flag id={shown} size={56} ring="pot" />
+                  <div style={{ fontWeight: 800, fontSize: 13, marginTop: 8 }}>{NATION[shown].name}</div>
+                  <div style={{ marginTop: 4 }}><PotTag pot={pot} /></div>
+                  {repl && repl !== orig && (
+                    <div className="eyebrow" style={{ marginTop: 4, color: '#9C988C', fontSize: 9, lineHeight: 1.3 }}>
+                      replaced <span style={{ textDecoration: 'line-through' }}>{NATION[orig]?.name}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

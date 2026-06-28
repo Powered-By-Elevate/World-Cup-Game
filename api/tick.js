@@ -255,7 +255,7 @@ var STAGE_MATCH_COUNT = {
 function koStage(round) {
   return round === "3rd" ? "Final" : round;
 }
-function nationStats(nid, scores, ko, scoring) {
+function nationStats(nid, scores, ko, scoring, phase) {
   const st = {
     pts: 0,
     gf: 0,
@@ -274,7 +274,7 @@ function nationStats(nid, scores, ko, scoring) {
   const addStage = (stage, pts) => {
     if (pts) st.byStage[stage] = (st.byStage[stage] || 0) + pts;
   };
-  (GROUP_MATCHES_OF[nid] || []).forEach((m) => {
+  if (phase !== "ko") (GROUP_MATCHES_OF[nid] || []).forEach((m) => {
     const s = scores[m.i];
     const counted = s && (s.st === "ft" || s.st === "live") && s.h != null && s.a != null;
     const isHome = m.h === nid;
@@ -304,7 +304,7 @@ function nationStats(nid, scores, ko, scoring) {
     }
     st.games.push({ m, isHome, gf, ga, r, live: s.st === "live" });
   });
-  ko.forEach((k) => {
+  if (phase !== "group") ko.forEach((k) => {
     if (k.h !== nid && k.a !== nid) return;
     const mi = MILESTONE_ORDER.indexOf(k.round === "3rd" ? "SF" : k.round);
     if (mi > st.deepest) st.deepest = mi;
@@ -362,6 +362,26 @@ function nationStats(nid, scores, ko, scoring) {
   st.total = st.pts + st.bonus;
   return st;
 }
+function mergeNationStats(g, k) {
+  const byStage = { ...g.byStage };
+  for (const [s, v] of Object.entries(k.byStage)) byStage[s] = (byStage[s] || 0) + v;
+  return {
+    pts: g.pts + k.pts,
+    gf: g.gf + k.gf,
+    ga: g.ga + k.ga,
+    w: g.w + k.w,
+    d: g.d + k.d,
+    l: g.l + k.l,
+    played: g.played + k.played,
+    bonus: k.bonus,
+    // milestone bonuses are knockout-only
+    games: [...g.games, ...k.games],
+    champ: k.champ,
+    deepest: k.deepest,
+    total: g.pts + k.pts + k.bonus,
+    byStage
+  };
+}
 function teamStats(team, scores, ko, scoring) {
   const per = {};
   let pts = 0, gf = 0, ga = 0, bonus = 0, played = 0, w = 0, d = 0, l = 0;
@@ -369,7 +389,8 @@ function teamStats(team, scores, ko, scoring) {
   POT_KEYS.forEach((pk) => {
     const nid = team.picks?.[pk];
     if (!nid) return;
-    const ns = nationStats(nid, scores, ko, scoring);
+    const repl = team.replacements?.[pk];
+    const ns = repl && repl !== nid ? mergeNationStats(nationStats(nid, scores, ko, scoring, "group"), nationStats(repl, scores, ko, scoring, "ko")) : nationStats(nid, scores, ko, scoring);
     per[pk] = ns;
     pts += ns.pts;
     gf += ns.gf;
@@ -416,6 +437,36 @@ function groupTable(letter, scores) {
   });
   return Object.values(t).map((x) => ({ ...x, gd: x.gf - x.ga })).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || (NATION[a.id]?.name || "").localeCompare(NATION[b.id]?.name || ""));
 }
+function qualifierInfo(scores) {
+  const groupDone = (g) => MATCHES.filter((m) => m.g === g).every((m) => {
+    const s = scores[m.i];
+    return !!s && s.st === "ft" && s.h != null;
+  });
+  const allGroupsDone = GROUP_LETTERS.every(groupDone);
+  const winner = {};
+  const runner = {};
+  const strength = {};
+  const thirds = [];
+  for (const g of GROUP_LETTERS) {
+    if (!groupDone(g)) continue;
+    const t = groupTable(g, scores);
+    t.forEach((x) => {
+      strength[x.id] = { pts: x.pts, gd: x.gd, gf: x.gf };
+    });
+    if (t[0]) winner[g] = t[0].id;
+    if (t[1]) runner[g] = t[1].id;
+    if (t[2]) thirds.push({ g, id: t[2].id, pts: t[2].pts, gd: t[2].gd, gf: t[2].gf });
+  }
+  thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.g.localeCompare(b.g));
+  const best8 = allGroupsDone ? thirds.slice(0, 8) : [];
+  const set = /* @__PURE__ */ new Set();
+  if (allGroupsDone) {
+    Object.values(winner).forEach((id) => set.add(id));
+    Object.values(runner).forEach((id) => set.add(id));
+    best8.forEach((x) => set.add(x.id));
+  }
+  return { winner, runner, best8, set, strength, allGroupsDone };
+}
 
 // src/data/liveResults.ts
 var NAME_TO_ID = Object.fromEntries(NATIONS.map((n) => [n.name, n.id]));
@@ -458,23 +509,7 @@ function statusOf(s) {
   return null;
 }
 function resolveBracketTeams(ko, scores) {
-  const groupDone = (g) => MATCHES.filter((m) => m.g === g).every((m) => {
-    const s = scores[m.i];
-    return !!s && s.st === "ft" && s.h != null;
-  });
-  const allGroupsDone = GROUP_LETTERS.every(groupDone);
-  const winner = {};
-  const runner = {};
-  const thirds = [];
-  for (const g of GROUP_LETTERS) {
-    if (!groupDone(g)) continue;
-    const t = groupTable(g, scores);
-    if (t[0]) winner[g] = t[0].id;
-    if (t[1]) runner[g] = t[1].id;
-    if (t[2]) thirds.push({ g, id: t[2].id, pts: t[2].pts, gd: t[2].gd, gf: t[2].gf });
-  }
-  thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.g.localeCompare(b.g));
-  const best8 = allGroupsDone ? thirds.slice(0, 8) : [];
+  const { winner, runner, best8 } = qualifierInfo(scores);
   const best8Group = new Set(best8.map((x) => x.g));
   const thirdRefs = /* @__PURE__ */ new Set();
   for (const k of ko) {
