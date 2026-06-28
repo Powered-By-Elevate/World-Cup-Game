@@ -97,13 +97,22 @@ export const GROUP_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", 
 export interface KOMatch {
   id: string;
   round: string;
+  /** Resolved nation id once the feed fills the slot; "" while the team is still
+   *  undecided (group stage not finished / bracket not drawn yet). */
   h: string;
   a: string;
+  /** Placeholder slot label the feed carries before a team is decided
+   *  (e.g. "Winner Group A", "Runner-up B", "3rd C/D/F"). Shown when h/a is "". */
+  hRef?: string;
+  aRef?: string;
   h_s: number | null;
   a_s: number | null;
   st: string;
   pk: string | null;
+  /** ET calendar day ("YYYY-MM-DD") — used for ordering/movers. */
   d?: string;
+  /** Full kickoff ISO timestamp — used to show the knockout schedule time. */
+  dt?: string;
 }
 
 export const KO_ROUNDS = [

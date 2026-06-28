@@ -15,6 +15,17 @@ interface Props {
   dates?: Record<string, string>;
 }
 
+/** One side of a knockout row: a resolved nation, or a muted placeholder slot
+ *  (e.g. "Winner Group A") while the draw hasn't filled it yet. */
+function KOSide({ id, label, myIds, pen, away }: { id: string; label?: string; myIds: string[]; pen?: boolean; away?: boolean }) {
+  const penTag = pen ? <span style={{ fontSize: 11 }}>(P)</span> : null;
+  const resolved = !!id && !!NATION[id];
+  const body = resolved
+    ? <><Flag id={id} size={30} ring={myIds.includes(id) ? 'pot' : 'ink'} /><span className="nm">{NATION[id].name}</span></>
+    : <><span className="ko-slot" aria-hidden style={{ width: 30, height: 30, borderRadius: '50%', border: '1.5px dashed var(--hair, #C9C2B0)', display: 'inline-block', flex: '0 0 auto' }} /><span className="nm muted" style={{ fontStyle: 'italic' }}>{label || 'TBD'}</span></>;
+  return <div className={`side${away ? ' away' : ''}`}>{away ? <>{penTag}{body}</> : <>{body}{penTag}</>}</div>;
+}
+
 export function MatchesView({ scores, ko, myTeam, dates = {} }: Props) {
   const [mode, setMode] = useState<'group' | 'ko'>('group');
   const [filter, setFilter] = useState<'all' | 'mine' | 'live'>('all');
@@ -77,7 +88,8 @@ export function MatchesView({ scores, ko, myTeam, dates = {} }: Props) {
       </> : <>
         {ko.length === 0 && <div className="card pad" style={{ textAlign: 'center' }}><div className="muted" style={{ fontSize: 13 }}>The bracket forms once the group stage wraps.</div></div>}
         {KO_SORT_ORDER.map(rid => {
-          const list = ko.filter(k => k.round === rid);
+          const list = ko.filter(k => k.round === rid)
+            .sort((a, b) => (a.dt || a.d || '').localeCompare(b.dt || b.d || ''));
           if (!list.length) return null;
           return (
             <div key={rid}>
@@ -85,14 +97,19 @@ export function MatchesView({ scores, ko, myTeam, dates = {} }: Props) {
               <div className="card flat" style={{ overflow: 'hidden' }}>
                 {list.map(k => {
                   const done = (k.st === 'ft' || k.st === 'live') && k.h_s != null;
-                  const mine = myIds.includes(k.h) || myIds.includes(k.a);
+                  const mine = (!!k.h && myIds.includes(k.h)) || (!!k.a && myIds.includes(k.a));
+                  const when = k.dt || k.d;
                   return (
                     <div className={`mrow ${mine ? 'mine' : ''}`} key={k.id}>
-                      <div className="side"><Flag id={k.h} size={30} ring={myIds.includes(k.h) ? 'pot' : 'ink'} /><span className="nm">{NATION[k.h].name}</span>{k.pk === k.h && <span style={{ fontSize: 11 }}>(P)</span>}</div>
-                      {done
-                        ? <span className="scorebug">{k.h_s}<span style={{ opacity: .4 }}>:</span>{k.a_s}</span>
-                        : <span className="scorebug sched">vs</span>}
-                      <div className="side away">{k.pk === k.a && <span style={{ fontSize: 11 }}>(P)</span>}<Flag id={k.a} size={30} ring={myIds.includes(k.a) ? 'pot' : 'ink'} /><span className="nm">{NATION[k.a].name}</span></div>
+                      <KOSide id={k.h} label={k.hRef} myIds={myIds} pen={k.pk === k.h} />
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                        {done
+                          ? <span className="scorebug">{k.h_s}<span style={{ opacity: .4 }}>:</span>{k.a_s}</span>
+                          : <span className="scorebug sched">{k.dt ? fmtTime(k.dt).replace(' ET', '') : 'vs'}</span>}
+                        {!done && when && <span className="eyebrow" style={{ fontSize: 9, color: '#9C988C' }}>{fmtDayLabel(dayKeyOf(when))}</span>}
+                        {k.st === 'live' && <span className="badge live" style={{ height: 16, fontSize: 8 }}><span className="dot" />LIVE</span>}
+                      </div>
+                      <KOSide id={k.a} label={k.aRef} myIds={myIds} pen={k.pk === k.a} away />
                     </div>
                   );
                 })}

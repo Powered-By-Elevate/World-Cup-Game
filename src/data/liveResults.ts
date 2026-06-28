@@ -57,7 +57,8 @@ export interface LiveData { scores: Record<string, ScoreEntry>; ko: KOMatch[]; l
 
 interface FeedMatch {
   id: number | string; stage: string; status: string;
-  home: { tla: string | null; name?: string | null }; away: { tla: string | null; name?: string | null };
+  home: { tla: string | null; name?: string | null; short?: string | null };
+  away: { tla: string | null; name?: string | null; short?: string | null };
   hs: number | null; as: number | null;
   winner: string | null; pens: { home: number; away: number } | null;
   date: string | null;
@@ -98,20 +99,31 @@ export function mapLive(matches: FeedMatch[]): LiveData {
     }
 
     const round = STAGE_ROUND[m.stage];
-    if (!round || !h || !a) continue; // skip rounds whose teams aren't set yet
+    if (!round) continue;
+    // A knockout slot is worth showing as soon as the feed schedules it — even
+    // before the draw resolves its teams — so the bracket + schedule appear the
+    // moment the group stage wraps. Skip only truly empty slots (no teams, no date).
+    const bothKnown = !!(h && a);
+    if (!bothKnown && !m.date) continue;
     const st = statusOf(m.status);
-    if (st === 'live') liveNow.push({ mi: null, round, h, a, date: m.date || '' });
-    const done = !!st && m.hs != null && m.as != null;
+    if (st === 'live' && bothKnown) liveNow.push({ mi: null, round, h: h!, a: a!, date: m.date || '' });
+    const done = bothKnown && !!st && m.hs != null && m.as != null;
     let pk: string | null = null;
-    if (m.pens && m.pens.home != null && m.pens.away != null) {
-      pk = m.pens.home > m.pens.away ? h : a;
-    } else if (done && m.hs === m.as && m.winner) {
-      pk = m.winner === 'HOME_TEAM' ? h : m.winner === 'AWAY_TEAM' ? a : null;
+    if (bothKnown) {
+      if (m.pens && m.pens.home != null && m.pens.away != null) {
+        pk = m.pens.home > m.pens.away ? h : a;
+      } else if (done && m.hs === m.as && m.winner) {
+        pk = m.winner === 'HOME_TEAM' ? h : m.winner === 'AWAY_TEAM' ? a : null;
+      }
     }
     ko.push({
-      id: 'api_' + m.id, round, h, a,
+      id: 'api_' + m.id, round,
+      h: h || '', a: a || '',
+      hRef: h ? undefined : (m.home?.short || undefined),
+      aRef: a ? undefined : (m.away?.short || undefined),
       h_s: done ? m.hs : null, a_s: done ? m.as : null,
-      st: st || 'sched', pk, d: (m.date || '').slice(0, 10),
+      st: bothKnown ? (st || 'sched') : 'sched', pk,
+      d: (m.date || '').slice(0, 10), dt: m.date || undefined,
     });
   }
 

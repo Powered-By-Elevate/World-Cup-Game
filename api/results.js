@@ -57,15 +57,29 @@ const L1_TTL_MS = 20_000;
 
 let l1 = { t: 0, payload: null };
 
-// zafronix stage → the stage constants the client already understands
-const STAGE = {
-  r32: "LAST_32", r16: "LAST_16", qf: "QUARTER_FINALS",
-  sf: "SEMI_FINALS", thirdPlace: "THIRD_PLACE", final: "FINAL",
-};
+// zafronix stage → the stage constants the client already understands.
+// Resilient to spelling/format drift: the feed has used `r32`, but variants like
+// `round_of_32`, `last16`, `quarter-finals`, `semifinal`, `3rd_place`, `final`
+// all appear across football feeds. We normalize loosely so a single label tweak
+// upstream can't silently drop the entire knockout bracket (every unmatched
+// knockout match would be skipped client-side, looking like "no schedule").
+function mapStage(raw) {
+  const s = String(raw || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!s) return raw;
+  if (s.startsWith("group")) return "GROUP_STAGE";
+  if (s.includes("32")) return "LAST_32";
+  if (s.includes("16")) return "LAST_16";
+  if (s.includes("quarter") || s === "qf") return "QUARTER_FINALS";
+  if (s.includes("semi") || s === "sf") return "SEMI_FINALS";
+  // third-place must be checked before "final" — it often reads "third_place_final"
+  if (s.includes("third") || s.includes("3rd") || s.includes("place")) return "THIRD_PLACE";
+  if (s.includes("final") || s === "f") return "FINAL";
+  return raw;
+}
 
 function normalize(json) {
   const matches = (json.data || []).map((m) => {
-    const stage = m.stage && m.stage.startsWith("group") ? "GROUP_STAGE" : (STAGE[m.stage] || m.stage);
+    const stage = mapStage(m.stage);
     const done = m.homeScore != null && m.awayScore != null;
     const status = done ? "FINISHED" : m.status === "live" ? "IN_PLAY" : "TIMED";
     // penalties comes as "4-2" or { home, away } when populated

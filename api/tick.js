@@ -290,26 +290,33 @@ function mapLive(matches) {
       continue;
     }
     const round = STAGE_ROUND[m.stage];
-    if (!round || !h || !a) continue;
+    if (!round) continue;
+    const bothKnown = !!(h && a);
+    if (!bothKnown && !m.date) continue;
     const st = statusOf(m.status);
-    if (st === "live") liveNow.push({ mi: null, round, h, a, date: m.date || "" });
-    const done = !!st && m.hs != null && m.as != null;
+    if (st === "live" && bothKnown) liveNow.push({ mi: null, round, h, a, date: m.date || "" });
+    const done = bothKnown && !!st && m.hs != null && m.as != null;
     let pk = null;
-    if (m.pens && m.pens.home != null && m.pens.away != null) {
-      pk = m.pens.home > m.pens.away ? h : a;
-    } else if (done && m.hs === m.as && m.winner) {
-      pk = m.winner === "HOME_TEAM" ? h : m.winner === "AWAY_TEAM" ? a : null;
+    if (bothKnown) {
+      if (m.pens && m.pens.home != null && m.pens.away != null) {
+        pk = m.pens.home > m.pens.away ? h : a;
+      } else if (done && m.hs === m.as && m.winner) {
+        pk = m.winner === "HOME_TEAM" ? h : m.winner === "AWAY_TEAM" ? a : null;
+      }
     }
     ko.push({
       id: "api_" + m.id,
       round,
-      h,
-      a,
+      h: h || "",
+      a: a || "",
+      hRef: h ? void 0 : m.home?.short || void 0,
+      aRef: a ? void 0 : m.away?.short || void 0,
       h_s: done ? m.hs : null,
       a_s: done ? m.as : null,
-      st: st || "sched",
+      st: bothKnown ? st || "sched" : "sched",
       pk,
-      d: (m.date || "").slice(0, 10)
+      d: (m.date || "").slice(0, 10),
+      dt: m.date || void 0
     });
   }
   return { scores, ko, liveNow, dates };
