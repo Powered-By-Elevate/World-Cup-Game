@@ -152,7 +152,7 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
 
       {/* Call of the Day — the one-tap daily habit, front and center */}
       <div style={{ marginTop: 14 }}>
-        <CallCard calls={calls} callChanges={callChanges} scores={scores} meId={meId} names={names} onCall={onCall} onSeeBoard={() => setTab('arcade')} />
+        <CallCard calls={calls} callChanges={callChanges} scores={scores} ko={ko} meId={meId} names={names} onCall={onCall} onSeeBoard={() => setTab('arcade')} />
       </div>
 
       <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={onTeamInvite}>

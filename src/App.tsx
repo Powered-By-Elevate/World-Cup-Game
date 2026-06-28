@@ -150,6 +150,10 @@ export default function App() {
   leagueCodeRef.current = leagueCode;
   const userRef = useRef(user);
   userRef.current = user;
+  // Latest resolved knockout bracket, for handlers (e.g. makeCall) that run
+  // inside commitState and need a KO match's kickoff, which isn't in AppState.
+  const koRef = useRef(ko);
+  koRef.current = ko;
 
   const toast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -631,7 +635,8 @@ export default function App() {
     makeCall: async (matchId: string, nationId: string) => {
       if (!me) return;
       await commitState(s => {
-        const d = MATCH_DATE[matchId];
+        // Group kickoff from the fixture table; knockout kickoff from the live bracket.
+        const d = MATCH_DATE[matchId] || koRef.current.find(k => k.id === matchId)?.dt;
         if (!d || parseDate(d).getTime() <= Date.now()) return s;   // locked at kickoff
         const all = (s.calls = s.calls || {});
         const mine = (all[me.id] = all[me.id] || {});
@@ -1153,7 +1158,7 @@ export default function App() {
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
         {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} dates={demo ? {} : (live?.dates ?? {})} redraftIds={redraftIds} />}
-        {tab === "arcade" && <Arcade calls={state.calls || {}} callChanges={state.callChanges || {}} scores={scores} meId={me!.id} names={callerNames} onCall={api.makeCall} members={chatMembers} onLaunch={launchGame} />}
+        {tab === "arcade" && <Arcade calls={state.calls || {}} callChanges={state.callChanges || {}} scores={scores} ko={ko} meId={me!.id} names={callerNames} onCall={api.makeCall} members={chatMembers} onLaunch={launchGame} />}
         {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
         {tab === "cabinet" && <TrophyRoom teams={state.teams || []} awardsByTeam={awardsByTeam} myTeam={myTeam} isCommish={isCommish} onSetAwardHolder={api.setAwardHolder} onShare={toast} />}
       </div>

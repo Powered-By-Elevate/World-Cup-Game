@@ -121,12 +121,52 @@ function resolveBracketTeams(ko: KOMatch[], scores: Record<string, ScoreEntry>):
     return '';   // e.g. "W49" winner-of-match refs (R16+) — resolved later as rounds play
   };
 
-  return ko.map(k => {
+  let out = ko.map(k => {
     if (k.h && k.a) return k;                 // feed already named both teams
     const h = k.h || resolveRef(k.hRef);
     const a = k.a || resolveRef(k.aRef);
     return (h !== k.h || a !== k.a) ? { ...k, h, a } : k;
   });
+
+  // R16 → Final fill in as winner/loser-of-match refs ("W73", "L101"). Resolve
+  // them from completed earlier-round results, cascading round by round so the
+  // bracket — and the advancement bonuses that key off it — continue through the
+  // final. Best-effort and non-destructive: a ref we can't match just stays a
+  // placeholder until the feed names it, so it can never break the schedule.
+  const winnerOf = (k: KOMatch): string | null => {
+    if (!k.h || !k.a || k.h_s == null || k.a_s == null) return null;
+    if (k.h_s > k.a_s) return k.h;
+    if (k.a_s > k.h_s) return k.a;
+    return k.pk || null;                       // level after extra time → penalty winner
+  };
+  const digits = (ref?: string) => { const m = /(\d+)/.exec(ref || ''); return m ? m[1] : ''; };
+  const progressRef = (ref: string | undefined, winBy: Record<string, string>, loseBy: Record<string, string>): string => {
+    const d = digits(ref);
+    if (!d) return '';
+    if (/^w|win/i.test(ref!)) return winBy[d] || '';
+    if (/^l|los/i.test(ref!)) return loseBy[d] || '';
+    return '';
+  };
+  for (let pass = 0; pass < 6; pass++) {       // ≤5 rounds deep (R32→Final)
+    const winBy: Record<string, string> = {};
+    const loseBy: Record<string, string> = {};
+    for (const k of out) {
+      const w = winnerOf(k);
+      if (!w) continue;
+      const d = digits(String(k.id));          // 'api_73' → '73'
+      if (d) { winBy[d] = w; loseBy[d] = w === k.h ? k.a : k.h; }
+    }
+    let changed = false;
+    out = out.map(k => {
+      if (k.h && k.a) return k;
+      const h = k.h || progressRef(k.hRef, winBy, loseBy);
+      const a = k.a || progressRef(k.aRef, winBy, loseBy);
+      if (h !== k.h || a !== k.a) { changed = true; return { ...k, h, a }; }
+      return k;
+    });
+    if (!changed) break;
+  }
+  return out;
 }
 
 /** Pure: map the normalized /api/results feed onto our fixtures + bracket.

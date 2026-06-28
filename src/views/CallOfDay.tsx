@@ -6,14 +6,16 @@ import { Flag } from '../components/Flag';
 import { Icon } from '../components/Icon';
 import { Avatar, Countdown } from '../components/shared';
 import { todaySlate, nextSlate, isCallOpen, callVerdict, callerStats } from '../utils/calls';
-import type { CallsMap, NameInfo } from '../utils/calls';
-import type { Match } from '../data/fixtures';
+import type { CallsMap, NameInfo, Callable } from '../utils/calls';
+import type { KOMatch } from '../data/fixtures';
 
 export interface Common {
   calls: CallsMap;
   /** memberId → matchId → number of changes already used (max 2). */
   callChanges?: Record<string, Record<string, number>>;
   scores: Record<string, ScoreEntry>;
+  /** Resolved knockout matches — extends the Call game past the group stage. */
+  ko: KOMatch[];
   meId: string;
   names: Record<string, NameInfo>;
   onCall: (matchId: string, nationId: string) => void;
@@ -30,13 +32,17 @@ function useNow(ms = 20000) {
 }
 
 /* ---------- one compact row per fixture in the day's slate ---------- */
-function CallRow({ m, now, pick, changesUsed = 0, scores, onCall }: {
-  m: Match; now: number; pick?: string; changesUsed?: number;
-  scores: Record<string, ScoreEntry>; onCall: (matchId: string, nationId: string) => void;
+function CallRow({ m, now, pick, changesUsed = 0, scores, ko, onCall }: {
+  m: Callable; now: number; pick?: string; changesUsed?: number;
+  scores: Record<string, ScoreEntry>; ko: KOMatch[]; onCall: (matchId: string, nationId: string) => void;
 }) {
   const open = isCallOpen(m, now);
-  const sc = scores[m.i];
-  const verdict = pick ? callVerdict(m.i, pick, scores) : null;
+  // Group score from `scores`; knockout score from the resolved bracket entry.
+  const koMatch = m.ko ? ko.find(k => k.id === m.i) : undefined;
+  const sc = m.ko
+    ? (koMatch && koMatch.h_s != null && koMatch.a_s != null ? { h: koMatch.h_s, a: koMatch.a_s, st: koMatch.st } : undefined)
+    : scores[m.i];
+  const verdict = pick ? callVerdict(m.i, pick, scores, ko) : null;
   const left = MAX_CALL_CHANGES - changesUsed;
   // Tappable while open and you still have an initial pick or a change to spend.
   const canPick = open && (!pick || left > 0);
@@ -77,11 +83,11 @@ function CallRow({ m, now, pick, changesUsed = 0, scores, onCall }: {
 }
 
 /* ---------- the day's calls (used on Home + atop the Callers tab) ---------- */
-export function CallCard({ calls, callChanges, scores, meId, names, onCall, onSeeBoard }: Common & { onSeeBoard?: () => void }) {
+export function CallCard({ calls, callChanges, scores, ko, meId, names, onCall, onSeeBoard }: Common & { onSeeBoard?: () => void }) {
   const now = useNow();
-  const slate = todaySlate(now);
-  const upcoming = nextSlate(now);
-  const stats = useMemo(() => callerStats(calls, scores, names), [calls, scores, names]);
+  const slate = todaySlate(now, ko);
+  const upcoming = nextSlate(now, ko);
+  const stats = useMemo(() => callerStats(calls, scores, names, ko), [calls, scores, names, ko]);
   const mine = stats.find(s => s.memberId === meId);
   const myRank = stats.findIndex(s => s.memberId === meId) + 1;
   const leader = stats[0];
@@ -103,7 +109,7 @@ export function CallCard({ calls, callChanges, scores, meId, names, onCall, onSe
         <>
           <div style={{ display: 'grid', gap: 8 }}>
             {slate.map(m => (
-              <CallRow key={m.i} m={m} now={now} pick={calls[meId]?.[m.i]} changesUsed={callChanges?.[meId]?.[m.i] || 0} scores={scores} onCall={onCall} />
+              <CallRow key={m.i} m={m} now={now} pick={calls[meId]?.[m.i]} changesUsed={callChanges?.[meId]?.[m.i] || 0} scores={scores} ko={ko} onCall={onCall} />
             ))}
           </div>
           {slate.some(m => isCallOpen(m, now)) && (
@@ -157,8 +163,8 @@ export function CallCard({ calls, callChanges, scores, meId, names, onCall, onSe
 }
 
 /* ---------- Best Caller standings (lives on the Arcade Leaderboards tab) ---------- */
-export function BestCallers({ calls, scores, meId, names }: Omit<Common, 'onCall'>) {
-  const stats = useMemo(() => callerStats(calls, scores, names), [calls, scores, names]);
+export function BestCallers({ calls, scores, ko, meId, names }: Omit<Common, 'onCall'>) {
+  const stats = useMemo(() => callerStats(calls, scores, names, ko), [calls, scores, names, ko]);
 
   return (
     <div>

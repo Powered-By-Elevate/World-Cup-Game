@@ -533,12 +533,55 @@ function resolveBracketTeams(ko, scores) {
     if (/^3[A-L]+$/.test(ref)) return assign[ref] || "";
     return "";
   };
-  return ko.map((k) => {
+  let out = ko.map((k) => {
     if (k.h && k.a) return k;
     const h = k.h || resolveRef(k.hRef);
     const a = k.a || resolveRef(k.aRef);
     return h !== k.h || a !== k.a ? { ...k, h, a } : k;
   });
+  const winnerOf = (k) => {
+    if (!k.h || !k.a || k.h_s == null || k.a_s == null) return null;
+    if (k.h_s > k.a_s) return k.h;
+    if (k.a_s > k.h_s) return k.a;
+    return k.pk || null;
+  };
+  const digits = (ref) => {
+    const m = /(\d+)/.exec(ref || "");
+    return m ? m[1] : "";
+  };
+  const progressRef = (ref, winBy, loseBy) => {
+    const d = digits(ref);
+    if (!d) return "";
+    if (/^w|win/i.test(ref)) return winBy[d] || "";
+    if (/^l|los/i.test(ref)) return loseBy[d] || "";
+    return "";
+  };
+  for (let pass = 0; pass < 6; pass++) {
+    const winBy = {};
+    const loseBy = {};
+    for (const k of out) {
+      const w = winnerOf(k);
+      if (!w) continue;
+      const d = digits(String(k.id));
+      if (d) {
+        winBy[d] = w;
+        loseBy[d] = w === k.h ? k.a : k.h;
+      }
+    }
+    let changed = false;
+    out = out.map((k) => {
+      if (k.h && k.a) return k;
+      const h = k.h || progressRef(k.hRef, winBy, loseBy);
+      const a = k.a || progressRef(k.aRef, winBy, loseBy);
+      if (h !== k.h || a !== k.a) {
+        changed = true;
+        return { ...k, h, a };
+      }
+      return k;
+    });
+    if (!changed) break;
+  }
+  return out;
 }
 function mapLive(matches) {
   const scores = {};
