@@ -191,7 +191,7 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
               <div className="mrow mine" key={idx}>
                 <div className="side">
                   <Flag id={r.h} size={30} ring={r.h === r.nid ? 'pot' : 'ink'} />
-                  <span className="nm">{NATION[r.h].name}</span>
+                  <span className="nm">{NATION[r.h]?.name || 'TBD'}</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                   {done
@@ -202,7 +202,7 @@ export function MyTeam({ myTeam, state, scores, ko, standings, setTab, onTeamInv
                 </div>
                 <div className="side away">
                   <Flag id={r.a} size={30} ring={r.a === r.nid ? 'pot' : 'ink'} />
-                  <span className="nm">{NATION[r.a].name}</span>
+                  <span className="nm">{NATION[r.a]?.name || 'TBD'}</span>
                 </div>
               </div>
             );
