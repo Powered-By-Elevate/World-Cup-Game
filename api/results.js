@@ -135,6 +135,36 @@ async function writeShared(sb, value) {
 
 export default async function handler(req, res) {
   const key = process.env.ZAFRONIX_API_KEY;
+
+  // Public health probe (no secret exposed) — visit /api/results?health to see
+  // whether the Zafronix key is configured and what the last upstream call
+  // returned. lastUpstreamStatus 200 = key healthy & feed flowing; 401/403 = bad
+  // or expired key; 429 = daily quota hit (key is fine, just rate-limited).
+  // Reads only the shared cache, so it never burns upstream quota.
+  if (req.query?.health !== undefined) {
+    const sb = sbClient();
+    const shared = await readShared(sb);
+    const t = Date.now();
+    const good = shared?.good || null;
+    res.status(200).json({
+      ok: true,
+      keyConfigured: !!key,
+      year: process.env.ZAFRONIX_YEAR || "2026",
+      supabaseCache: !!sb,
+      feed: {
+        hasData: !!good,
+        source: good ? "live" : "none",
+        matches: good?.count ?? 0,
+        ageMinutes: good && shared?.goodAt ? Math.round((t - shared.goodAt) / 60000) : null,
+        lastUpstreamStatus: shared?.lastStatus ?? null,
+        lastUpstreamError: shared?.lastError ?? null,
+        inBackoff: !!(shared?.nextTry && t < shared.nextTry),
+        retryInMinutes: shared?.nextTry && t < shared.nextTry ? Math.ceil((shared.nextTry - t) / 60000) : 0,
+      },
+    });
+    return;
+  }
+
   if (!key) {
     res.status(200).json({ source: "none", reason: "ZAFRONIX_API_KEY not set" });
     return;
@@ -184,6 +214,8 @@ export default async function handler(req, res) {
         good: shared?.good || null,
         goodAt: shared?.goodAt || 0,
         nextTry: now + backoff,
+        lastStatus: r.status,
+        lastError: (body || "").slice(0, 120) || `http ${r.status}`,
       });
       if (shared?.good) {
         l1 = { t: now, payload: shared.good };
@@ -196,13 +228,15 @@ export default async function handler(req, res) {
     const json = await r.json();
     const data = normalize(json);
     l1 = { t: now, payload: data };
-    await writeShared(sb, { good: data, goodAt: now, nextTry: 0 });
+    await writeShared(sb, { good: data, goodAt: now, nextTry: 0, lastStatus: 200, lastError: null });
     res.status(200).json(data);
   } catch (e) {
     await writeShared(sb, {
       good: shared?.good || null,
       goodAt: shared?.goodAt || 0,
       nextTry: now + BACKOFF_ERR_MS,
+      lastStatus: 0,
+      lastError: String(e && e.message ? e.message : e).slice(0, 120),
     });
     if (shared?.good) {
       l1 = { t: now, payload: shared.good };
