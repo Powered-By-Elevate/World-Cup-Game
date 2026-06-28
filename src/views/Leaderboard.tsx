@@ -138,12 +138,26 @@ export function TableView({ state, scores, standings, movers, myTeam, stageWins,
                     </div>
                     {POT_KEYS.map(pk => {
                       const ns = s.per[pk]; if (!ns) return null;
-                      const nid = t.picks![pk];
+                      const orig = t.picks![pk];
+                      const repl = t.replacements?.[pk];
+                      const nid = repl || orig;
+                      const redrafted = !!repl && repl !== orig;
                       return (
                         <div key={pk} className="between" style={{ padding: '8px 0', borderTop: '1px solid var(--line-2)' }}>
                           <div className="row" style={{ gap: 9 }}>
-                            <Flag id={nid} size={30} ring="pot" />
-                            <div><div style={{ fontWeight: 700, fontSize: 13 }}>{NATION[nid].name}</div><div className="muted" style={{ fontSize: 11 }}>{ns.w}W {ns.d}D {ns.l}L · {ns.gf}-{ns.ga}{ns.champ ? ' · 🏆' : ''}</div></div>
+                            <span style={{ position: 'relative', display: 'inline-flex' }}>
+                              <Flag id={nid} size={30} ring="pot" />
+                              {redrafted && (
+                                <span title={`Re-drafted — replaced ${NATION[orig]?.name || 'an eliminated nation'}`}
+                                  style={{ position: 'absolute', bottom: -3, right: -3, width: 15, height: 15, borderRadius: '50%', background: 'var(--ink)', color: 'var(--lime)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid var(--paper)' }}>
+                                  <Icon name="refresh" size={8} />
+                                </span>
+                              )}
+                            </span>
+                            <div>
+                              <div style={{ fontWeight: 700, fontSize: 13 }}>{NATION[nid].name}{redrafted && <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--mut)' }}> · replaced <span style={{ textDecoration: 'line-through' }}>{NATION[orig]?.name}</span></span>}</div>
+                              <div className="muted" style={{ fontSize: 11 }}>{ns.w}W {ns.d}D {ns.l}L · {ns.gf}-{ns.ga}{ns.champ ? ' · 🏆' : ''}</div>
+                            </div>
                           </div>
                           <div className="row" style={{ gap: 8 }}>
                             {ns.bonus > 0 && <span className="badge" style={{ background: 'var(--lime)' }}>+{ns.bonus} bonus</span>}

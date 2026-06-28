@@ -6,6 +6,7 @@ import type { ScoreEntry, Team } from '../data/types';
 import { matchStatus } from '../utils/scoring';
 import { dayKeyOf, fmtDayLabel, fmtTime, parseDate } from '../utils/helpers';
 import { Flag } from '../components/Flag';
+import { Icon } from '../components/Icon';
 
 interface Props {
   scores: Record<string, ScoreEntry>;
@@ -13,23 +14,37 @@ interface Props {
   myTeam: Team | null;
   /** Real kickoff dates from the live feed, keyed by fixture id (overrides our placeholder fixture dates). */
   dates?: Record<string, string>;
+  /** Nation ids that entered some team's roster via the knockout re-draft. */
+  redraftIds?: Set<string>;
 }
 
 /** One side of a knockout row: a resolved nation, or a muted placeholder slot
  *  (e.g. "Winner Group A") while the draw hasn't filled it yet. */
-function KOSide({ id, label, myIds, pen, away }: { id: string; label?: string; myIds: string[]; pen?: boolean; away?: boolean }) {
+function KOSide({ id, label, myIds, pen, away, redrafted }: { id: string; label?: string; myIds: string[]; pen?: boolean; away?: boolean; redrafted?: boolean }) {
   const penTag = pen ? <span style={{ fontSize: 11 }}>(P)</span> : null;
   const resolved = !!id && !!NATION[id];
+  const flag = (
+    <span style={{ position: 'relative', display: 'inline-flex', flex: '0 0 auto' }}>
+      <Flag id={id} size={30} ring={myIds.includes(id) ? 'pot' : 'ink'} />
+      {redrafted && (
+        <span title="Re-drafted nation" style={{ position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: '50%', background: 'var(--ink)', color: 'var(--lime)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid var(--paper)' }}>
+          <Icon name="refresh" size={8} />
+        </span>
+      )}
+    </span>
+  );
   const body = resolved
-    ? <><Flag id={id} size={30} ring={myIds.includes(id) ? 'pot' : 'ink'} /><span className="nm">{NATION[id].name}</span></>
+    ? <>{flag}<span className="nm">{NATION[id].name}</span></>
     : <><span className="ko-slot" aria-hidden style={{ width: 30, height: 30, borderRadius: '50%', border: '1.5px dashed var(--hair, #C9C2B0)', display: 'inline-block', flex: '0 0 auto' }} /><span className="nm muted" style={{ fontStyle: 'italic' }}>{label || 'TBD'}</span></>;
   return <div className={`side${away ? ' away' : ''}`}>{away ? <>{penTag}{body}</> : <>{body}{penTag}</>}</div>;
 }
 
-export function MatchesView({ scores, ko, myTeam, dates = {} }: Props) {
+export function MatchesView({ scores, ko, myTeam, dates = {}, redraftIds }: Props) {
   const [mode, setMode] = useState<'group' | 'ko'>('group');
   const [filter, setFilter] = useState<'all' | 'mine' | 'live'>('all');
   const myIds = myTeam?.picks ? POT_KEYS.map(pk => myTeam.picks![pk]) : [];
+  // Knockout highlighting follows the EFFECTIVE roster (re-drafted replacements).
+  const koMyIds = myTeam?.picks ? POT_KEYS.map(pk => myTeam.replacements?.[pk] || myTeam.picks![pk]) : [];
 
   // prefer the live feed's real kickoff date over our placeholder fixture date
   const dOf = (f: { i: string; d: string }) => dates[f.i] || f.d;
@@ -97,11 +112,11 @@ export function MatchesView({ scores, ko, myTeam, dates = {} }: Props) {
               <div className="card flat" style={{ overflow: 'hidden' }}>
                 {list.map(k => {
                   const done = (k.st === 'ft' || k.st === 'live') && k.h_s != null;
-                  const mine = (!!k.h && myIds.includes(k.h)) || (!!k.a && myIds.includes(k.a));
+                  const mine = (!!k.h && koMyIds.includes(k.h)) || (!!k.a && koMyIds.includes(k.a));
                   const when = k.dt || k.d;
                   return (
                     <div className={`mrow ${mine ? 'mine' : ''}`} key={k.id}>
-                      <KOSide id={k.h} label={k.hRef} myIds={myIds} pen={k.pk === k.h} />
+                      <KOSide id={k.h} label={k.hRef} myIds={koMyIds} pen={k.pk === k.h} redrafted={!!k.h && redraftIds?.has(k.h)} />
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                         {done
                           ? <span className="scorebug">{k.h_s}<span style={{ opacity: .4 }}>:</span>{k.a_s}</span>
@@ -109,7 +124,7 @@ export function MatchesView({ scores, ko, myTeam, dates = {} }: Props) {
                         {!done && when && <span className="eyebrow" style={{ fontSize: 9, color: '#9C988C' }}>{fmtDayLabel(dayKeyOf(when))}</span>}
                         {k.st === 'live' && <span className="badge live" style={{ height: 16, fontSize: 8 }}><span className="dot" />LIVE</span>}
                       </div>
-                      <KOSide id={k.a} label={k.aRef} myIds={myIds} pen={k.pk === k.a} away />
+                      <KOSide id={k.a} label={k.aRef} myIds={koMyIds} pen={k.pk === k.a} redrafted={!!k.a && redraftIds?.has(k.a)} away />
                     </div>
                   );
                 })}

@@ -854,6 +854,13 @@ export default function App() {
     return { aliveByTeam: m, koStarted: groupDone };
   }, [state.teams, scores, ko]);
 
+  // Every nation that entered a roster via the knockout re-draft (league-wide),
+  // so views can badge it as a replacement.
+  const redraftIds = useMemo(
+    () => new Set((state.teams || []).flatMap(t => Object.values(t.replacements || {}))),
+    [state.teams]
+  );
+
   // One-time knockout re-draft: the moment the group stage is final, replace each
   // team's eliminated nations and lock it (redraftDone). The computation is
   // deterministic, but to keep one trusted writer it only fires on the
@@ -1145,7 +1152,7 @@ export default function App() {
         {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} calls={state.calls || {}} callChanges={state.callChanges || {}} meId={me!.id} names={callerNames} onCall={api.makeCall} liveNow={demo ? [] : (live?.liveNow ?? [])} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
-        {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} dates={demo ? {} : (live?.dates ?? {})} />}
+        {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} dates={demo ? {} : (live?.dates ?? {})} redraftIds={redraftIds} />}
         {tab === "arcade" && <Arcade calls={state.calls || {}} callChanges={state.callChanges || {}} scores={scores} meId={me!.id} names={callerNames} onCall={api.makeCall} members={chatMembers} onLaunch={launchGame} />}
         {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
         {tab === "cabinet" && <TrophyRoom teams={state.teams || []} awardsByTeam={awardsByTeam} myTeam={myTeam} isCommish={isCommish} onSetAwardHolder={api.setAwardHolder} onShare={toast} />}

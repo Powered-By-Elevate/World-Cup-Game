@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { NATION } from '../data/nations';
 import type { Team } from '../data/types';
 import { Flag } from './Flag';
+import { Icon } from './Icon';
 
 /* ---------- pot helpers ---------- */
 export const POT_OF: Record<string, { label: string; tag: string; cls: string }> = {
@@ -27,15 +28,29 @@ export function teamGradient(team: Team | null): string {
   return `linear-gradient(115deg, ${stops.join(', ')})`;
 }
 
-/* ---------- TeamFlags : a team's three picks in a row ---------- */
+/* ---------- TeamFlags : a team's three EFFECTIVE picks in a row ----------
+   Shows the knockout roster — a re-drafted slot uses its replacement nation and
+   gets a small refresh badge so the swap is visible at a glance. */
 export function TeamFlags({ team, size = 40, ring = 'pot' }: { team: Team; size?: number; ring?: 'pot' | 'ink' }) {
+  const badge = Math.max(11, Math.round(size * 0.42));
   return (
     <div className="flagrow">
       {PICK_KEYS.map((k, i) => {
-        const id = team.picks?.[k];
-        return id
-          ? <Flag key={i} id={id} size={size} ring={ring} />
-          : <span key={i} className="flag" style={{ width: size, height: size, background: 'var(--line)' }} />;
+        const orig = team.picks?.[k];
+        const id = team.replacements?.[k] || orig;
+        const redrafted = !!team.replacements?.[k] && team.replacements[k] !== orig;
+        if (!id) return <span key={i} className="flag" style={{ width: size, height: size, background: 'var(--line)' }} />;
+        return (
+          <span key={i} style={{ position: 'relative', display: 'inline-flex' }}>
+            <Flag id={id} size={size} ring={ring} />
+            {redrafted && (
+              <span title={`Re-drafted — replaced ${NATION[orig!]?.name || 'an eliminated nation'}`}
+                style={{ position: 'absolute', bottom: -2, right: -2, width: badge, height: badge, borderRadius: '50%', background: 'var(--ink)', color: 'var(--lime)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid var(--paper)' }}>
+                <Icon name="refresh" size={Math.max(7, Math.round(size * 0.28))} />
+              </span>
+            )}
+          </span>
+        );
       })}
     </div>
   );
