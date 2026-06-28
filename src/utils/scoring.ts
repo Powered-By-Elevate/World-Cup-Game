@@ -135,7 +135,11 @@ export function nationStats(
   });
 
   if (scoring.bonuses) {
-    for (let i = 0; i <= st.deepest; i++) {
+    // The R32 (index 0) bonus is the "got out of the group stage" reward. For a
+    // re-draft replacement (phase 'ko') the team didn't earn that survival — it
+    // acquired the nation AFTER the groups — so skip it. The replacement still
+    // earns every deeper bonus (R16+) and the title, which are knockout feats.
+    for (let i = (phase === 'ko' ? 1 : 0); i <= st.deepest; i++) {
       const b = scoring.b[MILESTONE_ORDER[i]] || 0;
       st.bonus += b;
       addStage(MILESTONE_ORDER[i], b);   // "reach R16" bonus → the R16 stage, etc.

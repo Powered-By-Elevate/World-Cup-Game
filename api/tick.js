@@ -349,7 +349,7 @@ function nationStats(nid, scores, ko, scoring, phase) {
     st.games.push({ ko: k, isHome, gf, ga, r, live: k.st === "live", round: k.round });
   });
   if (scoring.bonuses) {
-    for (let i = 0; i <= st.deepest; i++) {
+    for (let i = phase === "ko" ? 1 : 0; i <= st.deepest; i++) {
       const b = scoring.b[MILESTONE_ORDER[i]] || 0;
       st.bonus += b;
       addStage(MILESTONE_ORDER[i], b);
