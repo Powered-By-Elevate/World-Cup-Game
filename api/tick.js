@@ -161,6 +161,7 @@ MATCHES.forEach((m) => {
 var MATCH_DATE = Object.fromEntries(
   MATCHES.map((m) => [m.i, m.d.slice(0, 10)])
 );
+var GROUP_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
 var KO_ROUNDS = [
   { id: "R32", label: "Round of 32", when: "Jun 28 - Jul 3" },
   { id: "R16", label: "Round of 16", when: "Jul 4 - 7" },
@@ -230,113 +231,6 @@ var NATIONS = [
 ];
 var NATION = Object.fromEntries(NATIONS.map((n) => [n.id, n]));
 var POT_KEYS = ["FAV", "UND", "LNG"];
-
-// src/data/liveResults.ts
-var NAME_TO_ID = Object.fromEntries(NATIONS.map((n) => [n.name, n.id]));
-var ALIAS = {
-  "Korea Republic": "KOR",
-  "IR Iran": "IRN",
-  "C\xF4te d'Ivoire": "CIV",
-  "Cote d'Ivoire": "CIV",
-  "T\xFCrkiye": "TUR",
-  "Turkey": "TUR",
-  "Bosnia and Herzegovina": "BIH",
-  "Congo DR": "COD",
-  "DR Congo": "COD",
-  "Congo": "COD",
-  "Cabo Verde": "CPV",
-  "Cura\xE7ao": "CUW",
-  "United States": "USA",
-  "Czech Republic": "CZE",
-  // legacy tla aliases (harmless if the feed ever sends codes again)
-  URY: "URU"
-};
-function toId(name) {
-  if (!name) return null;
-  const id = NAME_TO_ID[name] || ALIAS[name] || (NATION[name] ? name : null);
-  return id && NATION[id] ? id : null;
-}
-var STAGE_ROUND = {
-  LAST_32: "R32",
-  LAST_16: "R16",
-  QUARTER_FINALS: "QF",
-  SEMI_FINALS: "SF",
-  THIRD_PLACE: "3rd",
-  FINAL: "Final"
-};
-var PAIR = {};
-for (const m of MATCHES) PAIR[[m.h, m.a].sort().join("|")] = { mi: m.i, home: m.h };
-function statusOf(s) {
-  if (s === "FINISHED" || s === "AWARDED") return "ft";
-  if (s === "IN_PLAY" || s === "PAUSED" || s === "LIVE" || s === "SUSPENDED") return "live";
-  return null;
-}
-function mapLive(matches) {
-  const scores = {};
-  const ko = [];
-  const liveNow = [];
-  const dates = {};
-  for (const m of matches) {
-    const h = toId(m.home?.name ?? m.home?.tla);
-    const a = toId(m.away?.name ?? m.away?.tla);
-    if (m.stage === "GROUP_STAGE") {
-      const st2 = statusOf(m.status);
-      const f = h && a ? PAIR[[h, a].sort().join("|")] : void 0;
-      if (f && m.date) dates[f.mi] = m.date;
-      if (!st2 || !h || !a) continue;
-      if (st2 === "live") liveNow.push({ mi: f?.mi || null, round: null, h, a, date: m.date || "" });
-      if (m.hs == null || m.as == null || !f) continue;
-      scores[f.mi] = f.home === h ? { h: m.hs, a: m.as, st: st2 } : { h: m.as, a: m.hs, st: st2 };
-      continue;
-    }
-    const round = STAGE_ROUND[m.stage];
-    if (!round) continue;
-    const bothKnown = !!(h && a);
-    if (!bothKnown && !m.date) continue;
-    const st = statusOf(m.status);
-    if (st === "live" && bothKnown) liveNow.push({ mi: null, round, h, a, date: m.date || "" });
-    const done = bothKnown && !!st && m.hs != null && m.as != null;
-    let pk = null;
-    if (bothKnown) {
-      if (m.pens && m.pens.home != null && m.pens.away != null) {
-        pk = m.pens.home > m.pens.away ? h : a;
-      } else if (done && m.hs === m.as && m.winner) {
-        pk = m.winner === "HOME_TEAM" ? h : m.winner === "AWAY_TEAM" ? a : null;
-      }
-    }
-    ko.push({
-      id: "api_" + m.id,
-      round,
-      h: h || "",
-      a: a || "",
-      hRef: h ? void 0 : m.home?.short || void 0,
-      aRef: a ? void 0 : m.away?.short || void 0,
-      h_s: done ? m.hs : null,
-      a_s: done ? m.as : null,
-      st: bothKnown ? st || "sched" : "sched",
-      pk,
-      d: (m.date || "").slice(0, 10),
-      dt: m.date || void 0
-    });
-  }
-  return { scores, ko, liveNow, dates };
-}
-function upcomingFromFeed(matches) {
-  const out = [];
-  for (const m of matches) {
-    if (m.status !== "TIMED" || !m.date) continue;
-    const h = toId(m.home?.name ?? m.home?.tla);
-    const a = toId(m.away?.name ?? m.away?.tla);
-    if (!h || !a) continue;
-    if (m.stage === "GROUP_STAGE") {
-      const f = PAIR[[h, a].sort().join("|")];
-      out.push({ key: `g:${f?.mi || m.id}`, h, a, kickoff: m.date, knockout: false });
-    } else if (STAGE_ROUND[m.stage]) {
-      out.push({ key: `k:api_${m.id}`, h, a, kickoff: m.date, knockout: true });
-    }
-  }
-  return out;
-}
 
 // src/utils/helpers.ts
 var uid = () => Math.random().toString(36).slice(2, 9);
@@ -489,6 +383,193 @@ function teamStats(team, scores, ko, scoring) {
   });
   const total = pts + bonus;
   return { per, pts, bonus, total, gf, ga, gd: gf - ga, played, w, d, l, byStage };
+}
+function groupTable(letter, scores) {
+  const t = {};
+  MATCHES.filter((m) => m.g === letter).forEach((m) => {
+    [m.h, m.a].forEach((id) => {
+      if (!t[id]) t[id] = { id, p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, pts: 0, gd: 0 };
+    });
+    const s = scores[m.i];
+    if (!s || s.st !== "ft" && s.st !== "live" || s.h == null) return;
+    const H = t[m.h], A = t[m.a];
+    H.p++;
+    A.p++;
+    H.gf += s.h;
+    H.ga += s.a;
+    A.gf += s.a;
+    A.ga += s.h;
+    if (s.h > s.a) {
+      H.w++;
+      H.pts += 3;
+      A.l++;
+    } else if (s.h < s.a) {
+      A.w++;
+      A.pts += 3;
+      H.l++;
+    } else {
+      H.d++;
+      A.d++;
+      H.pts++;
+      A.pts++;
+    }
+  });
+  return Object.values(t).map((x) => ({ ...x, gd: x.gf - x.ga })).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || (NATION[a.id]?.name || "").localeCompare(NATION[b.id]?.name || ""));
+}
+
+// src/data/liveResults.ts
+var NAME_TO_ID = Object.fromEntries(NATIONS.map((n) => [n.name, n.id]));
+var ALIAS = {
+  "Korea Republic": "KOR",
+  "IR Iran": "IRN",
+  "C\xF4te d'Ivoire": "CIV",
+  "Cote d'Ivoire": "CIV",
+  "T\xFCrkiye": "TUR",
+  "Turkey": "TUR",
+  "Bosnia and Herzegovina": "BIH",
+  "Congo DR": "COD",
+  "DR Congo": "COD",
+  "Congo": "COD",
+  "Cabo Verde": "CPV",
+  "Cura\xE7ao": "CUW",
+  "United States": "USA",
+  "Czech Republic": "CZE",
+  // legacy tla aliases (harmless if the feed ever sends codes again)
+  URY: "URU"
+};
+function toId(name) {
+  if (!name) return null;
+  const id = NAME_TO_ID[name] || ALIAS[name] || (NATION[name] ? name : null);
+  return id && NATION[id] ? id : null;
+}
+var STAGE_ROUND = {
+  LAST_32: "R32",
+  LAST_16: "R16",
+  QUARTER_FINALS: "QF",
+  SEMI_FINALS: "SF",
+  THIRD_PLACE: "3rd",
+  FINAL: "Final"
+};
+var PAIR = {};
+for (const m of MATCHES) PAIR[[m.h, m.a].sort().join("|")] = { mi: m.i, home: m.h };
+function statusOf(s) {
+  if (s === "FINISHED" || s === "AWARDED") return "ft";
+  if (s === "IN_PLAY" || s === "PAUSED" || s === "LIVE" || s === "SUSPENDED") return "live";
+  return null;
+}
+function resolveBracketTeams(ko, scores) {
+  const groupDone = (g) => MATCHES.filter((m) => m.g === g).every((m) => {
+    const s = scores[m.i];
+    return !!s && s.st === "ft" && s.h != null;
+  });
+  const allGroupsDone = GROUP_LETTERS.every(groupDone);
+  const winner = {};
+  const runner = {};
+  const thirds = [];
+  for (const g of GROUP_LETTERS) {
+    if (!groupDone(g)) continue;
+    const t = groupTable(g, scores);
+    if (t[0]) winner[g] = t[0].id;
+    if (t[1]) runner[g] = t[1].id;
+    if (t[2]) thirds.push({ g, id: t[2].id, pts: t[2].pts, gd: t[2].gd, gf: t[2].gf });
+  }
+  thirds.sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.g.localeCompare(b.g));
+  const best8 = allGroupsDone ? thirds.slice(0, 8) : [];
+  const best8Group = new Set(best8.map((x) => x.g));
+  const thirdRefs = /* @__PURE__ */ new Set();
+  for (const k of ko) {
+    if (!k.h && k.hRef && /^3[A-L]+$/.test(k.hRef)) thirdRefs.add(k.hRef);
+    if (!k.a && k.aRef && /^3[A-L]+$/.test(k.aRef)) thirdRefs.add(k.aRef);
+  }
+  const assign = {};
+  const usedGroup = /* @__PURE__ */ new Set();
+  const slots = [...thirdRefs].map((ref) => ({ ref, cands: ref.slice(1).split("").filter((g) => best8Group.has(g)) })).sort((a, b) => a.cands.length - b.cands.length || a.ref.localeCompare(b.ref));
+  for (const slot of slots) {
+    const pick = best8.find((x) => slot.cands.includes(x.g) && !usedGroup.has(x.g));
+    if (pick) {
+      assign[slot.ref] = pick.id;
+      usedGroup.add(pick.g);
+    }
+  }
+  const resolveRef = (ref) => {
+    if (!ref) return "";
+    const m = /^([12])([A-L])$/.exec(ref);
+    if (m) return (m[1] === "1" ? winner[m[2]] : runner[m[2]]) || "";
+    if (/^3[A-L]+$/.test(ref)) return assign[ref] || "";
+    return "";
+  };
+  return ko.map((k) => {
+    if (k.h && k.a) return k;
+    const h = k.h || resolveRef(k.hRef);
+    const a = k.a || resolveRef(k.aRef);
+    return h !== k.h || a !== k.a ? { ...k, h, a } : k;
+  });
+}
+function mapLive(matches) {
+  const scores = {};
+  const ko = [];
+  const liveNow = [];
+  const dates = {};
+  for (const m of matches) {
+    const h = toId(m.home?.name ?? m.home?.tla);
+    const a = toId(m.away?.name ?? m.away?.tla);
+    if (m.stage === "GROUP_STAGE") {
+      const st2 = statusOf(m.status);
+      const f = h && a ? PAIR[[h, a].sort().join("|")] : void 0;
+      if (f && m.date) dates[f.mi] = m.date;
+      if (!st2 || !h || !a) continue;
+      if (st2 === "live") liveNow.push({ mi: f?.mi || null, round: null, h, a, date: m.date || "" });
+      if (m.hs == null || m.as == null || !f) continue;
+      scores[f.mi] = f.home === h ? { h: m.hs, a: m.as, st: st2 } : { h: m.as, a: m.hs, st: st2 };
+      continue;
+    }
+    const round = STAGE_ROUND[m.stage];
+    if (!round) continue;
+    const bothKnown = !!(h && a);
+    if (!bothKnown && !m.date) continue;
+    const st = statusOf(m.status);
+    if (st === "live" && bothKnown) liveNow.push({ mi: null, round, h, a, date: m.date || "" });
+    const done = bothKnown && !!st && m.hs != null && m.as != null;
+    let pk = null;
+    if (bothKnown) {
+      if (m.pens && m.pens.home != null && m.pens.away != null) {
+        pk = m.pens.home > m.pens.away ? h : a;
+      } else if (done && m.hs === m.as && m.winner) {
+        pk = m.winner === "HOME_TEAM" ? h : m.winner === "AWAY_TEAM" ? a : null;
+      }
+    }
+    ko.push({
+      id: "api_" + m.id,
+      round,
+      h: h || "",
+      a: a || "",
+      hRef: h ? void 0 : m.home?.short || void 0,
+      aRef: a ? void 0 : m.away?.short || void 0,
+      h_s: done ? m.hs : null,
+      a_s: done ? m.as : null,
+      st: bothKnown ? st || "sched" : "sched",
+      pk,
+      d: (m.date || "").slice(0, 10),
+      dt: m.date || void 0
+    });
+  }
+  return { scores, ko: resolveBracketTeams(ko, scores), liveNow, dates };
+}
+function upcomingFromFeed(matches) {
+  const out = [];
+  for (const m of matches) {
+    if (m.status !== "TIMED" || !m.date) continue;
+    const h = toId(m.home?.name ?? m.home?.tla);
+    const a = toId(m.away?.name ?? m.away?.tla);
+    if (!h || !a) continue;
+    if (m.stage === "GROUP_STAGE") {
+      const f = PAIR[[h, a].sort().join("|")];
+      out.push({ key: `g:${f?.mi || m.id}`, h, a, kickoff: m.date, knockout: false });
+    } else if (STAGE_ROUND[m.stage]) {
+      out.push({ key: `k:api_${m.id}`, h, a, kickoff: m.date, knockout: true });
+    }
+  }
+  return out;
 }
 
 // src/utils/matchNotify.ts
