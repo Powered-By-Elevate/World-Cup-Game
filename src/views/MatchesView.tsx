@@ -7,6 +7,8 @@ import { matchStatus } from '../utils/scoring';
 import { dayKeyOf, fmtDayLabel, fmtTime, parseDate } from '../utils/helpers';
 import { Flag } from '../components/Flag';
 import { Icon } from '../components/Icon';
+import { isOverridden } from '../utils/overrides';
+import type { Overrides } from '../utils/overrides';
 
 interface Props {
   scores: Record<string, ScoreEntry>;
@@ -16,6 +18,78 @@ interface Props {
   dates?: Record<string, string>;
   /** Nation ids that entered some team's roster via the knockout re-draft. */
   redraftIds?: Set<string>;
+  /** Commissioner-only score corrections (a safety valve over the feed). */
+  isCommish?: boolean;
+  overrides?: Overrides;
+  onOverride?: (matchId: string, h: number, a: number, pk?: string) => void;
+  onClearOverride?: (matchId: string) => void;
+}
+
+interface EditTarget { id: string; hId: string; aId: string; h: number; a: number; ko: boolean; overridden: boolean }
+
+/** Commissioner score-correction dialog — the only place a score can be set by
+ *  hand, and only when the feed is wrong. Layered, marked, and reversible. */
+function ScoreEditor({ m, onSave, onClear, onClose }: {
+  m: EditTarget; onSave: (h: number, a: number, pk?: string) => void; onClear: () => void; onClose: () => void;
+}) {
+  const [h, setH] = useState(String(m.h));
+  const [a, setA] = useState(String(m.a));
+  const [adv, setAdv] = useState<'h' | 'a'>('h');
+  const hi = Math.max(0, parseInt(h, 10) || 0);
+  const ai = Math.max(0, parseInt(a, 10) || 0);
+  const drawKO = m.ko && hi === ai;
+  const inputStyle = { width: 60, fontSize: 30, fontWeight: 800, textAlign: 'center' as const, border: '2px solid var(--ink)', borderRadius: 12, padding: '6px 0', background: 'var(--paper)' };
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(21,18,12,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, zIndex: 100 }}>
+      <div onClick={e => e.stopPropagation()} className="card pad" style={{ maxWidth: 340, width: '100%', background: 'var(--paper)' }}>
+        <div className="eyebrow" style={{ marginBottom: 4 }}>Correct the score</div>
+        <p className="muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 14 }}>Overrides the live feed for this match. Clear it to hand the match back to the feed.</p>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <div style={{ textAlign: 'center', flex: 1, minWidth: 0 }}>
+            <Flag id={m.hId} size={34} ring="ink" />
+            <div style={{ fontWeight: 700, fontSize: 12, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{NATION[m.hId]?.name || m.hId}</div>
+            <input type="number" inputMode="numeric" min={0} value={h} onChange={e => setH(e.target.value)} style={{ ...inputStyle, marginTop: 6 }} />
+          </div>
+          <span style={{ fontWeight: 800, opacity: .4 }}>:</span>
+          <div style={{ textAlign: 'center', flex: 1, minWidth: 0 }}>
+            <Flag id={m.aId} size={34} ring="ink" />
+            <div style={{ fontWeight: 700, fontSize: 12, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{NATION[m.aId]?.name || m.aId}</div>
+            <input type="number" inputMode="numeric" min={0} value={a} onChange={e => setA(e.target.value)} style={{ ...inputStyle, marginTop: 6 }} />
+          </div>
+        </div>
+        {drawKO && (
+          <div style={{ marginTop: 14 }}>
+            <div className="eyebrow" style={{ fontSize: 10, marginBottom: 6 }}>Who advances (penalties)?</div>
+            <div className="seg">
+              <button className={adv === 'h' ? 'on' : ''} onClick={() => setAdv('h')}>{NATION[m.hId]?.name || 'Home'}</button>
+              <button className={adv === 'a' ? 'on' : ''} onClick={() => setAdv('a')}>{NATION[m.aId]?.name || 'Away'}</button>
+            </div>
+          </div>
+        )}
+        <div className="row" style={{ gap: 8, marginTop: 18 }}>
+          <button className="btn btn-block" style={{ background: 'var(--lime)' }} onClick={() => onSave(hi, ai, drawKO ? (adv === 'h' ? m.hId : m.aId) : undefined)}>Save correction</button>
+        </div>
+        <div className="row" style={{ gap: 8, marginTop: 8 }}>
+          {m.overridden && <button className="btn btn-ghost btn-block" onClick={onClear}>Clear (use feed)</button>}
+          <button className="btn btn-ghost btn-block" onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Small "corrected" chip shown on a match the commissioner has overridden. */
+function CorrectedBadge() {
+  return <span className="badge" style={{ height: 16, fontSize: 8, background: 'var(--ink)', color: 'var(--paper)' }}><Icon name="edit" size={8} /> corrected</span>;
+}
+
+/** Pencil button the commissioner taps to correct a match's score. */
+function EditBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button onClick={onClick} title="Correct this score" style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', color: 'var(--mut, #9C988C)', display: 'inline-flex' }}>
+      <Icon name="edit" size={12} />
+    </button>
+  );
 }
 
 /** One side of a knockout row: a resolved nation, or a muted placeholder slot
@@ -39,9 +113,10 @@ function KOSide({ id, label, myIds, pen, away, redrafted }: { id: string; label?
   return <div className={`side${away ? ' away' : ''}`}>{away ? <>{penTag}{body}</> : <>{body}{penTag}</>}</div>;
 }
 
-export function MatchesView({ scores, ko, myTeam, dates = {}, redraftIds }: Props) {
+export function MatchesView({ scores, ko, myTeam, dates = {}, redraftIds, isCommish, overrides, onOverride, onClearOverride }: Props) {
   const [mode, setMode] = useState<'group' | 'ko'>('group');
   const [filter, setFilter] = useState<'all' | 'mine' | 'live'>('all');
+  const [edit, setEdit] = useState<EditTarget | null>(null);
   const myIds = myTeam?.picks ? POT_KEYS.map(pk => myTeam.picks![pk]) : [];
   // Knockout highlighting follows the EFFECTIVE roster (re-drafted replacements).
   const koMyIds = myTeam?.picks ? POT_KEYS.map(pk => myTeam.replacements?.[pk] || myTeam.picks![pk]) : [];
@@ -91,6 +166,8 @@ export function MatchesView({ scores, ko, myTeam, dates = {}, redraftIds }: Prop
                         : <span className="scorebug sched">{fmtTime(dOf(f)).replace(' ET', '')}</span>}
                       {stt === 'live' && <span className="badge live" style={{ height: 16, fontSize: 8 }}><span className="dot" />LIVE</span>}
                       {done && stt !== 'live' && <span className="badge ft" style={{ height: 16, fontSize: 8 }}>FT</span>}
+                      {isOverridden(f.i, overrides) && <CorrectedBadge />}
+                      {isCommish && <EditBtn onClick={() => setEdit({ id: f.i, hId: f.h, aId: f.a, h: s?.h ?? 0, a: s?.a ?? 0, ko: false, overridden: isOverridden(f.i, overrides) })} />}
                     </div>
                     <div className="side away"><Flag id={f.a} size={30} ring={myIds.includes(f.a) ? 'pot' : 'ink'} /><span className="nm">{NATION[f.a].name}</span></div>
                   </div>
@@ -123,6 +200,8 @@ export function MatchesView({ scores, ko, myTeam, dates = {}, redraftIds }: Prop
                           : <span className="scorebug sched">{k.dt ? fmtTime(k.dt).replace(' ET', '') : 'vs'}</span>}
                         {!done && when && <span className="eyebrow" style={{ fontSize: 9, color: '#9C988C' }}>{fmtDayLabel(dayKeyOf(when))}</span>}
                         {k.st === 'live' && <span className="badge live" style={{ height: 16, fontSize: 8 }}><span className="dot" />LIVE</span>}
+                        {isOverridden(k.id, overrides) && <CorrectedBadge />}
+                        {isCommish && k.h && k.a && <EditBtn onClick={() => setEdit({ id: k.id, hId: k.h, aId: k.a, h: k.h_s ?? 0, a: k.a_s ?? 0, ko: true, overridden: isOverridden(k.id, overrides) })} />}
                       </div>
                       <KOSide id={k.a} label={k.aRef} myIds={koMyIds} pen={k.pk === k.a} redrafted={!!k.a && redraftIds?.has(k.a)} away />
                     </div>
@@ -133,6 +212,15 @@ export function MatchesView({ scores, ko, myTeam, dates = {}, redraftIds }: Prop
           );
         })}
       </>}
+
+      {edit && (
+        <ScoreEditor
+          m={edit}
+          onSave={(h, a, pk) => { onOverride?.(edit.id, h, a, pk); setEdit(null); }}
+          onClear={() => { onClearOverride?.(edit.id); setEdit(null); }}
+          onClose={() => setEdit(null)}
+        />
+      )}
     </div>
   );
 }

@@ -54,6 +54,11 @@ export interface AppState {
   /** Set true once the one-time knockout re-draft has run (eliminated group-stage
    *  nations replaced for the bracket). Guards against it ever firing twice. */
   redraftDone?: boolean;
+  /** Commissioner score corrections that layer OVER the live feed, keyed by
+   *  fixture id (group "g#") or knockout match id ("api_#"). A safety valve for
+   *  when the feed reports a wrong score. `pk` = who advances if a knockout is
+   *  level. Clearing a key hands that match back to the feed. */
+  scoreOverrides?: Record<string, { h: number; a: number; pk?: string }>;
   v: number;
 }
 
@@ -129,6 +134,7 @@ export function withDefaults(s: Partial<AppState> | null): AppState {
     awards: Array.isArray(s.awards) ? s.awards : [],
     calls: s.calls && typeof s.calls === 'object' && !Array.isArray(s.calls) ? s.calls : {},
     redraftDone: !!s.redraftDone,
+    scoreOverrides: s.scoreOverrides && typeof s.scoreOverrides === 'object' && !Array.isArray(s.scoreOverrides) ? s.scoreOverrides : {},
     v: 1,
   };
 }

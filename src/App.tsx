@@ -20,6 +20,7 @@ import { teamStats, computeMovers, stageWinners, stageComplete } from './utils/s
 import type { StandingEntry, StageWinner } from './utils/scoring';
 import { computeAwards, aliveCount } from './utils/awards';
 import { computeRedraft } from './utils/redraft';
+import { applyGroupOverrides, applyKoOverrides } from './utils/overrides';
 import { Icon, Mark } from './components/Icon';
 import type { IconName } from './components/Icon';
 import { Avatar, Celebration } from './components/shared';
@@ -136,8 +137,10 @@ export default function App() {
   // Real results only. When the live feed has nothing (yet, or briefly down),
   // scores stay empty and the UI shows fixtures as pending — never simulated
   // numbers. The deterministic engine is reachable ONLY via the Demo toggle.
-  const scores = demo ? ENGINE_SCORES : (live?.scores ?? {});
-  const ko = demo ? ENGINE_KO : (live?.ko ?? []);
+  // Commissioner corrections layer over the live feed (never over demo results).
+  const overrides = state.scoreOverrides || {};
+  const scores = demo ? ENGINE_SCORES : applyGroupOverrides(live?.scores ?? {}, overrides);
+  const ko = demo ? ENGINE_KO : applyKoOverrides(live?.ko ?? [], overrides);
 
   const toggleDemo = useCallback((v: boolean) => {
     setDemo(v);
@@ -652,6 +655,23 @@ export default function App() {
         return s;
       });
     },
+    // Commissioner-only: correct a match the feed got wrong. Layers over the
+    // feed and persists until cleared. `pk` = who advances if a knockout is level.
+    setScoreOverride: async (matchId: string, h: number, a: number, pk?: string) => {
+      await commitState(s => {
+        if (s.commissioner && me?.id !== s.commissioner) return s;   // commissioner only
+        const ov = (s.scoreOverrides = s.scoreOverrides || {});
+        ov[matchId] = { h, a, ...(pk ? { pk } : {}) };
+        return s;
+      });
+    },
+    clearScoreOverride: async (matchId: string) => {
+      await commitState(s => {
+        if (s.commissioner && me?.id !== s.commissioner) return s;
+        if (s.scoreOverrides) delete s.scoreOverrides[matchId];
+        return s;
+      });
+    },
   }), [commitState, setMeBoth, me, user]);
 
   const myTeam = useMemo(
@@ -1157,7 +1177,7 @@ export default function App() {
         {tab === "home" && <MyTeam myTeam={myTeam!} state={state} scores={scores} ko={ko} standings={standings} setTab={setTab} onTeamInvite={copyTeamLink} isCommish={isCommish} commishName={commishName} onSetDraftTime={api.setDraftTime} calls={state.calls || {}} callChanges={state.callChanges || {}} meId={me!.id} names={callerNames} onCall={api.makeCall} liveNow={demo ? [] : (live?.liveNow ?? [])} />}
         {tab === "draft" && <DraftView state={state} isCommish={isCommish} commishName={commishName} onRunDraft={api.runDraft} onReset={api.resetDraft} onMovePot={api.movePot} toast={toast} />}
         {tab === "table" && <TableView state={state} scores={scores} standings={standings} movers={movers} myTeam={myTeam} stageWins={stageWins} awardsByTeam={awardsByTeam} aliveByTeam={aliveByTeam} koStarted={koStarted} />}
-        {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} dates={demo ? {} : (live?.dates ?? {})} redraftIds={redraftIds} />}
+        {tab === "matches" && <MatchesView scores={scores} ko={ko} myTeam={myTeam} dates={demo ? {} : (live?.dates ?? {})} redraftIds={redraftIds} isCommish={isCommish} overrides={overrides} onOverride={api.setScoreOverride} onClearOverride={api.clearScoreOverride} />}
         {tab === "arcade" && <Arcade calls={state.calls || {}} callChanges={state.callChanges || {}} scores={scores} ko={ko} meId={me!.id} names={callerNames} onCall={api.makeCall} members={chatMembers} onLaunch={launchGame} />}
         {tab === "squads" && <Squads state={state} scores={scores} standings={standings} myTeam={myTeam} />}
         {tab === "cabinet" && <TrophyRoom teams={state.teams || []} awardsByTeam={awardsByTeam} myTeam={myTeam} isCommish={isCommish} onSetAwardHolder={api.setAwardHolder} onShare={toast} />}
