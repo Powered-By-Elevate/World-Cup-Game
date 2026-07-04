@@ -165,6 +165,32 @@ export default async function handler(req, res) {
     return;
   }
 
+  // Debug view of the knockout feed — visit /api/results?ko to see exactly how
+  // the feed labels knockout matches (ids, the winner/slot refs, status,
+  // scores). Used to fix bracket auto-population without guessing the format.
+  // Reads only the shared cache; exposes no secret.
+  if (req.query?.ko !== undefined) {
+    const sb = sbClient();
+    const shared = await readShared(sb);
+    const all = shared?.good?.matches || [];
+    const ko = all
+      .filter((m) => m.stage && m.stage !== "GROUP_STAGE")
+      .map((m) => ({
+        id: m.id,
+        stage: m.stage,
+        status: m.status,
+        homeName: m.home?.name || null,
+        homeRef: m.home?.short || null,
+        awayName: m.away?.name || null,
+        awayRef: m.away?.short || null,
+        hs: m.hs ?? null,
+        as: m.as ?? null,
+        date: m.date || null,
+      }));
+    res.status(200).json({ ok: true, count: ko.length, ko });
+    return;
+  }
+
   if (!key) {
     res.status(200).json({ source: "none", reason: "ZAFRONIX_API_KEY not set" });
     return;
