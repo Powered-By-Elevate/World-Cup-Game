@@ -12,7 +12,7 @@ import {
 } from './utils/storage';
 import type { League, AuthUser } from './utils/storage';
 import { groupResults, knockoutResults } from './data/results';
-import { fetchLiveResults } from './data/liveResults';
+import { fetchLiveResults, cascadeProgress } from './data/liveResults';
 import type { LiveData } from './data/liveResults';
 import { uid, shuffle, parseDate } from './utils/helpers';
 import { MATCH_DATE } from './data/fixtures';
@@ -138,9 +138,11 @@ export default function App() {
   // scores stay empty and the UI shows fixtures as pending — never simulated
   // numbers. The deterministic engine is reachable ONLY via the Demo toggle.
   // Commissioner corrections layer over the live feed (never over demo results).
+  // After applying KO corrections, re-run the bracket cascade so a corrected
+  // result (e.g. who advanced on penalties) propagates into later rounds.
   const overrides = state.scoreOverrides || {};
   const scores = demo ? ENGINE_SCORES : applyGroupOverrides(live?.scores ?? {}, overrides);
-  const ko = demo ? ENGINE_KO : applyKoOverrides(live?.ko ?? [], overrides);
+  const ko = demo ? ENGINE_KO : cascadeProgress(applyKoOverrides(live?.ko ?? [], overrides));
 
   const toggleDemo = useCallback((v: boolean) => {
     setDemo(v);

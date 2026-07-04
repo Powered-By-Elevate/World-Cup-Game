@@ -185,6 +185,8 @@ export default async function handler(req, res) {
         awayRef: m.away?.short || null,
         hs: m.hs ?? null,
         as: m.as ?? null,
+        winner: m.winner ?? null,
+        pens: m.pens ?? null,
         date: m.date || null,
       }));
     res.status(200).json({ ok: true, count: ko.length, ko });

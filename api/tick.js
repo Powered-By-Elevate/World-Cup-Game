@@ -533,39 +533,47 @@ function resolveBracketTeams(ko, scores) {
     if (/^3[A-L]+$/.test(ref)) return assign[ref] || "";
     return "";
   };
-  let out = ko.map((k) => {
+  const out = ko.map((k) => {
     if (k.h && k.a) return k;
     const h = k.h || resolveRef(k.hRef);
     const a = k.a || resolveRef(k.aRef);
     return h !== k.h || a !== k.a ? { ...k, h, a } : k;
   });
+  return cascadeProgress(out);
+}
+function cascadeProgress(ko) {
   const winnerOf = (k) => {
     if (!k.h || !k.a || k.h_s == null || k.a_s == null) return null;
     if (k.h_s > k.a_s) return k.h;
     if (k.a_s > k.h_s) return k.a;
     return k.pk || null;
   };
-  const digits = (ref) => {
+  const idNum = (id) => {
+    const m = /(\d+)$/.exec(id);
+    return m ? String(parseInt(m[1], 10)) : "";
+  };
+  const refNum = (ref) => {
     const m = /(\d+)/.exec(ref || "");
-    return m ? m[1] : "";
+    return m ? String(parseInt(m[1], 10)) : "";
   };
   const progressRef = (ref, winBy, loseBy) => {
-    const d = digits(ref);
-    if (!d) return "";
-    if (/^w|win/i.test(ref)) return winBy[d] || "";
-    if (/^l|los/i.test(ref)) return loseBy[d] || "";
+    const n = refNum(ref);
+    if (!n) return "";
+    if (/^\s*w/i.test(ref)) return winBy[n] || "";
+    if (/^\s*l/i.test(ref)) return loseBy[n] || "";
     return "";
   };
+  let out = ko;
   for (let pass = 0; pass < 6; pass++) {
     const winBy = {};
     const loseBy = {};
     for (const k of out) {
       const w = winnerOf(k);
       if (!w) continue;
-      const d = digits(String(k.id));
-      if (d) {
-        winBy[d] = w;
-        loseBy[d] = w === k.h ? k.a : k.h;
+      const n = idNum(String(k.id));
+      if (n) {
+        winBy[n] = w;
+        loseBy[n] = w === k.h ? k.a : k.h;
       }
     }
     let changed = false;

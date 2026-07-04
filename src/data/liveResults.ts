@@ -121,40 +121,48 @@ function resolveBracketTeams(ko: KOMatch[], scores: Record<string, ScoreEntry>):
     return '';   // e.g. "W49" winner-of-match refs (R16+) — resolved later as rounds play
   };
 
-  let out = ko.map(k => {
+  const out = ko.map(k => {
     if (k.h && k.a) return k;                 // feed already named both teams
     const h = k.h || resolveRef(k.hRef);
     const a = k.a || resolveRef(k.aRef);
     return (h !== k.h || a !== k.a) ? { ...k, h, a } : k;
   });
+  return cascadeProgress(out);
+}
 
-  // R16 → Final fill in as winner/loser-of-match refs ("W73", "L101"). Resolve
-  // them from completed earlier-round results, cascading round by round so the
-  // bracket — and the advancement bonuses that key off it — continue through the
-  // final. Best-effort and non-destructive: a ref we can't match just stays a
-  // placeholder until the feed names it, so it can never break the schedule.
+/** Fill R16 → Final slots from completed earlier-round results. The feed labels
+ *  each slot as "W74" / "L101" — the winner / loser of match 74 / 101 — where
+ *  the number is the TRAILING digits of the match's feed id ("api_2026-074" →
+ *  74), NOT the leading year. Cascades round by round so the bracket (and the
+ *  advancement bonuses that key off it) continue through the final. Exported so
+ *  a commissioner score-correction can re-trigger it (e.g. setting who advanced
+ *  from a penalty shootout the feed didn't resolve). Non-destructive: an
+ *  unmatched ref just stays a placeholder, so it can never break the schedule. */
+export function cascadeProgress(ko: KOMatch[]): KOMatch[] {
   const winnerOf = (k: KOMatch): string | null => {
     if (!k.h || !k.a || k.h_s == null || k.a_s == null) return null;
     if (k.h_s > k.a_s) return k.h;
     if (k.a_s > k.h_s) return k.a;
     return k.pk || null;                       // level after extra time → penalty winner
   };
-  const digits = (ref?: string) => { const m = /(\d+)/.exec(ref || ''); return m ? m[1] : ''; };
+  const idNum = (id: string) => { const m = /(\d+)$/.exec(id); return m ? String(parseInt(m[1], 10)) : ''; };
+  const refNum = (ref?: string) => { const m = /(\d+)/.exec(ref || ''); return m ? String(parseInt(m[1], 10)) : ''; };
   const progressRef = (ref: string | undefined, winBy: Record<string, string>, loseBy: Record<string, string>): string => {
-    const d = digits(ref);
-    if (!d) return '';
-    if (/^w|win/i.test(ref!)) return winBy[d] || '';
-    if (/^l|los/i.test(ref!)) return loseBy[d] || '';
+    const n = refNum(ref);
+    if (!n) return '';
+    if (/^\s*w/i.test(ref!)) return winBy[n] || '';   // "W74" → winner of match 74
+    if (/^\s*l/i.test(ref!)) return loseBy[n] || '';   // "L101" → loser of match 101
     return '';
   };
-  for (let pass = 0; pass < 6; pass++) {       // ≤5 rounds deep (R32→Final)
+  let out = ko;
+  for (let pass = 0; pass < 6; pass++) {       // ≤5 rounds deep (R32 → Final)
     const winBy: Record<string, string> = {};
     const loseBy: Record<string, string> = {};
     for (const k of out) {
       const w = winnerOf(k);
       if (!w) continue;
-      const d = digits(String(k.id));          // 'api_73' → '73'
-      if (d) { winBy[d] = w; loseBy[d] = w === k.h ? k.a : k.h; }
+      const n = idNum(String(k.id));           // 'api_2026-074' → '74'
+      if (n) { winBy[n] = w; loseBy[n] = w === k.h ? k.a : k.h; }
     }
     let changed = false;
     out = out.map(k => {
