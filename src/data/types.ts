@@ -23,6 +23,11 @@ export interface Team {
    *  pick keeps its group-stage points; the replacement earns knockout points.
    *  Absent/empty when nothing was replaced. */
   replacements?: Record<string, string>;
+  /** Commissioner roster corrections: pot key → the ORIGINAL nation id that was
+   *  manually swapped out. Marks the slot as corrected and lets it be reverted.
+   *  A correction is a FULL identity swap (the new nation's group + knockout
+   *  points count). */
+  corrected?: Record<string, string>;
 }
 
 export interface Scoring {

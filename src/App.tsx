@@ -37,6 +37,7 @@ import { MatchesView } from './views/MatchesView';
 import { Squads } from './views/Squads';
 import { Settings } from './views/Settings';
 import { Manage } from './views/Manage';
+import { RosterFix } from './views/RosterFix';
 import { TrophyRoom } from './views/TrophyRoom';
 import { Arcade } from './views/Arcade';
 import { recordScore, createChallenge, respondChallenge, winnerOf, GAME_META } from './utils/arcade';
@@ -104,6 +105,7 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showManage, setShowManage] = useState(false);
+  const [showRosterFix, setShowRosterFix] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showLeagues, setShowLeagues] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -674,6 +676,33 @@ export default function App() {
         return s;
       });
     },
+    // Commissioner-only roster correction: full identity swap of a team's slot
+    // for a free-agent nation. Remembers the original pick so it's reversible.
+    correctRoster: async (teamId: string, pot: string, newNationId: string) => {
+      await commitState(s => {
+        if (s.commissioner && me?.id !== s.commissioner) return s;
+        const t = s.teams.find(x => x.id === teamId);
+        if (!t || !t.picks) return s;
+        // reject if another team already owns the incoming nation
+        const ownedElsewhere = s.teams.some(o => o.id !== teamId && POT_KEYS.some(pk => o.picks?.[pk] === newNationId || o.replacements?.[pk] === newNationId));
+        if (ownedElsewhere || t.picks[pot] === newNationId) return s;
+        t.corrected = t.corrected || {};
+        if (!(pot in t.corrected)) t.corrected[pot] = t.picks[pot];   // remember original once
+        t.picks[pot] = newNationId;
+        if (t.replacements) delete t.replacements[pot];               // full swap clears any re-draft
+        return s;
+      });
+    },
+    revertRoster: async (teamId: string, pot: string) => {
+      await commitState(s => {
+        if (s.commissioner && me?.id !== s.commissioner) return s;
+        const t = s.teams.find(x => x.id === teamId);
+        if (!t || !t.corrected || !(pot in t.corrected)) return s;
+        if (t.picks) t.picks[pot] = t.corrected[pot];
+        delete t.corrected[pot];
+        return s;
+      });
+    },
   }), [commitState, setMeBoth, me, user]);
 
   const myTeam = useMemo(
@@ -1206,8 +1235,15 @@ export default function App() {
           state={state}
           onClose={() => setShowSettings(false)} onScoring={api.setScoring} onResetApp={resetApp}
           onOpenManage={() => { setShowSettings(false); setShowManage(true); }}
+          onOpenRosterFix={() => { setShowSettings(false); setShowRosterFix(true); }}
           onAnnounce={announce}
           demo={demo} onToggleDemo={toggleDemo} />
+      )}
+      {showRosterFix && isCommish && (
+        <RosterFix
+          state={state} scores={scores} ko={ko}
+          onApply={api.correctRoster} onRevert={api.revertRoster}
+          onClose={() => setShowRosterFix(false)} />
       )}
       {showManage && isCommish && (
         <Manage

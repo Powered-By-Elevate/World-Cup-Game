@@ -73,7 +73,7 @@ export function Squads({ state, standings, myTeam }: Props) {
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: 11, fontWeight: 700, marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{NATION[nid].name}</div>
+                          <div style={{ fontSize: 11, fontWeight: 700, marginTop: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{NATION[nid]?.name || nid}</div>
                           {redrafted && (
                             <div className="eyebrow" style={{ fontSize: 8, color: 'var(--mut)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               <span style={{ textDecoration: 'line-through' }}>{NATION[orig]?.name}</span>

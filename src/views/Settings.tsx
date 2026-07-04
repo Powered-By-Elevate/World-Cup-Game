@@ -10,12 +10,13 @@ interface Props {
   onScoring: (sc: Scoring) => void;
   onResetApp: () => void;
   onOpenManage: () => void;
+  onOpenRosterFix: () => void;
   onAnnounce: (message: string) => void;
   demo: boolean;
   onToggleDemo: (v: boolean) => void;
 }
 
-export function Settings({ state, onClose, onScoring, onResetApp, onOpenManage, onAnnounce, demo, onToggleDemo }: Props) {
+export function Settings({ state, onClose, onScoring, onResetApp, onOpenManage, onOpenRosterFix, onAnnounce, demo, onToggleDemo }: Props) {
   const sc = state.scoring;
   const [msg, setMsg] = useState('');
   const [sending, setSending] = useState(false);
@@ -56,6 +57,16 @@ export function Settings({ state, onClose, onScoring, onResetApp, onOpenManage, 
               <div style={{ fontWeight: 800 }}>Teams &amp; people</div>
               <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
                 {state.teams.length} {state.teams.length === 1 ? 'team' : 'teams'} · {state.teams.reduce((n, t) => n + (t.members?.length || 0), 0)} {state.teams.reduce((n, t) => n + (t.members?.length || 0), 0) === 1 ? 'person' : 'people'} — add, move, edit
+              </div>
+            </div>
+            <Icon name="chevron" size={16} />
+          </button>
+
+          <button className="between card flat pad" style={{ marginBottom: 14, width: '100%', textAlign: 'left', cursor: 'pointer' }} onClick={onOpenRosterFix}>
+            <div>
+              <div style={{ fontWeight: 800 }}>Fix a roster</div>
+              <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
+                Correct a team's nation — swap in a free agent, with the points swing shown before you confirm.
               </div>
             </div>
             <Icon name="chevron" size={16} />
